@@ -16,6 +16,9 @@ graphify/
 graphify-output/
 output/
 runtime/
+.runtime/
+*.m3u8
+*.ts
 *.bak
 *.backup
 *~

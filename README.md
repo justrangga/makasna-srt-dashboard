@@ -11,17 +11,18 @@
 
 Makasna SRT Dashboard adalah dasbor Flask ringan untuk memantau MediaMTX dan mengelola tujuan relay SRT/RTMP berbasis FFmpeg.
 
-- Statistik resource host dan stream aktif dari MediaMTX Control API
-- Sumber SRT, RTSP, RTMP, dan HTTP
-- Tujuan relay SRT, RTMP, dan RTMPS
-- Deteksi dan pemilihan track audio dengan `ffprobe`
+- UI modern monokrom untuk statistik resource host dan stream aktif dari MediaMTX Control API
+- Sumber SRT, RTSP, RTMP, dan HTTP serta tujuan relay SRT, RTMP, dan RTMPS
+- Pemilihan Stream ID dan deteksi/pemilihan track audio dengan `ffprobe`
+- Satu preview live HLS terkelola secara global dengan penghentian otomatis
+- Metrik kesehatan jaringan SRT, chart histori telemetry, dan log perubahan status
 - Restart otomatis FFmpeg selama tujuan tetap aktif
-- Definisi relay persisten di `forwards.json` dan log per relay di `logs/`
+- Definisi relay persisten di `forwards.json`, log per relay di `logs/`, dan segmen preview sementara di `.runtime/preview/`
 - Mode **Direct Copy** dan transkode H.264/AAC dengan bitrate khusus
 
 ### Arsitektur
 
-Publisher mengirim stream ke MediaMTX. Dasbor meminta status dari Control API lokal MediaMTX di `127.0.0.1:9997` dan menjalankan satu proses FFmpeg untuk setiap tujuan aktif. Nama sumber lokal seperti `live` diubah menjadi `rtsp://127.0.0.1:8554/live`. `forwards.json` dan `logs/` adalah data runtime yang diabaikan Git.
+Publisher mengirim stream ke MediaMTX. Dasbor meminta status path dan koneksi SRT dari Control API lokal MediaMTX di `127.0.0.1:9997`, lalu menjalankan satu proses FFmpeg untuk setiap tujuan aktif. Nama sumber lokal seperti `live` diubah menjadi `rtsp://127.0.0.1:8554/live`. Preview juga membaca RTSP lokal dan FFmpeg membuat playlist/segmen HLS berdurasi pendek di `.runtime/preview/`; ini terpisah dari HLS MediaMTX, yang tetap dinonaktifkan pada konfigurasi contoh. `forwards.json`, `logs/`, dan `.runtime/` adalah data runtime yang diabaikan Git.
 
 Untuk produksi, unit yang disediakan menjalankan:
 
@@ -193,6 +194,15 @@ ffmpeg -re -i INPUT_FILE -c copy -f mpegts 'srt://SERVER_IP:8890?streamid=publis
 ffplay 'srt://SERVER_IP:8890?streamid=read:STREAM_NAME'
 ```
 
+### Preview live dan kesehatan jaringan SRT
+
+1. Pilih path MediaMTX yang aktif atau masukkan **Stream ID** yang valid, lalu klik **Detect / load** untuk mendeteksi track audio.
+2. Pilih audio dan klik **Start**. Hanya ada **satu preview secara global** untuk seluruh proses dasbor; memulai preview baru menghentikan preview sebelumnya, dan preview berhenti otomatis setelah 15 menit.
+3. FFmpeg membaca stream RTSP lokal dan membuat HLS dengan segmen 2 detik serta playlist berjendela 5 segmen. Segmen lama dihapus, tetapi proses ini tetap memakai disk, CPU, dan I/O; browser memutar playlist melalui HLS.js atau dukungan HLS native.
+4. Panel kesehatan menghubungkan Stream ID secara tepat ke publisher SRT MediaMTX dan menampilkan receive rate, RTT, packet loss, retransmission, drop, kapasitas link, counter, uptime, chart histori singkat, serta log perubahan status. Counter bersifat kumulatif, sedangkan rate/RTT/loss rate adalah sampel saat ini.
+
+Preview bukan mekanisme akses multitenant: token playlist sementara bukan autentikasi. Dasbor tetap harus berada di localhost atau di balik reverse proxy HTTPS terautentikasi. Setelah crash, file `.runtime/preview/` lama dapat dibersihkan saat service berhenti. Jangan menjalankan lebih dari satu worker/proses aplikasi karena relay dan satu slot preview disimpan dalam memori proses.
+
 ### Menambah relay dan memilih audio multitrack
 
 1. Pastikan source sedang aktif.
@@ -248,7 +258,7 @@ sudo systemctl restart mediamtx.service makasna-dashboard.service
 sudo systemctl status mediamtx.service makasna-dashboard.service
 ```
 
-Pastikan ownership `forwards.json` dan `logs/` tetap `makasna:makasna`. Uji publish/read dan relay setelah update.
+Pastikan ownership `forwards.json`, `logs/`, dan `.runtime/` tetap `makasna:makasna`. Uji publish/read, preview, metrik SRT, dan relay setelah update.
 
 ### Firewall dan port jaringan
 
@@ -274,6 +284,8 @@ Relay keluar juga memerlukan DNS dan akses egress ke host/port tujuan. SRT memak
 ### Pemecahan masalah
 
 - **Dasbor tidak melihat stream:** periksa `systemctl status mediamtx`, lalu `curl http://127.0.0.1:9997/v3/paths/list`; pastikan `apiAddress` tetap `127.0.0.1:9997`.
+- **Preview tidak mulai/tersendat:** pastikan Stream ID dan audio benar, FFmpeg dapat membaca `rtsp://127.0.0.1:8554/STREAM_NAME`, user service dapat menulis `.runtime/`, dan codec copy kompatibel dengan HLS/browser. Preview baru menggantikan satu preview global yang sedang berjalan.
+- **Metrik SRT kosong:** metrik hanya tersedia untuk publisher SRT dengan path yang tepat sama; periksa endpoint lokal `/v3/srtconns/list` dan versi MediaMTX.
 - **SRT tidak tersambung:** pastikan UDP `8890` terbuka, `STREAM_NAME` sama, mode streamid adalah `publish:` atau `read:`, dan tidak ada publisher kedua karena `overridePublisher: no`.
 - **Relay berhenti/gagal:** buka log dari UI atau periksa `logs/relay_RELAY_ID.log`; verifikasi URL tujuan, konektivitas egress, codec destination, dan kapasitas CPU.
 - **Audio salah/hilang:** aktifkan source sebelum deteksi, jalankan `ffprobe`, lalu pilih indeks audio yang benar. Mapping bertanda `?`, jadi track yang tidak tersedia tidak membuat konstruksi command gagal.
@@ -304,17 +316,18 @@ MIT. Lihat [LICENSE](LICENSE).
 
 Makasna SRT Dashboard is a lightweight Flask dashboard for monitoring MediaMTX and managing FFmpeg-based SRT/RTMP relay destinations.
 
-- Host resource statistics and active streams from the MediaMTX Control API
-- SRT, RTSP, RTMP, and HTTP sources
-- SRT, RTMP, and RTMPS relay destinations
-- Audio-track detection and selection with `ffprobe`
+- Modern monochrome UI for host resource statistics and active streams from the MediaMTX Control API
+- SRT, RTSP, RTMP, and HTTP sources plus SRT, RTMP, and RTMPS relay destinations
+- Stream ID selection and audio-track detection/selection with `ffprobe`
+- One globally managed HLS live preview with automatic shutdown
+- SRT network health metrics, telemetry history charts, and status-change log
 - Automatic FFmpeg restart while a destination remains enabled
-- Persistent relay definitions in `forwards.json` and per-relay logs in `logs/`
+- Persistent relay definitions in `forwards.json`, per-relay logs in `logs/`, and temporary preview segments in `.runtime/preview/`
 - **Direct Copy** and configurable H.264/AAC bitrate modes
 
 ### Architecture
 
-Publishers send streams to MediaMTX. The dashboard requests status from the local MediaMTX Control API at `127.0.0.1:9997` and runs one FFmpeg process for every enabled destination. A local source name such as `live` becomes `rtsp://127.0.0.1:8554/live`. `forwards.json` and `logs/` are Git-ignored runtime data.
+Publishers send streams to MediaMTX. The dashboard requests path and SRT connection status from the local MediaMTX Control API at `127.0.0.1:9997` and runs one FFmpeg process for every enabled destination. A local source name such as `live` becomes `rtsp://127.0.0.1:8554/live`. Preview also reads local RTSP, and FFmpeg creates a short-lived HLS playlist and segments under `.runtime/preview/`; this is separate from MediaMTX HLS, which remains disabled in the example configuration. `forwards.json`, `logs/`, and `.runtime/` are Git-ignored runtime data.
 
 In production, the supplied units run:
 
@@ -486,6 +499,15 @@ ffmpeg -re -i INPUT_FILE -c copy -f mpegts 'srt://SERVER_IP:8890?streamid=publis
 ffplay 'srt://SERVER_IP:8890?streamid=read:STREAM_NAME'
 ```
 
+### Live preview and SRT network health
+
+1. Select a ready MediaMTX path or enter a valid **Stream ID**, then select **Detect / load** to detect audio tracks.
+2. Select audio and press **Start**. There is only **one preview globally** for the entire dashboard process; starting another replaces the previous preview, and the preview stops automatically after 15 minutes.
+3. FFmpeg reads local RTSP and creates HLS with 2-second segments and a 5-segment sliding playlist. Old segments are deleted, but this still consumes disk, CPU, and I/O; the browser plays the playlist through HLS.js or native HLS support.
+4. The health panel correlates the Stream ID exactly with a MediaMTX SRT publisher and reports receive rate, RTT, packet loss, retransmissions, drops, link capacity, counters, uptime, short telemetry history charts, and status-change logs. Counters are cumulative, while rate/RTT/loss rate are current samples.
+
+Preview is not a multi-tenant access mechanism: its temporary playlist token is not authentication. Keep the dashboard on localhost or behind an authenticated HTTPS reverse proxy. After a crash, stale `.runtime/preview/` files can be cleaned while the service is stopped. Do not run multiple workers/application processes because relay state and the single preview slot are process-local.
+
 ### Adding a relay and selecting multitrack audio
 
 1. Ensure the source is active.
@@ -541,7 +563,7 @@ sudo systemctl restart mediamtx.service makasna-dashboard.service
 sudo systemctl status mediamtx.service makasna-dashboard.service
 ```
 
-Ensure `forwards.json` and `logs/` remain owned by `makasna:makasna`. Test publishing, reading, and relays after the update.
+Ensure `forwards.json`, `logs/`, and `.runtime/` remain owned by `makasna:makasna`. Test publishing, reading, preview, SRT metrics, and relays after the update.
 
 ### Firewall and network ports
 
@@ -567,6 +589,8 @@ Outbound relays also need DNS and egress access to each destination host/port. S
 ### Troubleshooting
 
 - **Dashboard does not show streams:** check `systemctl status mediamtx`, then `curl http://127.0.0.1:9997/v3/paths/list`; ensure `apiAddress` remains `127.0.0.1:9997`.
+- **Preview does not start/stalls:** ensure the Stream ID and audio are correct, FFmpeg can read `rtsp://127.0.0.1:8554/STREAM_NAME`, the service user can write `.runtime/`, and copied codecs are compatible with HLS/browser playback. A new preview replaces the currently running global preview.
+- **SRT metrics are empty:** metrics exist only for an SRT publisher whose path matches exactly; check the local `/v3/srtconns/list` endpoint and MediaMTX version.
 - **SRT does not connect:** ensure UDP `8890` is open, `STREAM_NAME` matches, the streamid mode is `publish:` or `read:`, and there is no second publisher because `overridePublisher: no`.
 - **Relay stops or fails:** open its log in the UI or inspect `logs/relay_RELAY_ID.log`; verify the destination URL, egress connectivity, destination codec support, and CPU capacity.
 - **Wrong or missing audio:** activate the source before detection, run `ffprobe`, and select the correct audio index. Mapping is optional (`?`), so a missing track does not make command construction fail.

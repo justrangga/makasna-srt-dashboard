@@ -12,9 +12,13 @@ import psutil
 import requests
 import subprocess
 import threading
+import re
+import shutil
+import atexit
+import uuid
 from datetime import datetime
 from urllib.parse import urlsplit
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
@@ -45,6 +49,13 @@ LEGACY_720P_DEFAULTS = {
     "audio_bitrate": 128,
     "encoder_preset": "veryfast"
 }
+MEDIAMTX_API = "http://127.0.0.1:9997"
+STREAM_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+PREVIEW_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime", "preview")
+PREVIEW_TIMEOUT_SECONDS = 900
+PREVIEW_LOCK = threading.RLock()
+preview_state = {"proc": None, "token": None, "stream_id": None, "audio_index": None,
+                 "started_at": None, "error": None, "timer": None}
 
 
 def validate_integer_setting(value, name, minimum, maximum):
@@ -345,576 +356,171 @@ def bootstrap_relays():
         if f.get("enabled", False):
             start_relay(f["id"])
 
-# HTML Template
-DASHBOARD_HTML = """
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Makasna SRT & RTMP Relay Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
-    .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.08); }
-    .network-chart-wrap { position: relative; height: 78px; margin-top: 10px; }
-  </style>
-</head>
-<body class="min-h-screen p-4 md:p-8">
-  <div class="max-w-7xl mx-auto space-y-6">
-    
-    <!-- Top Header -->
-    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass p-6 rounded-2xl">
-      <div class="flex items-center gap-3">
-        <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white text-2xl shadow-lg shadow-cyan-500/30">
-          🦞
-        </div>
-        <div>
-          <h1 class="text-2xl font-bold text-white tracking-wide">Makasna SRT Relay</h1>
-          <p class="text-sm text-slate-400">High-Performance SRT & RTMP Media Redirector</p>
-        </div>
-      </div>
-      
-      <div class="flex items-center gap-3">
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          MediaMTX Online (:8890)
-        </span>
-        <button onclick="openAddModal()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-medium rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-blue-500/25 transition">
-          <i class="fa-solid fa-plus"></i> Add Redirect Target
-        </button>
-      </div>
-    </header>
 
-    <!-- Server Status Stats Grid -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="glass p-5 rounded-2xl">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-xs uppercase tracking-wider font-semibold">CPU Usage</span>
-          <i class="fa-solid fa-microchip text-cyan-400"></i>
-        </div>
-        <div class="text-2xl font-bold text-white" id="stat-cpu">-- %</div>
-        <div class="w-full bg-slate-700/50 h-1.5 rounded-full mt-3 overflow-hidden">
-          <div id="bar-cpu" class="bg-cyan-400 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
-        </div>
-      </div>
+def validate_stream_id(value):
+    if not isinstance(value, str) or not STREAM_ID_PATTERN.fullmatch(value):
+        raise ValueError("Stream ID must be 1-64 letters, numbers, dots, underscores, or hyphens")
+    return value
 
-      <div class="glass p-5 rounded-2xl">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-xs uppercase tracking-wider font-semibold">RAM Usage</span>
-          <i class="fa-solid fa-memory text-purple-400"></i>
-        </div>
-        <div class="text-2xl font-bold text-white" id="stat-ram">-- MB</div>
-        <div class="w-full bg-slate-700/50 h-1.5 rounded-full mt-3 overflow-hidden">
-          <div id="bar-ram" class="bg-purple-400 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
-        </div>
-      </div>
 
-      <div class="glass p-5 rounded-2xl overflow-hidden">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-xs uppercase tracking-wider font-semibold">Network TX / RX</span>
-          <i class="fa-solid fa-network-wired text-blue-400"></i>
-        </div>
-        <div class="text-sm font-bold flex items-center gap-4" id="stat-net">
-          <span class="text-cyan-300">↑ TX <span id="stat-tx" class="text-white">0.0</span> <small class="text-[10px] text-slate-500">Mbps</small></span>
-          <span class="text-violet-300">↓ RX <span id="stat-rx" class="text-white">0.0</span> <small class="text-[10px] text-slate-500">Mbps</small></span>
-        </div>
-        <div class="network-chart-wrap">
-          <canvas id="network-chart" aria-label="Real-time network TX and RX throughput"></canvas>
-        </div>
-      </div>
+def preview_directory(token):
+    if not isinstance(token, str) or not re.fullmatch(r"[a-f0-9]{32}", token):
+        raise ValueError("Invalid preview token")
+    path = os.path.abspath(os.path.join(PREVIEW_ROOT, token))
+    root = os.path.abspath(PREVIEW_ROOT)
+    if os.path.commonpath((root, path)) != root:
+        raise ValueError("Invalid preview path")
+    return path
 
-      <div class="glass p-5 rounded-2xl">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-xs uppercase tracking-wider font-semibold">Active Streams</span>
-          <i class="fa-solid fa-video text-emerald-400"></i>
-        </div>
-        <div class="text-2xl font-bold text-emerald-400" id="stat-active-count">0</div>
-        <div class="text-xs text-slate-400 mt-2" id="stat-active-names">No incoming stream</div>
-      </div>
-    </div>
 
-    <!-- Ingest Quick URLs Info Card -->
-    <div class="glass p-6 rounded-2xl">
-      <h2 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-        <i class="fa-solid fa-tower-broadcast text-cyan-400"></i> Server Ingest Endpoints
-      </h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-        <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 flex items-center justify-between">
-          <div>
-            <span class="text-xs font-semibold text-cyan-400 block mb-1">SRT Ingest URL (OBS / Camera / Encoder)</span>
-            <code class="text-slate-300 select-all font-mono text-xs">srt://SERVER_IP:8890?streamid=publish:STREAM_NAME</code>
-          </div>
-          <button onclick="copyText('srt://SERVER_IP:8890?streamid=publish:live')" class="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-lg transition" title="Copy">
-            <i class="fa-regular fa-copy"></i>
-          </button>
-        </div>
+def build_preview_command(stream_id, audio_index, output_dir, transcode=False):
+    stream_id = validate_stream_id(stream_id)
+    audio_index = validate_audio_index(audio_index)
+    source = f"rtsp://127.0.0.1:8554/{stream_id}"
+    playlist = os.path.join(output_dir, "index.m3u8")
+    segments = os.path.join(output_dir, "segment_%05d.ts")
+    command = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "warning",
+               "-rtsp_transport", "tcp", "-i", source,
+               "-map", "0:v:0?", "-map", f"0:a:{audio_index}?", "-sn", "-dn"]
+    if transcode:
+        command.extend(["-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
+                        "-pix_fmt", "yuv420p", "-g", "50", "-keyint_min", "50",
+                        "-c:a", "aac", "-b:a", "128k"])
+    else:
+        command.extend(["-c:v", "copy", "-c:a", "copy", "-bsf:v", "h264_mp4toannexb"])
+    command.extend(["-f", "hls", "-hls_time", "2", "-hls_list_size", "5",
+                    "-hls_flags", "delete_segments+append_list+omit_endlist+independent_segments",
+                    "-hls_segment_filename", segments, playlist])
+    return command
 
-        <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 flex items-center justify-between">
-          <div>
-            <span class="text-xs font-semibold text-amber-400 block mb-1">SRT Play / Receiver URL (OBS / VLC / vMix)</span>
-            <code class="text-slate-300 select-all font-mono text-xs">srt://SERVER_IP:8890?streamid=read:STREAM_NAME</code>
-          </div>
-          <button onclick="copyText('srt://SERVER_IP:8890?streamid=read:live')" class="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-lg transition" title="Copy">
-            <i class="fa-regular fa-copy"></i>
-          </button>
-        </div>
-      </div>
-    </div>
 
-    <!-- Active Forwarding / Redirect Targets Table -->
-    <div class="glass p-6 rounded-2xl space-y-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-lg font-semibold text-white">Stream Forwarders & Redirectors</h2>
-          <p class="text-sm text-slate-400">Forward local streams to YouTube, Facebook, Twitch, or Remote SRT/RTMP Servers</p>
-        </div>
-      </div>
+def _reset_preview_state(error=None):
+    timer = preview_state.get("timer")
+    if timer:
+        timer.cancel()
+    preview_state.update({"proc": None, "token": None, "stream_id": None,
+                          "audio_index": None, "started_at": None, "error": error, "timer": None})
 
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm text-slate-300">
-          <thead class="text-xs uppercase text-slate-400 bg-slate-800/50 border-b border-slate-700/50">
-            <tr>
-              <th class="py-3 px-4 rounded-l-xl">Target / Label</th>
-              <th class="py-3 px-4">Source Stream</th>
-              <th class="py-3 px-4">Destination</th>
-              <th class="py-3 px-4">Audio</th>
-              <th class="py-3 px-4">Mode</th>
-              <th class="py-3 px-4">Status</th>
-              <th class="py-3 px-4 text-right rounded-r-xl">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="forwards-table-body" class="divide-y divide-slate-800">
-            <tr>
-               <td colspan="7" class="py-8 text-center text-slate-500">Loading forwarders...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
 
-  </div>
+def stop_preview():
+    with PREVIEW_LOCK:
+        proc = preview_state.get("proc")
+        token = preview_state.get("token")
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        _reset_preview_state()
+        if token:
+            shutil.rmtree(preview_directory(token), ignore_errors=True)
 
-  <!-- Add Target Modal -->
-  <div id="add-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-    <div class="glass w-full max-w-lg p-6 rounded-2xl space-y-5 border border-slate-700">
-      <div class="flex items-center justify-between">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-satellite-dish text-cyan-400"></i> New Forward Target
-        </h3>
-        <button onclick="closeAddModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
-      </div>
 
-      <form id="add-form" onsubmit="handleAddForward(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Target Label / Name</label>
-          <input type="text" name="name" required placeholder="e.g. YouTube Live, Backup SRT" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-500 text-sm">
-        </div>
+def _watch_preview(proc, token):
+    returncode = proc.wait()
+    with PREVIEW_LOCK:
+        if preview_state.get("proc") is proc and preview_state.get("token") == token:
+            error = None if returncode == 0 else "Preview encoder exited; verify the stream and selected tracks"
+            _reset_preview_state(error)
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Source Stream Name / URL</label>
-          <input type="text" name="source" required placeholder="e.g. live or cam1" value="live" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-500 text-sm">
-          <span class="text-xs text-slate-500">Ketik nama stream lokal (contoh: <code>live</code>) atau URL lengkap.</span>
-        </div>
 
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-semibold text-slate-300">Audio Track</label>
-            <button type="button" id="detect-audio-button" onclick="detectAudioTracks()" class="px-3 py-1 rounded-lg text-xs text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20">Detect Audio Tracks</button>
-          </div>
-          <select id="audio-index" name="audio_index" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-500 text-sm">
-            <option value="0">Audio 1 (default)</option>
-          </select>
-          <span id="audio-detect-status" class="text-xs text-slate-500">Defaults to the first audio track.</span>
-        </div>
+def start_preview(stream_id, audio_index):
+    stream_id = validate_stream_id(stream_id)
+    audio_index = validate_audio_index(audio_index)
+    stop_preview()
+    token = uuid.uuid4().hex
+    output_dir = preview_directory(token)
+    os.makedirs(output_dir, mode=0o700, exist_ok=False)
+    command = build_preview_command(stream_id, audio_index, output_dir)
+    try:
+        proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                shell=False, close_fds=True)
+    except OSError:
+        shutil.rmtree(output_dir, ignore_errors=True)
+        raise RuntimeError("FFmpeg is unavailable")
+    with PREVIEW_LOCK:
+        timer = threading.Timer(PREVIEW_TIMEOUT_SECONDS, stop_preview)
+        timer.daemon = True
+        preview_state.update({"proc": proc, "token": token, "stream_id": stream_id,
+                              "audio_index": audio_index, "started_at": time.time(),
+                              "error": None, "timer": timer})
+        timer.start()
+    threading.Thread(target=_watch_preview, args=(proc, token), daemon=True).start()
+    return token
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Preset / Destination Type</label>
-          <select id="dest-preset" onchange="applyPreset(this.value)" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-500 text-sm mb-2">
-            <option value="custom">Custom URL</option>
-            <option value="youtube">YouTube Live (RTMP)</option>
-            <option value="facebook">Facebook Live (RTMP)</option>
-            <option value="twitch">Twitch (RTMP)</option>
-            <option value="srt_caller">Remote SRT Destination</option>
-          </select>
-        </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Destination URL / Stream Target</label>
-          <input type="text" id="dest-url" name="destination" required placeholder="rtmp://a.rtmp.youtube.com/live2/YOUR_STREAM_KEY" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-500 text-sm font-mono">
-        </div>
+def preview_status_payload():
+    with PREVIEW_LOCK:
+        proc = preview_state.get("proc")
+        running = bool(proc and proc.poll() is None)
+        token = preview_state.get("token") if running else None
+        return {"ok": True, "running": running, "ready": bool(
+                    token and os.path.isfile(os.path.join(preview_directory(token), "index.m3u8"))),
+                "stream_id": preview_state.get("stream_id") if running else None,
+                "audio_index": preview_state.get("audio_index") if running else None,
+                "playlist_url": f"/preview/{token}/index.m3u8" if token else None,
+                "started_at": preview_state.get("started_at") if running else None,
+                "error": preview_state.get("error")}
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Video & Audio Processing</label>
-          <select name="mode" onchange="updateProcessingFields()" class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-500 text-sm">
-            <option value="copy" selected>Direct Copy — original bitrate, no re-encode</option>
-            <option value="custom">Custom Bitrate — re-encode video/audio</option>
-          </select>
-          <span class="text-xs text-slate-500">Bitrate cannot change in Direct Copy mode.</span>
-        </div>
 
-        <div id="custom-processing-fields" class="hidden grid grid-cols-2 gap-3">
-          <label class="text-xs text-slate-300">Video bitrate (kbps)<input type="number" name="video_bitrate" min="250" max="50000" value="4500" class="mt-1 w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-white"></label>
-          <label class="text-xs text-slate-300">Max bitrate (kbps)<input type="number" name="max_bitrate" min="250" max="50000" value="5000" class="mt-1 w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-white"></label>
-          <label class="text-xs text-slate-300">Buffer size (kbps)<input type="number" name="buffer_size" min="500" max="100000" value="9000" class="mt-1 w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-white"></label>
-          <label class="text-xs text-slate-300">Audio bitrate (kbps)<input type="number" name="audio_bitrate" min="32" max="512" value="160" class="mt-1 w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-white"></label>
-          <label class="col-span-2 text-xs text-slate-300">Encoder preset<select name="encoder_preset" class="mt-1 w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-white"><option>ultrafast</option><option>superfast</option><option selected>veryfast</option><option>faster</option><option>fast</option><option>medium</option><option>slow</option></select></label>
-        </div>
+def _number(record, key, integer=False):
+    value = record.get(key, 0)
+    try:
+        return int(value) if integer else round(float(value), 3)
+    except (TypeError, ValueError):
+        return 0 if integer else 0.0
 
-        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
-          <button type="button" onclick="closeAddModal()" class="px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-white bg-slate-800">Cancel</button>
-          <button type="submit" class="px-5 py-2 rounded-xl text-sm text-white font-medium bg-cyan-600 hover:bg-cyan-500 transition shadow-lg shadow-cyan-500/20">Save & Start</button>
-        </div>
-      </form>
-    </div>
-  </div>
 
-  <!-- Log Viewer Modal -->
-  <div id="log-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-    <div class="glass w-full max-w-3xl p-6 rounded-2xl space-y-4 border border-slate-700 max-h-[85vh] flex flex-col">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-terminal text-cyan-400"></i> Relay Logs: <span id="log-title" class="text-slate-300"></span>
-        </h3>
-        <button onclick="closeLogModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
-      </div>
-      <div class="flex-1 bg-black/80 rounded-xl p-4 overflow-y-auto border border-slate-800 font-mono text-xs text-slate-300 whitespace-pre-wrap" id="log-content">
-        Loading logs...
-      </div>
-      <div class="flex justify-between items-center pt-2">
-        <span class="text-xs text-slate-500">Auto-refreshes every 2s</span>
-        <button onclick="closeLogModal()" class="px-4 py-1.5 rounded-lg text-xs text-white bg-slate-800 hover:bg-slate-700">Close</button>
-      </div>
-    </div>
-  </div>
+def classify_srt_health(rtt_ms, loss_rate, drop_packets):
+    if loss_rate >= 2 or rtt_ms >= 300 or drop_packets >= 100:
+        return "critical"
+    if loss_rate >= 0.5 or rtt_ms >= 150 or drop_packets > 0:
+        return "degraded"
+    return "healthy"
 
-  <script>
-    let currentLogId = null;
-    let logInterval = null;
-    let networkChart = null;
-    let statsRequestInFlight = false;
-    const NETWORK_HISTORY_SIZE = 25;
 
-    function initNetworkChart() {
-      const canvas = document.getElementById('network-chart');
-      if (!canvas || typeof Chart === 'undefined') return;
-      const ctx = canvas.getContext('2d');
-      const txFill = ctx.createLinearGradient(0, 0, 0, 78);
-      txFill.addColorStop(0, 'rgba(34, 211, 238, 0.30)');
-      txFill.addColorStop(1, 'rgba(34, 211, 238, 0.01)');
-      const rxFill = ctx.createLinearGradient(0, 0, 0, 78);
-      rxFill.addColorStop(0, 'rgba(139, 92, 246, 0.27)');
-      rxFill.addColorStop(1, 'rgba(59, 130, 246, 0.01)');
+def sanitize_srt_connection(record):
+    rtt = _number(record, "msRTT")
+    loss_rate = _number(record, "packetsReceivedLossRate")
+    drops = _number(record, "packetsReceivedDrop", True)
+    started = record.get("created") or record.get("createdAt")
+    uptime = None
+    if isinstance(started, str):
+        try:
+            uptime = max(0, int(time.time() - datetime.fromisoformat(started.replace("Z", "+00:00")).timestamp()))
+        except (ValueError, TypeError):
+            pass
+    return {"receive_mbps": _number(record, "mbpsReceiveRate"), "rtt_ms": rtt,
+            "packet_loss_count": _number(record, "packetsReceivedLoss", True),
+            "packet_loss_rate": loss_rate,
+            "retransmitted_packets": _number(record, "packetsReceivedRetrans", True),
+            "dropped_packets": drops, "dropped_bytes": _number(record, "bytesReceivedDrop", True),
+            "link_capacity_mbps": _number(record, "mbpsLinkCapacity"),
+            "packets_received": _number(record, "packetsReceived", True),
+            "packets_received_unique": _number(record, "packetsReceivedUnique", True),
+            "bytes_received": _number(record, "bytesReceived", True),
+            "bytes_lost": _number(record, "bytesReceivedLoss", True), "uptime_seconds": uptime,
+            "health": classify_srt_health(rtt, loss_rate, drops)}
 
-      networkChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            { label: 'TX', data: [], borderColor: '#22d3ee', backgroundColor: txFill, fill: true, borderWidth: 2, pointRadius: 0, tension: 0.42 },
-            { label: 'RX', data: [], borderColor: '#8b5cf6', backgroundColor: rxFill, fill: true, borderWidth: 2, pointRadius: 0, tension: 0.42 }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: { duration: 350, easing: 'easeOutQuart' },
-          interaction: { intersect: false, mode: 'index' },
-          plugins: { legend: { display: false }, tooltip: { displayColors: true, backgroundColor: 'rgba(15, 23, 42, .92)' } },
-          scales: {
-            x: { display: false },
-            y: {
-              beginAtZero: true,
-              border: { display: false },
-              ticks: { color: 'rgba(148, 163, 184, .65)', maxTicksLimit: 3, font: { size: 9 } },
-              grid: { color: 'rgba(148, 163, 184, .08)', drawTicks: false }
-            }
-          }
-        }
-      });
-    }
 
-    function updateNetworkChart(tx, rx) {
-      if (!networkChart) return;
-      networkChart.data.labels.push(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-      networkChart.data.datasets[0].data.push(Number(tx) || 0);
-      networkChart.data.datasets[1].data.push(Number(rx) || 0);
-      if (networkChart.data.labels.length > NETWORK_HISTORY_SIZE) {
-        networkChart.data.labels.shift();
-        networkChart.data.datasets.forEach(dataset => dataset.data.shift());
-      }
-      networkChart.update();
-    }
+def find_srt_publisher(data, stream_id):
+    items = data.get("items", []) if isinstance(data, dict) else []
+    for record in items if isinstance(items, list) else []:
+        if isinstance(record, dict) and record.get("state") == "publish" and record.get("path") == stream_id:
+            return sanitize_srt_connection(record)
+    return None
 
-    function copyText(text) {
-      navigator.clipboard.writeText(text);
-      alert('Copied to clipboard: ' + text);
-    }
 
-    function openAddModal() {
-      document.getElementById('add-modal').classList.remove('hidden');
-    }
-
-    function closeAddModal() {
-      document.getElementById('add-modal').classList.add('hidden');
-    }
-
-    function updateProcessingFields() {
-      const form = document.getElementById('add-form');
-      const fields = document.getElementById('custom-processing-fields');
-      const custom = form.mode.value === 'custom';
-      fields.classList.toggle('hidden', !custom);
-      fields.querySelectorAll('input, select').forEach(field => field.disabled = !custom);
-    }
-
-    function applyPreset(preset) {
-      const destInput = document.getElementById('dest-url');
-      if (preset === 'youtube') {
-        destInput.value = 'rtmp://a.rtmp.youtube.com/live2/STREAM_KEY';
-      } else if (preset === 'facebook') {
-        destInput.value = 'rtmps://live-api-s.facebook.com:443/rtmp/STREAM_KEY';
-      } else if (preset === 'twitch') {
-        destInput.value = 'rtmp://live.twitch.tv/app/STREAM_KEY';
-      } else if (preset === 'srt_caller') {
-        destInput.value = 'srt://REMOTE_IP:8890?streamid=publish:STREAM_NAME';
-      } else {
-        destInput.value = '';
-      }
-    }
-
-    function formatAudioTrack(track) {
-      const details = [track.codec, track.channel_layout || (track.channels ? track.channels + ' channels' : null), track.sample_rate ? track.sample_rate + ' Hz' : null, track.language, track.title].filter(Boolean);
-      return `Audio ${track.selector + 1}${details.length ? ' — ' + details.join(', ') : ''}`;
-    }
-
-    async function detectAudioTracks() {
-      const form = document.getElementById('add-form');
-      const select = document.getElementById('audio-index');
-      const status = document.getElementById('audio-detect-status');
-      const button = document.getElementById('detect-audio-button');
-      const source = form.source.value.trim();
-      if (!source) {
-        status.textContent = 'Enter a source before detecting audio tracks.';
-        return;
-      }
-      button.disabled = true;
-      status.textContent = 'Detecting audio tracks...';
-      try {
-        const res = await fetch('/api/audio-tracks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source })
-        });
-        let data;
-        try { data = await res.json(); } catch (err) { throw new Error('Malformed response from server.'); }
-        if (!res.ok) throw new Error(data.error || 'Unable to probe source.');
-        if (!data || !Array.isArray(data.audio_streams)) throw new Error('Malformed response from server.');
-        if (data.audio_streams.length === 0) {
-          select.innerHTML = '<option value="0">Audio 1 (default; no track detected)</option>';
-          status.textContent = 'No audio tracks found on the active source.';
-          return;
-        }
-        select.innerHTML = '';
-        data.audio_streams.forEach(track => {
-          if (!Number.isInteger(track.selector) || track.selector < 0) return;
-          const option = document.createElement('option');
-          option.value = track.selector;
-          option.textContent = formatAudioTrack(track);
-          select.appendChild(option);
-        });
-        if (!select.options.length) throw new Error('Malformed response from server.');
-        status.textContent = `${select.options.length} audio track(s) detected.`;
-      } catch (err) {
-        status.textContent = err.message || 'Unable to detect audio tracks.';
-      } finally {
-        button.disabled = false;
-      }
-    }
-
-    async function fetchStats() {
-      if (statsRequestInFlight) return;
-      statsRequestInFlight = true;
-      try {
-        const res = await fetch('/api/stats', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`Stats request failed: ${res.status}`);
-        const data = await res.json();
-        
-        const cpuVal = (data && data.cpu !== null && data.cpu !== undefined) ? data.cpu : 0;
-        const ramUsed = (data && data.ram_used_mb !== null && data.ram_used_mb !== undefined) ? data.ram_used_mb : 0;
-        const ramTotal = (data && data.ram_total_mb !== null && data.ram_total_mb !== undefined) ? data.ram_total_mb : 0;
-        const ramPct = (data && data.ram_percent !== null && data.ram_percent !== undefined) ? data.ram_percent : 0;
-        const txVal = (data && data.tx_mbps !== null && data.tx_mbps !== undefined) ? data.tx_mbps : 0;
-        const rxVal = (data && data.rx_mbps !== null && data.rx_mbps !== undefined) ? data.rx_mbps : 0;
-
-        const elCpu = document.getElementById('stat-cpu');
-        const elBarCpu = document.getElementById('bar-cpu');
-        if (elCpu) elCpu.textContent = cpuVal + ' %';
-        if (elBarCpu) elBarCpu.style.width = Math.min(Math.max(cpuVal, 0), 100) + '%';
-        
-        const elRam = document.getElementById('stat-ram');
-        const elBarRam = document.getElementById('bar-ram');
-        if (elRam) elRam.textContent = ramUsed + ' / ' + ramTotal + ' MB';
-        if (elBarRam) elBarRam.style.width = Math.min(Math.max(ramPct, 0), 100) + '%';
-        
-        const elTx = document.getElementById('stat-tx');
-        const elRx = document.getElementById('stat-rx');
-        if (elTx) elTx.textContent = txVal;
-        if (elRx) elRx.textContent = rxVal;
-        updateNetworkChart(txVal, rxVal);
-        
-        const streams = (data && Array.isArray(data.active_streams)) ? data.active_streams : [];
-        const count = streams.length;
-        const elCount = document.getElementById('stat-active-count');
-        const elNames = document.getElementById('stat-active-names');
-        if (elCount) elCount.textContent = count;
-        if (elNames) {
-          if (count > 0) {
-            elNames.textContent = streams.map(s => s.name).join(', ');
-          } else {
-            elNames.textContent = 'No incoming stream';
-          }
-        }
-      } catch (err) {
-        console.warn('Unable to refresh server stats:', err);
-      } finally {
-        statsRequestInFlight = false;
-      }
-    }
-
-    async function fetchForwards() {
-      try {
-        const res = await fetch('/api/forwards');
-        const list = await res.json();
-        const tbody = document.getElementById('forwards-table-body');
-        
-        if (list.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-500">No redirect rules yet. Click "Add Redirect Target" to create one.</td></tr>';
-          return;
-        }
-        
-        let html = '';
-        list.forEach(item => {
-          const isRunning = item.enabled && item.running;
-          const statusBadge = isRunning 
-            ? '<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Streaming</span>'
-            : '<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-700/40 text-slate-400 border border-slate-700 inline-flex items-center gap-1.5">Stopped</span>';
-          
-          html += `
-            <tr class="hover:bg-slate-800/40 transition">
-              <td class="py-3.5 px-4 font-semibold text-white">${item.name}</td>
-              <td class="py-3.5 px-4"><span class="px-2 py-0.5 bg-cyan-950/60 border border-cyan-800/50 text-cyan-300 rounded font-mono text-xs">${item.source}</span></td>
-              <td class="py-3.5 px-4 max-w-xs truncate font-mono text-xs text-slate-400">${item.destination_label}</td>
-              <td class="py-3.5 px-4 text-xs text-slate-400">Audio ${(Number.isInteger(item.audio_index) ? item.audio_index : 0) + 1}</td>
-              <td class="py-3.5 px-4 text-xs text-slate-400">${item.processing_summary}</td>
-              <td class="py-3.5 px-4">${statusBadge}</td>
-              <td class="py-3.5 px-4 text-right space-x-2">
-                <button onclick="toggleRelay('${item.id}', ${!item.enabled})" class="p-1.5 px-3 rounded-lg text-xs font-medium ${item.enabled ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'} transition">
-                  <i class="fa-solid ${item.enabled ? 'fa-stop' : 'fa-play'} mr-1"></i> ${item.enabled ? 'Stop' : 'Start'}
-                </button>
-                <button onclick="openLogModal('${item.id}', '${item.name}')" class="p-1.5 px-2.5 rounded-lg text-xs text-slate-400 hover:text-white bg-slate-800 transition" title="View Logs">
-                  <i class="fa-solid fa-file-lines"></i>
-                </button>
-                <button onclick="deleteForward('${item.id}')" class="p-1.5 px-2.5 rounded-lg text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 transition" title="Delete">
-                  <i class="fa-solid fa-trash-can"></i>
-                </button>
-              </td>
-            </tr>
-          `;
-        });
-        tbody.innerHTML = html;
-      } catch (err) {}
-    }
-
-    async function handleAddForward(e) {
-      e.preventDefault();
-      const form = e.target;
-      const data = {
-        name: form.name.value,
-        source: form.source.value,
-        destination: form.destination.value,
-        audio_index: form.audio_index.value,
-        mode: form.mode.value,
-        video_bitrate: form.video_bitrate.value,
-        max_bitrate: form.max_bitrate.value,
-        buffer_size: form.buffer_size.value,
-        audio_bitrate: form.audio_bitrate.value,
-        encoder_preset: form.encoder_preset.value
-      };
-      
-      const res = await fetch('/api/forwards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      
-      if (res.ok) {
-        closeAddModal();
-        form.reset();
-        updateProcessingFields();
-        fetchForwards();
-      }
-    }
-
-    async function toggleRelay(id, enable) {
-      await fetch(`/api/forwards/${id}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: enable })
-      });
-      fetchForwards();
-    }
-
-    async function deleteForward(id) {
-      if (!confirm('Are you sure you want to delete this target?')) return;
-      await fetch(`/api/forwards/${id}`, { method: 'DELETE' });
-      fetchForwards();
-    }
-
-    function openLogModal(id, name) {
-      currentLogId = id;
-      document.getElementById('log-title').textContent = name;
-      document.getElementById('log-modal').classList.remove('hidden');
-      loadLogs();
-      if (logInterval) clearInterval(logInterval);
-      logInterval = setInterval(loadLogs, 2000);
-    }
-
-    function closeLogModal() {
-      currentLogId = null;
-      if (logInterval) clearInterval(logInterval);
-      document.getElementById('log-modal').classList.add('hidden');
-    }
-
-    async function loadLogs() {
-      if (!currentLogId) return;
-      try {
-        const res = await fetch(`/api/forwards/${currentLogId}/logs`);
-        const text = await res.text();
-        const box = document.getElementById('log-content');
-        box.textContent = text || 'No logs generated yet.';
-        box.scrollTop = box.scrollHeight;
-      } catch (err) {}
-    }
-
-    // Polling init
-    initNetworkChart();
-    updateProcessingFields();
-    fetchStats();
-    fetchForwards();
-    setInterval(fetchStats, 2000);
-    setInterval(fetchForwards, 4000);
-  </script>
-</body>
-</html>
-"""
+atexit.register(stop_preview)
 
 # API Routes
 @app.route("/")
 def index():
-    return render_template_string(DASHBOARD_HTML)
+    return render_template("dashboard.html")
 
 @app.route("/api/stats")
 def api_stats():
@@ -922,19 +528,83 @@ def api_stats():
 
 @app.route("/api/audio-tracks", methods=["POST"])
 def api_audio_tracks():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     source = data.get("source")
-    if not isinstance(source, str):
-        return jsonify({"error": "Source is required"}), 400
+    stream_id = data.get("stream_id")
     try:
+        if source is None:
+            source = validate_stream_id(stream_id)
+        elif not isinstance(source, str):
+            raise ValueError("Source is required")
         audio_streams = probe_audio_streams(source)
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "Audio probe timed out; verify the stream is active"}), 504
+        return jsonify({"ok": False, "error": "Audio probe timed out; verify the stream is active"}), 504
     except (ValueError, RuntimeError) as exc:
-        return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": False, "error": str(exc)}), 400
     except OSError:
-        return jsonify({"error": "ffprobe is unavailable"}), 503
-    return jsonify({"audio_streams": audio_streams})
+        return jsonify({"ok": False, "error": "ffprobe is unavailable"}), 503
+    return jsonify({"ok": True, "source": source, "stream_id": stream_id,
+                    "audio_streams": audio_streams})
+
+
+@app.route("/api/preview/start", methods=["POST"])
+def api_preview_start():
+    data = request.get_json(silent=True) or {}
+    try:
+        stream_id = validate_stream_id(data.get("stream_id"))
+        audio_index = validate_audio_index(data.get("audio_index"))
+        token = start_preview(stream_id, audio_index)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 503
+    return jsonify({"ok": True, "stream_id": stream_id, "audio_index": audio_index,
+                    "playlist_url": f"/preview/{token}/index.m3u8"})
+
+
+@app.route("/api/preview/status")
+def api_preview_status():
+    return jsonify(preview_status_payload())
+
+
+@app.route("/api/preview/stop", methods=["POST"])
+def api_preview_stop():
+    stop_preview()
+    return jsonify({"ok": True, "running": False})
+
+
+@app.route("/preview/<token>/<path:filename>")
+def preview_file(token, filename):
+    try:
+        directory = preview_directory(token)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Invalid preview token"}), 404
+    if filename != "index.m3u8" and not re.fullmatch(r"segment_[0-9]{5}\.ts", filename):
+        return jsonify({"ok": False, "error": "Invalid preview file"}), 404
+    with PREVIEW_LOCK:
+        if token != preview_state.get("token"):
+            return jsonify({"ok": False, "error": "Preview is no longer active"}), 404
+    return send_from_directory(directory, filename, conditional=True, max_age=0)
+
+
+@app.route("/api/srt-health")
+def api_srt_health():
+    try:
+        stream_id = validate_stream_id(request.args.get("stream_id"))
+    except ValueError as exc:
+        return jsonify({"ok": False, "connected": False, "metrics": None, "error": str(exc)}), 400
+    try:
+        response = requests.get(f"{MEDIAMTX_API}/v3/srtconns/list", timeout=1.5)
+        response.raise_for_status()
+        metrics = find_srt_publisher(response.json(), stream_id)
+    except (requests.RequestException, ValueError):
+        return jsonify({"ok": False, "connected": False, "metrics": None,
+                        "error": "MediaMTX SRT metrics are temporarily unavailable"}), 503
+    if metrics is None:
+        return jsonify({"ok": True, "connected": False, "stream_id": stream_id,
+                        "metrics": None, "error": "No SRT publisher for selected stream"})
+    return jsonify({"ok": True, "connected": True, "stream_id": stream_id,
+                    "metrics": metrics, "error": None})
 
 @app.route("/api/forwards", methods=["GET"])
 def api_get_forwards():

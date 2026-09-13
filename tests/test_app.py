@@ -147,5 +147,124 @@ class ForwardApiTests(unittest.TestCase):
             self.assertIn("error", response.get_json())
 
 
+class PreviewSecurityTests(unittest.TestCase):
+    def tearDown(self):
+        app.stop_preview()
+
+    def test_stream_id_and_path_validation(self):
+        for valid in ("Makasna", "cam-1", "room_2.main"):
+            self.assertEqual(app.validate_stream_id(valid), valid)
+        for invalid in ("", "../secret", "a/b", "http://host/x", "x?query=1", "a" * 65, None):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                app.validate_stream_id(invalid)
+        with self.assertRaises(ValueError):
+            app.preview_directory("../bad")
+
+    def test_preview_command_mapping_and_bounded_hls(self):
+        command = app.build_preview_command("Makasna", 3, "/tmp/preview")
+        self.assertIn("rtsp://127.0.0.1:8554/Makasna", command)
+        self.assertIn("0:v:0?", command)
+        self.assertIn("0:a:3?", command)
+        self.assertEqual(command[command.index("-hls_list_size") + 1], "5")
+        self.assertIn("delete_segments+append_list+omit_endlist+independent_segments", command)
+        self.assertNotIn("shell=True", command)
+
+    @mock.patch.object(app.threading, "Thread")
+    @mock.patch.object(app.threading, "Timer")
+    @mock.patch.object(app.subprocess, "Popen")
+    def test_start_replaces_and_stop_terminates(self, popen, timer, thread):
+        first, second = mock.Mock(), mock.Mock()
+        first.poll.return_value = None
+        second.poll.return_value = None
+        popen.side_effect = [first, second]
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(app, "PREVIEW_ROOT", root):
+            app.start_preview("Makasna", 0)
+            app.start_preview("Makasna", 1)
+            first.terminate.assert_called_once()
+            app.stop_preview()
+            second.terminate.assert_called_once()
+        self.assertFalse(popen.call_args.kwargs["shell"])
+
+
+class SrtHealthTests(unittest.TestCase):
+    def test_exact_publish_correlation_and_sanitization(self):
+        record = {"path": "Makasna", "state": "publish", "remoteAddr": "secret",
+                  "mbpsReceiveRate": 8.5, "msRTT": 40, "packetsReceivedLoss": 2,
+                  "packetsReceivedLossRate": 0.1, "packetsReceivedRetrans": 3,
+                  "packetsReceivedDrop": 0, "bytesReceivedDrop": 0,
+                  "mbpsLinkCapacity": 20, "packetsReceived": 100,
+                  "packetsReceivedUnique": 95, "bytesReceived": 1000,
+                  "bytesReceivedLoss": 10}
+        metrics = app.find_srt_publisher({"items": [record]}, "Makasna")
+        self.assertEqual(metrics["health"], "healthy")
+        self.assertNotIn("remoteAddr", metrics)
+        self.assertIsNone(app.find_srt_publisher({"items": [record]}, "makasna"))
+        record["state"] = "read"
+        self.assertIsNone(app.find_srt_publisher({"items": [record]}, "Makasna"))
+
+    def test_deterministic_thresholds(self):
+        self.assertEqual(app.classify_srt_health(149, .49, 0), "healthy")
+        self.assertEqual(app.classify_srt_health(150, 0, 0), "degraded")
+        self.assertEqual(app.classify_srt_health(0, .5, 0), "degraded")
+        self.assertEqual(app.classify_srt_health(300, 0, 0), "critical")
+        self.assertEqual(app.classify_srt_health(0, 2, 0), "critical")
+        self.assertEqual(app.classify_srt_health(0, 0, 100), "critical")
+
+
+class DashboardFlowTests(unittest.TestCase):
+    def setUp(self):
+        self.client = app.app.test_client()
+
+    def test_new_relay_flow_markers(self):
+        html = self.client.get("/").get_data(as_text=True)
+        for marker in ("Add Redirect Target", "New Forward Target", "Target Label / Name",
+                       "Source Stream Name / URL", "Detect Audio Tracks",
+                       "Preset / Destination Type", "Destination URL / Stream Target",
+                       "Direct Stream Copy", "Custom Bitrate", "Save &amp; Start",
+                       "add-form-error", "applyPreset", "detectAudioTracks",
+                       "e.target===e.currentTarget"):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+        self.assertNotIn("font-awesome", html.lower())
+        self.assertNotIn("fa-solid", html)
+        self.assertNotIn("RustDesk", html)
+
+    @mock.patch.object(app, "probe_audio_streams", return_value=[])
+    def test_audio_detection_accepts_source_flow(self, probe):
+        response = self.client.post("/api/audio-tracks", json={"source": "rtmp://example.test/live"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["source"], "rtmp://example.test/live")
+        probe.assert_called_once_with("rtmp://example.test/live")
+
+
+class PreviewApiTests(unittest.TestCase):
+    def setUp(self):
+        self.client = app.app.test_client()
+
+    def test_rejects_malformed_start(self):
+        response = self.client.post("/api/preview/start", json={"stream_id": "../x", "audio_index": 0})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.get_json()["ok"])
+
+    @mock.patch.object(app, "start_preview", return_value="a" * 32)
+    def test_start_schema(self, start):
+        response = self.client.post("/api/preview/start", json={"stream_id": "Makasna", "audio_index": 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["audio_index"], 2)
+        start.assert_called_once_with("Makasna", 2)
+
+    @mock.patch.object(app.requests, "get", side_effect=app.requests.Timeout())
+    def test_srt_api_failure_is_sanitized(self, get):
+        response = self.client.get("/api/srt-health?stream_id=Makasna")
+        self.assertEqual(response.status_code, 503)
+        body = response.get_json()
+        self.assertFalse(body["ok"])
+        self.assertNotIn("127.0.0.1", body["error"])
+
+    def test_preview_file_rejects_bad_paths(self):
+        response = self.client.get("/preview/not-a-token/index.m3u8")
+        self.assertEqual(response.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()
