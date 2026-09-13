@@ -1,0 +1,12 @@
+[
+  {
+    "id": "fwd_example",
+    "name": "Example destination",
+    "source": "live",
+    "destination": "srt://DESTINATION_HOST:8890?streamid=publish:STREAM_NAME",
+    "audio_index": 0,
+    "mode": "copy",
+    "enabled": false,
+    "created_at": 0
+  }
+]

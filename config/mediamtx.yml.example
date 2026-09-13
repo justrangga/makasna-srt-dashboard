@@ -1,0 +1,31 @@
+logLevel: info
+logDestinations: [stdout]
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+udpMaxPayloadSize: 1472
+
+api: yes
+apiAddress: 127.0.0.1:9997
+metrics: no
+pprof: no
+playback: no
+
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtmp: yes
+rtmpAddress: :1935
+hls: no
+webrtc: no
+srt: yes
+srtAddress: :8890
+
+pathDefaults:
+  source: publisher
+  sourceOnDemand: no
+  record: no
+  overridePublisher: no
+
+paths:
+  all_others:

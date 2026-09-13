@@ -1,0 +1,19 @@
+[Unit]
+Description=Makasna SRT and RTMP Relay Dashboard
+After=network-online.target mediamtx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=makasna
+Group=makasna
+WorkingDirectory=/srv/makasna-dashboard
+EnvironmentFile=/etc/makasna-dashboard.env
+ExecStart=/srv/makasna-dashboard/.venv/bin/gunicorn --workers 1 --bind 127.0.0.1:${PORT} app:app
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

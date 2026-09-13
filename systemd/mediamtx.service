@@ -1,0 +1,19 @@
+[Unit]
+Description=MediaMTX streaming server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mediamtx
+Group=mediamtx
+EnvironmentFile=/etc/mediamtx.env
+ExecStart=/usr/local/bin/mediamtx ${MEDIAMTX_CONFIG}
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
