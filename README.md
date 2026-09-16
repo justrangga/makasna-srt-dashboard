@@ -112,7 +112,7 @@ set -a
 set +a
 ```
 
-Jika `SECRET_KEY` tidak tersedia, aplikasi membuat nilai acak per proses sehingga session tidak bertahan setelah restart. Saat ini dasbor tidak memiliki login bawaan.
+Jika `SECRET_KEY` tidak tersedia, aplikasi membuat nilai acak per proses sehingga session tidak bertahan setelah restart. Gunakan `DASHBOARD_USER` dan `DASHBOARD_PASS` untuk mengatur kredensial login (default: `admin` / `@linux1234`).
 
 ### Menjalankan pengembangan
 
@@ -417,7 +417,7 @@ set -a
 set +a
 ```
 
-If `SECRET_KEY` is unavailable, the application creates a random value per process, so sessions do not survive a restart. The dashboard currently has no built-in login.
+If `SECRET_KEY` is unavailable, the application creates a random value per process, so sessions do not survive a restart. Configure `DASHBOARD_USER` and `DASHBOARD_PASS` for dashboard login credentials (default: `admin` / `@linux1234`).
 
 ### Development start
 

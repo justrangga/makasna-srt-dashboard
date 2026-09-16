@@ -1,12 +1,8 @@
 import json
 import os
-from pathlib import Path
-import sys
 import tempfile
 import unittest
 from unittest import mock
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app
 
@@ -16,6 +12,80 @@ BASE_FORWARD = {
     "destination": "rtmp://example.test/live/key",
     "audio_index": 2
 }
+
+
+class AuthenticationTests(unittest.TestCase):
+    def setUp(self):
+        self.client = app.app.test_client()
+
+    def test_unauthenticated_access(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login", response.headers["Location"])
+        response = self.client.get("/api/forwards")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json(), {"ok": False, "error": "Unauthorized"})
+
+    def test_login_get_and_valid_form(self):
+        self.assertEqual(self.client.get("/login").status_code, 200)
+        response = self.client.post("/login", data={
+            "username": app.DASHBOARD_USER, "password": app.DASHBOARD_PASS
+        })
+        self.assertEqual(response.status_code, 302)
+        with self.client.session_transaction() as session:
+            self.assertTrue(session["logged_in"])
+            self.assertEqual(session["username"], app.DASHBOARD_USER)
+
+    def test_login_json_and_invalid_credentials(self):
+        response = self.client.post("/login", json={
+            "username": app.DASHBOARD_USER, "password": app.DASHBOARD_PASS
+        })
+        self.assertEqual(response.get_json(), {"ok": True})
+        client = app.app.test_client()
+        response = client.post("/login", json={"username": "bad", "password": "bad"})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()["error"], "Invalid username or password")
+
+    def test_logout_clears_session(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "admin"
+        response = self.client.get("/logout")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login", response.headers["Location"])
+        with self.client.session_transaction() as session:
+            self.assertNotIn("logged_in", session)
+
+
+class SrtPortApiTests(unittest.TestCase):
+    def setUp(self):
+        self.client = app.app.test_client()
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+
+    @mock.patch.object(app.requests, "get")
+    def test_get_srt_port(self, get):
+        get.return_value.json.return_value = {"srtAddress": "0.0.0.0:9000"}
+        response = self.client.get("/api/srt/port")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["port"], 9000)
+        get.assert_called_once_with(f"{app.MEDIAMTX_API}/v3/config/global/get", timeout=2.0)
+
+    @mock.patch.object(app.requests, "patch")
+    def test_post_srt_port(self, patch):
+        with mock.patch.object(app, "MEDIAMTX_CONF", "/nonexistent/mediamtx.yml"):
+            response = self.client.post("/api/srt/port", json={"port": 9001})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["port"], 9001)
+        patch.assert_called_once_with(f"{app.MEDIAMTX_API}/v3/config/global/patch",
+                                      json={"srtAddress": ":9001"}, timeout=3.0)
+
+    def test_post_rejects_invalid_ports(self):
+        for port in (1023, 65536, "not-a-port"):
+            with self.subTest(port=port):
+                response = self.client.post("/api/srt/port", json={"port": port})
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(response.get_json()["ok"])
 
 
 class AudioTrackTests(unittest.TestCase):
@@ -117,6 +187,9 @@ class ForwardApiTests(unittest.TestCase):
         self.start_mock = self.start_patch.start()
         app.save_forwards([])
         self.client = app.app.test_client()
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "admin"
 
     def tearDown(self):
         self.start_patch.stop()
@@ -214,6 +287,9 @@ class SrtHealthTests(unittest.TestCase):
 class DashboardFlowTests(unittest.TestCase):
     def setUp(self):
         self.client = app.app.test_client()
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "admin"
 
     def test_new_relay_flow_markers(self):
         html = self.client.get("/").get_data(as_text=True)
@@ -240,6 +316,9 @@ class DashboardFlowTests(unittest.TestCase):
 class PreviewApiTests(unittest.TestCase):
     def setUp(self):
         self.client = app.app.test_client()
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["username"] = "admin"
 
     def test_rejects_malformed_start(self):
         response = self.client.post("/api/preview/start", json={"stream_id": "../x", "audio_index": 0})

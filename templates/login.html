@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign In · Makasna Media Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+:root{color-scheme:dark;--bg:#080808;--panel:#111;--line:#303030;--muted:#999;--text:#f5f5f5}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--text);font:14px Poppins,Arial,sans-serif}.card{width:min(420px,100%);padding:32px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.45)}.eyebrow,label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h1{margin:8px 0 24px;font-size:24px}.fields{display:grid;gap:16px}label{display:grid;gap:8px}input,button{width:100%;border:1px solid #444;border-radius:8px;padding:12px;font:inherit}input{background:#0b0b0b;color:#fff}input:focus{outline:1px solid #fff;border-color:#fff}button{margin-top:6px;cursor:pointer;border-color:#fff;background:#fff;color:#000;font-weight:600}.error{margin:0 0 18px;padding:10px 12px;border-left:2px solid #fff;background:#181818;color:#f5f5f5}
+</style>
+</head>
+<body><main class="card"><div class="eyebrow">Authentication Required</div><h1>Makasna Media Dashboard</h1>{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}<form method="post" class="fields"><label>Username<input name="username" type="text" required autofocus autocomplete="username"></label><label>Password<input name="password" type="password" required autocomplete="current-password"></label><button type="submit">Sign In</button></form></main></body>
+</html>

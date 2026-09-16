@@ -5,7 +5,7 @@ Lightweight streaming redirector & relay manager
 """
 
 import os
-import secrets
+import sys
 import json
 import time
 import psutil
@@ -16,12 +16,16 @@ import re
 import shutil
 import atexit
 import uuid
+import hmac
 from datetime import datetime
+from functools import wraps
 from urllib.parse import urlsplit
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.secret_key = os.environ.get("SECRET_KEY", "makasna-srt-secret-2026")
+DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "admin")
+DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS", "@linux1234")
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "forwards.json")
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
@@ -49,7 +53,8 @@ LEGACY_720P_DEFAULTS = {
     "audio_bitrate": 128,
     "encoder_preset": "veryfast"
 }
-MEDIAMTX_API = "http://127.0.0.1:9997"
+MEDIAMTX_API = os.environ.get("MEDIAMTX_API", "http://127.0.0.1:9997")
+MEDIAMTX_CONF = os.environ.get("MEDIAMTX_CONF", "/etc/mediamtx/mediamtx.yml")
 STREAM_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 PREVIEW_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime", "preview")
 PREVIEW_TIMEOUT_SECONDS = 900
@@ -219,7 +224,7 @@ def get_server_stats():
     # Check MediaMTX active streams
     active_streams = []
     try:
-        r = requests.get("http://127.0.0.1:9997/v3/paths/list", timeout=1.0)
+        r = requests.get(f"{MEDIAMTX_API}/v3/paths/list", timeout=1.0)
         if r.status_code == 200:
             data = r.json()
             items = data.get("items", [])
@@ -305,8 +310,7 @@ def run_relay_worker(relay_id):
         
         with open(log_file, "a") as f_out:
             f_out.write(f"\n--- [ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ] Starting Relay ---\n")
-            f_out.write(f"Source: {safe_destination_label(target.get('source', ''))}\n")
-            f_out.write(f"Destination: {safe_destination_label(target.get('destination', ''))}\n\n")
+            f_out.write("CMD: " + " ".join(cmd) + "\n\n")
             f_out.flush()
             
             proc = subprocess.Popen(
@@ -515,12 +519,120 @@ def find_srt_publisher(data, stream_id):
     return None
 
 
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if session.get("logged_in"):
+            return view(*args, **kwargs)
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+        return redirect(url_for("login"))
+    return wrapped
+
+
+def get_current_srt_port():
+    try:
+        response = requests.get(f"{MEDIAMTX_API}/v3/config/global/get", timeout=2.0)
+        response.raise_for_status()
+        address = response.json().get("srtAddress") or ":8890"
+        match = re.search(r":(\d+)$", address)
+        port = int(match.group(1)) if match else 8890
+        return {"ok": True, "port": port, "address": address}
+    except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+        try:
+            if os.path.isfile(MEDIAMTX_CONF):
+                with open(MEDIAMTX_CONF, "r") as config_file:
+                    content = config_file.read()
+                match = re.search(r"^\s*srtAddress:\s*[^\n#]*:?(\d+)\s*$", content, re.MULTILINE)
+                if match:
+                    port = int(match.group(1))
+                    return {"ok": True, "port": port, "address": f":{port}"}
+        except (OSError, ValueError):
+            pass
+        return {"ok": False, "port": 8890, "error": str(exc)}
+
+
+def update_srt_port(new_port):
+    if isinstance(new_port, bool):
+        raise ValueError("Port must be an integer between 1024 and 65535")
+    try:
+        port = int(new_port)
+    except (TypeError, ValueError):
+        raise ValueError("Port must be an integer between 1024 and 65535")
+    if str(new_port).strip() != str(port) or not 1024 <= port <= 65535:
+        raise ValueError("Port must be an integer between 1024 and 65535")
+    response = requests.patch(f"{MEDIAMTX_API}/v3/config/global/patch",
+                              json={"srtAddress": f":{port}"}, timeout=3.0)
+    response.raise_for_status()
+    if os.path.isfile(MEDIAMTX_CONF) and os.access(MEDIAMTX_CONF, os.W_OK):
+        with open(MEDIAMTX_CONF, "r") as config_file:
+            content = config_file.read()
+        updated, count = re.subn(r"^(#?\s*srtAddress:\s*).*$", f"srtAddress: :{port}",
+                                 content, flags=re.MULTILINE)
+        if count:
+            with open(MEDIAMTX_CONF, "w") as config_file:
+                config_file.write(updated)
+    return {"ok": True, "port": port, "message": f"SRT port updated to {port}"}
+
+
 atexit.register(stop_preview)
 
-# API Routes
+
+@app.before_request
+def protect_api_routes():
+    if request.path.startswith("/api/") and not session.get("logged_in"):
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("logged_in"):
+        return redirect(url_for("index"))
+    if request.method == "GET":
+        return render_template("login.html")
+    is_json = request.is_json
+    data = request.get_json(silent=True) if is_json else request.form
+    data = data or {}
+    username = str(data.get("username", ""))
+    password = str(data.get("password", ""))
+    valid = (hmac.compare_digest(username, DASHBOARD_USER) and
+             hmac.compare_digest(password, DASHBOARD_PASS))
+    if valid:
+        session["logged_in"] = True
+        session["username"] = username
+        if is_json:
+            return jsonify({"ok": True})
+        return redirect(url_for("index"))
+    error = "Invalid username or password"
+    if is_json:
+        return jsonify({"ok": False, "error": error}), 401
+    return render_template("login.html", error=error), 401
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def index():
     return render_template("dashboard.html")
+
+
+@app.route("/api/srt/port", methods=["GET", "POST"])
+@login_required
+def api_srt_port():
+    if request.method == "GET":
+        return jsonify(get_current_srt_port())
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(update_srt_port(data.get("port")))
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except requests.RequestException as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
 
 @app.route("/api/stats")
 def api_stats():
@@ -574,6 +686,7 @@ def api_preview_stop():
 
 
 @app.route("/preview/<token>/<path:filename>")
+@login_required
 def preview_file(token, filename):
     try:
         directory = preview_directory(token)
