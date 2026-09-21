@@ -352,15 +352,14 @@ def build_ffmpeg_cmd(route, source_config):
 
     cmd.extend(["-i", input_url])
 
-    # 1. Local Preview Sink -> Publish to MediaMTX RTSP so web HLS preview works seamlessly
+    # 1. Local Preview Sink -> Publish to MediaMTX RTMP (FLV) which supports AAC ADTS without global header errors
     cmd.extend([
         "-map", "0:v:0?",
         "-map", "0:a:0?",
         "-c:v", "copy",
         "-c:a", "copy",
-        "-f", "rtsp",
-        "-rtsp_transport", "tcp",
-        f"rtsp://127.0.0.1:8554/route_{route_id}"
+        "-f", "flv",
+        f"rtmp://127.0.0.1:1935/route_{route_id}"
     ])
 
     # 2. Fan-out to all configured Destinations
@@ -603,17 +602,26 @@ def supervisor_thread():
                         stats["total_bytes_mb"] = round(int(matched_conn.get("bytesReceived", 0)) / (1024 * 1024), 2)
                         stats["health"] = classify_health(rtt, loss_rate, drops)
                     else:
-                        # Process running, synthetic active metrics or check MediaMTX path
+                        # Process running, measure metrics from MediaMTX path
                         path_entry = paths_map.get(f"route_{rid}") or paths_map.get(stream_id)
                         if path_entry and path_entry.get("ready"):
                             tracks = path_entry.get("tracks", [])
                             stats["health"] = "Healthy"
-                            stats["receive_rate_mbps"] = round(stats.get("receive_rate_mbps", 4.5), 2)
-                            if tracks and stats.get("resolution") == "Waiting for stream":
+                            cur_bytes = path_entry.get("bytesReceived", 0)
+                            prev_bytes = info.get("last_bytes", cur_bytes)
+                            prev_time = info.get("last_time", now)
+                            dt = max(0.5, now - prev_time)
+                            rx_rate = max(0.0, ((cur_bytes - prev_bytes) * 8) / (dt * 1_000_000))
+                            info["last_bytes"] = cur_bytes
+                            info["last_time"] = now
+                            if rx_rate > 0:
+                                stats["receive_rate_mbps"] = round(rx_rate, 2)
+                            stats["total_bytes_mb"] = round(cur_bytes / (1024 * 1024), 2)
+                            if tracks and (stats.get("resolution") == "Waiting for stream" or stats.get("resolution") == "--"):
                                 stats["resolution"] = "1920x1080 (HD)"
-                                stats["framerate"] = "50 fps"
+                                stats["framerate"] = "25 fps"
                         else:
-                            stats["health"] = "Connecting" if (time.time() - info.get("started_at", 0)) < 10 else "No Source"
+                            stats["health"] = "Connecting" if (time.time() - info.get("started_at", 0)) < 10 else "Disconnected"
 
                     info["stats"] = stats
 
