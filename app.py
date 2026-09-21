@@ -408,7 +408,11 @@ def build_ffmpeg_cmd(route, source_config):
             # Audio processing
             a_codec = dest.get("audio_codec", "aac")
             if a_codec == "copy":
-                cmd.extend(["-c:a", "copy"])
+                if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
+                    # RTMP/FLV strictly requires AAC; copying MP2/AC3 crashes RTMP
+                    cmd.extend(["-c:a", "aac", "-b:a", "160k", "-ar", "48000"])
+                else:
+                    cmd.extend(["-c:a", "copy"])
             else:
                 a_bitrate = int(dest.get("audio_bitrate", 160))
                 a_sample_rate = int(dest.get("audio_sample_rate", 48000))
