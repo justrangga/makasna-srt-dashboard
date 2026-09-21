@@ -714,6 +714,7 @@ def api_create_route():
     ps = data.get("primary_source", {})
     primary_source = {
         "type": ps.get("type", "srt_listener"),
+        "url": ps.get("url", "").strip(),
         "stream_id": ps.get("stream_id", f"feed_{rid[-4:]}"),
         "address": ps.get("address", "0.0.0.0"),
         "port": int(ps.get("port", 12100 + len(routes))),
@@ -726,6 +727,7 @@ def api_create_route():
     secondary_source = {
         "enabled": bool(ss.get("enabled", False)),
         "type": ss.get("type", "srt_listener"),
+        "url": ss.get("url", "").strip(),
         "stream_id": ss.get("stream_id", f"feed_{rid[-4:]}_sec"),
         "address": ss.get("address", "0.0.0.0"),
         "port": int(ss.get("port", 13100 + len(routes))),

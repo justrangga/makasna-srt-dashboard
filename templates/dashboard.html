@@ -1125,7 +1125,7 @@ video {
         <!-- Secondary Source Config -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-            <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--muted); margin:0;">Secondary Source (Failover)</h4>
+            <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--amber); margin:0;">Secondary Source (Failover)</h4>
             <label style="font-size:12px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
               <input type="checkbox" id="rf-s-enabled" onchange="toggleSecondarySource(this.checked)"> Enable Secondary
             </label>
@@ -1134,26 +1134,51 @@ video {
             <div class="form-row">
               <div class="form-group">
                 <label>Protocol / Mode</label>
-                <select id="rf-s-type" class="form-control">
-                  <option value="srt_listener">SRT Listener</option>
-                  <option value="srt_caller">SRT Caller</option>
+                <select id="rf-s-type" class="form-control" onchange="handleSecondarySourceTypeChange(this.value)">
+                  <option value="srt_listener">SRT Listener (Wait for push)</option>
+                  <option value="srt_caller">SRT Caller (Pull from remote)</option>
+                  <option value="srt_rendezvous">SRT Rendezvous (P2P NAT)</option>
+                  <option value="direct_url">Direct Stream URL (Full URL)</option>
+                  <option value="local_stream">Local MediaMTX Path</option>
                   <option value="udp">UDP Ingest</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label>Port</label>
+              <div class="form-group" id="rf-s-port-group">
+                <label id="rf-s-port-label">Port / Target Port</label>
                 <input type="number" id="rf-s-port" class="form-control" value="12101">
               </div>
             </div>
-            <div class="form-row">
+            <div class="form-group" id="rf-s-addr-group" style="display:none;">
+              <label>Remote Server Address / Host (IP or Domain)</label>
+              <input type="text" id="rf-s-addr" class="form-control" placeholder="e.g. 103.120.x.x or srt.remote-broadcaster.com">
+            </div>
+            <div class="form-group" id="rf-s-url-group" style="display:none;">
+              <label>Direct Stream URL</label>
+              <input type="text" id="rf-s-url" class="form-control" placeholder="srt://remote-server:9000?streamid=backup&latency=200">
+            </div>
+            <div class="form-row" id="rf-s-details-row">
               <div class="form-group">
-                <label>Stream ID</label>
+                <label>Stream ID / Path Name</label>
                 <input type="text" id="rf-s-streamid" class="form-control" value="venue_backup">
               </div>
               <div class="form-group">
-                <label>Latency Buffer (ms)</label>
+                <label>SRT Latency Buffer (ms)</label>
                 <input type="number" id="rf-s-latency" class="form-control" value="200">
               </div>
+            </div>
+            <div class="form-group">
+              <label>Passphrase (Optional AES encryption)</label>
+              <input type="password" id="rf-s-passphrase" class="form-control" placeholder="Leave empty for cleartext">
+            </div>
+            <!-- Stream Probe Button & Live Result Box -->
+            <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <button type="button" class="btn-icon" style="color:var(--amber); border-color:rgba(245,158,11,0.3); font-weight:600; min-height:38px;" onclick="probeSecondarySource()">
+                  Detect / Probe Secondary Stream Specs
+                </button>
+                <span id="probe-sec-status" style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted)"></span>
+              </div>
+              <div id="probe-sec-result-box" style="display:none; margin-top:10px; padding:10px; background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.25); border-radius:6px; font-size:11.5px; font-family:'JetBrains Mono'; word-break:break-all;"></div>
             </div>
           </div>
         </div>
@@ -1546,6 +1571,14 @@ function openAddRouteModal() {
   document.getElementById('destinations-container').innerHTML = '';
   destinationCount = 0;
   addDestinationRow();
+  handleSourceTypeChange('srt_listener');
+  handleSecondarySourceTypeChange('srt_listener');
+  document.getElementById('rf-s-enabled').checked = false;
+  toggleSecondarySource(false);
+  document.getElementById('probe-status').textContent = '';
+  document.getElementById('probe-result-box').style.display = 'none';
+  document.getElementById('probe-sec-status').textContent = '';
+  document.getElementById('probe-sec-result-box').style.display = 'none';
   document.getElementById('modal-route').classList.remove('hidden');
 }
 
@@ -1575,9 +1608,15 @@ function editRoute(id) {
   document.getElementById('rf-s-enabled').checked = Boolean(s.enabled);
   toggleSecondarySource(Boolean(s.enabled));
   document.getElementById('rf-s-type').value = s.type || 'srt_listener';
+  handleSecondarySourceTypeChange(s.type || 'srt_listener');
   document.getElementById('rf-s-port').value = s.port || 12101;
+  document.getElementById('rf-s-addr').value = s.address || '';
+  document.getElementById('rf-s-url').value = s.url || '';
   document.getElementById('rf-s-streamid').value = s.stream_id || '';
   document.getElementById('rf-s-latency').value = s.latency || 200;
+  document.getElementById('rf-s-passphrase').value = s.passphrase || '';
+  document.getElementById('probe-sec-status').textContent = '';
+  document.getElementById('probe-sec-result-box').style.display = 'none';
 
   // Destinations
   const container = document.getElementById('destinations-container');
@@ -1608,7 +1647,7 @@ function handleSourceTypeChange(type) {
   const portGroup = document.getElementById('rf-p-port-group');
   const detailsRow = document.getElementById('rf-p-details-row');
 
-  if (type === 'srt_caller') {
+  if (type === 'srt_caller' || type === 'srt_rendezvous') {
     addrGroup.style.display = 'flex';
     urlGroup.style.display = 'none';
     portGroup.style.display = 'flex';
@@ -1627,6 +1666,85 @@ function handleSourceTypeChange(type) {
     detailsRow.style.display = 'grid';
   }
 }
+
+function handleSecondarySourceTypeChange(type) {
+  const addrGroup = document.getElementById('rf-s-addr-group');
+  const urlGroup = document.getElementById('rf-s-url-group');
+  const portLabel = document.getElementById('rf-s-port-label');
+  const portGroup = document.getElementById('rf-s-port-group');
+  const detailsRow = document.getElementById('rf-s-details-row');
+
+  if (type === 'srt_caller' || type === 'srt_rendezvous') {
+    addrGroup.style.display = 'flex';
+    urlGroup.style.display = 'none';
+    portGroup.style.display = 'flex';
+    portLabel.textContent = 'Remote Server Port';
+    detailsRow.style.display = 'grid';
+  } else if (type === 'direct_url') {
+    addrGroup.style.display = 'none';
+    urlGroup.style.display = 'flex';
+    portGroup.style.display = 'none';
+    detailsRow.style.display = 'none';
+  } else {
+    addrGroup.style.display = 'none';
+    urlGroup.style.display = 'none';
+    portGroup.style.display = 'flex';
+    portLabel.textContent = 'Listen Port / Target Port';
+    detailsRow.style.display = 'grid';
+  }
+}
+
+async function probeSecondarySource() {
+  const statusEl = document.getElementById('probe-sec-status');
+  const resultBox = document.getElementById('probe-sec-result-box');
+  statusEl.textContent = 'Probing secondary stream...';
+  resultBox.style.display = 'none';
+
+  const type = document.getElementById('rf-s-type').value;
+  const sourcePayload = {
+    type: type,
+    url: document.getElementById('rf-s-url').value.trim(),
+    address: document.getElementById('rf-s-addr').value.trim() || '127.0.0.1',
+    port: parseInt(document.getElementById('rf-s-port').value) || 12101,
+    stream_id: document.getElementById('rf-s-streamid').value.trim(),
+    latency: parseInt(document.getElementById('rf-s-latency').value) || 200,
+    passphrase: document.getElementById('rf-s-passphrase').value.trim()
+  };
+
+  try {
+    const res = await api('/api/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: sourcePayload })
+    });
+
+    if (res.ok) {
+      statusEl.textContent = 'Secondary stream verified active!';
+      let html = `<b style="color:var(--amber);">Input Target:</b> ${escapeHtml(res.input_url)}<br>`;
+      if (res.video_streams && res.video_streams.length) {
+        const v = res.video_streams[0];
+        html += `<b style="color:#fff;">Video:</b> ${v.width}x${v.height} @ ${v.fps || '--'} fps (${v.codec.toUpperCase()})<br>`;
+      } else {
+        html += `<b style="color:var(--amber);">Video:</b> No video track detected<br>`;
+      }
+      if (res.audio_streams && res.audio_streams.length) {
+        html += `<b style="color:#fff;">Audio Tracks:</b> `;
+        html += res.audio_streams.map(a => `[#${a.index}: ${a.codec} ${a.channels}ch ${a.sample_rate}Hz]`).join(' ');
+      }
+      resultBox.innerHTML = html;
+      resultBox.style.display = 'block';
+    } else {
+      statusEl.textContent = 'Probe error';
+      resultBox.innerHTML = `<span style="color:var(--red);">${escapeHtml(res.error)}</span>`;
+      resultBox.style.display = 'block';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Error';
+    resultBox.innerHTML = `<span style="color:var(--red);">${escapeHtml(e.message)}</span>`;
+    resultBox.style.display = 'block';
+  }
+}
+
 
 async function probeCurrentSource() {
   const statusEl = document.getElementById('probe-status');
@@ -1844,9 +1962,12 @@ async function handleRouteFormSubmit(e) {
     secondary_source: {
       enabled: document.getElementById('rf-s-enabled').checked,
       type: document.getElementById('rf-s-type').value,
+      url: document.getElementById('rf-s-url').value.trim(),
+      address: document.getElementById('rf-s-addr').value.trim() || '127.0.0.1',
       port: parseInt(document.getElementById('rf-s-port').value) || 12101,
       stream_id: document.getElementById('rf-s-streamid').value.trim(),
-      latency: parseInt(document.getElementById('rf-s-latency').value) || 200
+      latency: parseInt(document.getElementById('rf-s-latency').value) || 200,
+      passphrase: document.getElementById('rf-s-passphrase').value.trim()
     },
     destinations: destinations
   };
