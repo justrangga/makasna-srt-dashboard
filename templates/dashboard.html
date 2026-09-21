@@ -849,6 +849,9 @@ video {
     <div class="nav-item active" id="side-routes" onclick="switchTab('routes')">
       <span>Routes</span>
     </div>
+    <div class="nav-item" id="side-recordings" onclick="switchTab('recordings')">
+      <span>Recordings</span>
+    </div>
     <div class="nav-item" id="side-events" onclick="switchTab('events')">
       <span>Event Log</span>
     </div>
@@ -925,6 +928,114 @@ video {
         <div style="padding:20px; color:var(--muted)">Loading events...</div>
       </div>
     </div>
+
+    <!-- VIEW 3: Recordings & Google Drive -->
+    <div id="view-recordings" style="display:none;">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Recordings &amp; Cloud Archive</h1>
+          <p>Local segmented recording rules (15m, 30m, 1h) with automated Google Drive sync.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn-icon" onclick="fetchRecordings()">Refresh List</button>
+        </div>
+      </div>
+
+      <!-- Google Drive Account Connection Card -->
+      <div style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:20px; display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:36px; height:36px; border-radius:8px; background:rgba(0,229,255,0.1); border:1px solid rgba(0,229,255,0.25); display:flex; align-items:center; justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cyan);"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:15px;">Google Drive Cloud Sync</div>
+              <div id="gdrive-status-desc" style="font-size:12px; color:var(--muted);">Checking connection...</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="btn-gdrive-connect" class="btn-primary" onclick="connectGoogleDrive()">
+              Sign In with Google
+            </button>
+            <button id="btn-gdrive-disconnect" class="btn-icon btn-danger" style="display:none;" onclick="disconnectGoogleDrive()">
+              Disconnect Account
+            </button>
+            <button class="btn-icon" onclick="toggleGdriveSettings()">
+              Settings / Custom App
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Google OAuth / Folder Settings (Expandable) -->
+        <div id="gdrive-settings-panel" style="display:none; background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:16px; margin-top:6px;">
+          <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--cyan); margin-bottom:12px;">Google Cloud Project Settings</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Target Google Drive Folder</label>
+              <input type="text" id="cfg-gdrive-folder" class="form-control" value="Makasna Video Archive" placeholder="Folder Name">
+            </div>
+            <div class="form-group">
+              <label>OAuth Client ID</label>
+              <input type="text" id="cfg-gdrive-client-id" class="form-control" placeholder="xxxx.apps.googleusercontent.com">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>OAuth Client Secret</label>
+            <input type="password" id="cfg-gdrive-client-secret" class="form-control" placeholder="GOCSPX-xxxx">
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:8px;">
+            <div style="display:flex; gap:14px; flex-wrap:wrap;">
+              <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer;">
+                <input type="checkbox" id="cfg-gdrive-auto-upload" checked> Otomatis upload saat rekaman selesai
+              </label>
+              <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer;">
+                <input type="checkbox" id="cfg-gdrive-delete-after"> Hapus file lokal setelah sukses upload
+              </label>
+            </div>
+            <button type="button" class="btn-primary" onclick="saveGdriveSettings()">Save Cloud Settings</button>
+          </div>
+
+          <!-- Manual Code Paste Accordion -->
+          <div style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);">
+            <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">Manual Authorization Code (Jika redirect terhalang firewall):</div>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="gdrive-manual-code" class="form-control" placeholder="Paste Google Auth Code here">
+              <button class="btn-icon" style="white-space:nowrap;" onclick="submitManualGdriveCode()">Submit Code</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Storage Bar -->
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-family:'JetBrains Mono'; padding-top:8px; border-top:1px solid var(--border);">
+          <span style="color:var(--muted);">Internal Server Disk: <b id="disk-stat-text" style="color:#fff;">-- GB Free</b></span>
+          <span style="color:var(--cyan);" id="recordings-count-text">0 segments recorded</span>
+        </div>
+      </div>
+
+      <!-- Desktop Table of Recordings -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>File / Segment</th>
+              <th>Route Name</th>
+              <th>File Size</th>
+              <th>Recorded Time</th>
+              <th>Cloud Sync Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="recordings-tbody">
+            <tr><td colspan="6" style="text-align:center; color:var(--muted); padding:30px;">Loading recordings...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Smartphone Mobile Cards View -->
+      <div class="mobile-routes-list" id="mobile-recordings-container">
+        <div style="text-align:center; color:var(--muted); padding:30px;">Loading recordings...</div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -933,6 +1044,10 @@ video {
   <div class="bottom-nav-item active" id="bnav-routes" onclick="switchTab('routes')">
     <svg class="bottom-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H12"/></svg>
     <span>Routes</span>
+  </div>
+  <div class="bottom-nav-item" id="bnav-recordings" onclick="switchTab('recordings')">
+    <svg class="bottom-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+    <span>Records</span>
   </div>
   <div class="bottom-nav-item" id="bnav-events" onclick="switchTab('events')">
     <svg class="bottom-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -1188,6 +1303,41 @@ video {
                 <span id="probe-sec-status" style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted)"></span>
               </div>
               <div id="probe-sec-result-box" style="display:none; margin-top:10px; padding:10px; background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.25); border-radius:6px; font-size:11.5px; font-family:'JetBrains Mono'; word-break:break-all;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Internal Segmented Recording & Google Drive Upload -->
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+            <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--cyan); margin:0;">Internal Segmented Recording</h4>
+            <label style="font-size:12px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="rf-rec-enabled" onchange="toggleRecordingFields(this.checked)"> Enable Recording
+            </label>
+          </div>
+          <div id="rf-rec-fields" style="opacity:0.4; pointer-events:none; display:flex; flex-direction:column; gap:12px;">
+            <div class="form-row">
+              <div class="form-group" style="margin:0;">
+                <label>Segment Duration Rule</label>
+                <select id="rf-rec-duration" class="form-control">
+                  <option value="900" selected>15 Menit (900 detik)</option>
+                  <option value="1800">30 Menit (1800 detik)</option>
+                  <option value="3600">1 Jam (3600 detik)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Storage Retention Policy</label>
+                <select id="rf-rec-retention" class="form-control">
+                  <option value="keep">Keep Local &amp; Sync to Cloud</option>
+                  <option value="delete_after_upload">Delete Local File After Google Drive Upload</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="rf-rec-upload-gdrive" checked>
+              <label for="rf-rec-upload-gdrive" style="font-size:12px; color:var(--text); cursor:pointer;">
+                Otomatis kirim setiap segment selesai ke Google Drive yang tersambung
+              </label>
             </div>
           </div>
         </div>
@@ -1584,6 +1734,11 @@ function openAddRouteModal() {
   handleSecondarySourceTypeChange('srt_listener');
   document.getElementById('rf-s-enabled').checked = false;
   toggleSecondarySource(false);
+  document.getElementById('rf-rec-enabled').checked = false;
+  toggleRecordingFields(false);
+  document.getElementById('rf-rec-duration').value = '900';
+  document.getElementById('rf-rec-retention').value = 'keep';
+  document.getElementById('rf-rec-upload-gdrive').checked = true;
   document.getElementById('probe-status').textContent = '';
   document.getElementById('probe-result-box').style.display = 'none';
   document.getElementById('probe-sec-status').textContent = '';
@@ -1627,6 +1782,13 @@ function editRoute(id) {
   document.getElementById('probe-sec-status').textContent = '';
   document.getElementById('probe-sec-result-box').style.display = 'none';
 
+  // Recording
+  document.getElementById('rf-rec-enabled').checked = Boolean(r.record_enabled);
+  toggleRecordingFields(Boolean(r.record_enabled));
+  document.getElementById('rf-rec-duration').value = String(r.record_duration || 900);
+  document.getElementById('rf-rec-retention').value = r.delete_after_upload ? 'delete_after_upload' : 'keep';
+  document.getElementById('rf-rec-upload-gdrive').checked = r.upload_to_gdrive !== false;
+
   // Destinations
   const container = document.getElementById('destinations-container');
   container.innerHTML = '';
@@ -1647,6 +1809,14 @@ function toggleSecondarySource(enabled) {
   const el = document.getElementById('rf-secondary-fields');
   el.style.opacity = enabled ? '1' : '0.4';
   el.style.pointerEvents = enabled ? 'auto' : 'none';
+}
+
+function toggleRecordingFields(enabled) {
+  const el = document.getElementById('rf-rec-fields');
+  if (el) {
+    el.style.opacity = enabled ? '1' : '0.4';
+    el.style.pointerEvents = enabled ? 'auto' : 'none';
+  }
 }
 
 function handleSourceTypeChange(type) {
@@ -1978,7 +2148,11 @@ async function handleRouteFormSubmit(e) {
       latency: parseInt(document.getElementById('rf-s-latency').value) || 200,
       passphrase: document.getElementById('rf-s-passphrase').value.trim()
     },
-    destinations: destinations
+    destinations: destinations,
+    record_enabled: document.getElementById('rf-rec-enabled').checked,
+    record_duration: parseInt(document.getElementById('rf-rec-duration').value) || 900,
+    upload_to_gdrive: document.getElementById('rf-rec-upload-gdrive').checked,
+    delete_after_upload: document.getElementById('rf-rec-retention').value === 'delete_after_upload'
   };
 
   try {
@@ -2008,23 +2182,288 @@ function switchTab(tab) {
   document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.bottom-nav-item').forEach(el => el.classList.remove('active'));
 
+  const viewRoutes = document.getElementById('view-routes');
+  const viewEvents = document.getElementById('view-events');
+  const viewRecordings = document.getElementById('view-recordings');
+
+  if (viewRoutes) viewRoutes.style.display = 'none';
+  if (viewEvents) viewEvents.style.display = 'none';
+  if (viewRecordings) viewRecordings.style.display = 'none';
+
   if (tab === 'routes') {
     const s = document.getElementById('side-routes');
     if (s) s.classList.add('active');
     const b = document.getElementById('bnav-routes');
     if (b) b.classList.add('active');
-    document.getElementById('view-routes').style.display = 'block';
-    document.getElementById('view-events').style.display = 'none';
+    if (viewRoutes) viewRoutes.style.display = 'block';
+  } else if (tab === 'recordings') {
+    const s = document.getElementById('side-recordings');
+    if (s) s.classList.add('active');
+    const b = document.getElementById('bnav-recordings');
+    if (b) b.classList.add('active');
+    if (viewRecordings) viewRecordings.style.display = 'block';
+    fetchRecordings();
+    fetchGdriveStatus();
   } else if (tab === 'events') {
     const s = document.getElementById('side-events');
     if (s) s.classList.add('active');
     const b = document.getElementById('bnav-events');
     if (b) b.classList.add('active');
-    document.getElementById('view-routes').style.display = 'none';
-    document.getElementById('view-events').style.display = 'block';
+    if (viewEvents) viewEvents.style.display = 'block';
     fetchEvents();
   }
 }
+
+// =========================================================================
+// Google Drive & Recording UI Functions
+// =========================================================================
+async function fetchGdriveStatus() {
+  try {
+    const d = await api('/api/gdrive/status');
+    const desc = document.getElementById('gdrive-status-desc');
+    const btnConnect = document.getElementById('btn-gdrive-connect');
+    const btnDisconnect = document.getElementById('btn-gdrive-disconnect');
+
+    if (d.connected) {
+      desc.innerHTML = `<span style="color:var(--green); font-weight:600;">Tersambung: ${escapeHtml(d.email || 'Google Account')}</span> · Folder: ${escapeHtml(d.target_folder)}`;
+      if (btnConnect) btnConnect.style.display = 'none';
+      if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
+    } else {
+      desc.innerHTML = `<span style="color:var(--muted);">Belum tersambung ke Google Drive</span>`;
+      if (btnConnect) btnConnect.style.display = 'inline-flex';
+      if (btnDisconnect) btnDisconnect.style.display = 'none';
+    }
+    const folderInput = document.getElementById('cfg-gdrive-folder');
+    if (folderInput) folderInput.value = d.target_folder || 'Makasna Video Archive';
+    const clientInput = document.getElementById('cfg-gdrive-client-id');
+    if (clientInput) clientInput.value = d.client_id || '';
+    const autoUpCheck = document.getElementById('cfg-gdrive-auto-upload');
+    if (autoUpCheck) autoUpCheck.checked = d.auto_upload !== false;
+    const delCheck = document.getElementById('cfg-gdrive-delete-after');
+    if (delCheck) delCheck.checked = Boolean(d.delete_after_upload);
+  } catch(e) {}
+}
+
+function toggleGdriveSettings() {
+  const p = document.getElementById('gdrive-settings-panel');
+  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveGdriveSettings() {
+  const client_id = document.getElementById('cfg-gdrive-client-id').value.trim();
+  const client_secret = document.getElementById('cfg-gdrive-client-secret').value.trim();
+  const target_folder_name = document.getElementById('cfg-gdrive-folder').value.trim();
+  const auto_upload = document.getElementById('cfg-gdrive-auto-upload').checked;
+  const delete_after_upload = document.getElementById('cfg-gdrive-delete-after').checked;
+
+  try {
+    await api('/api/gdrive/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id, client_secret, target_folder_name, auto_upload, delete_after_upload })
+    });
+    alert('Pengaturan Google Cloud berhasil disimpan!');
+    fetchGdriveStatus();
+  } catch(e) { alert(e.message); }
+}
+
+async function connectGoogleDrive() {
+  try {
+    const d = await api('/api/gdrive/auth-url');
+    if (d.auth_url) {
+      window.location.href = d.auth_url;
+    }
+  } catch(e) {
+    alert('Gagal memulai login Google: ' + e.message + '\n\nPeriksa Client ID & Client Secret di Settings / Custom App.');
+    toggleGdriveSettings();
+  }
+}
+
+async function submitManualGdriveCode() {
+  const code = document.getElementById('gdrive-manual-code').value.trim();
+  if (!code) {
+    alert('Masukkan kode otorisasi dari Google');
+    return;
+  }
+  try {
+    const res = await api('/api/gdrive/manual-auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    alert(res.message);
+    document.getElementById('gdrive-manual-code').value = '';
+    fetchGdriveStatus();
+    toggleGdriveSettings();
+  } catch(e) { alert(e.message); }
+}
+
+async function disconnectGoogleDrive() {
+  if (!confirm('Putuskan sambungan Google Drive? Rekaman otomatis ke cloud akan dihentikan.')) return;
+  try {
+    await api('/api/gdrive/disconnect', { method: 'POST' });
+    fetchGdriveStatus();
+  } catch(e) { alert(e.message); }
+}
+
+let recordingsList = [];
+async function fetchRecordings() {
+  const tbody = document.getElementById('recordings-tbody');
+  const mContainer = document.getElementById('mobile-recordings-container');
+  if (!tbody) return;
+  try {
+    const d = await api('/api/recordings');
+    recordingsList = d.recordings || [];
+
+    if (d.disk) {
+      const diskEl = document.getElementById('disk-stat-text');
+      if (diskEl) diskEl.textContent = `${d.disk.free_gb} GB Free of ${d.disk.total_gb} GB (${d.disk.percent}% used)`;
+    }
+    const countEl = document.getElementById('recordings-count-text');
+    if (countEl) countEl.textContent = `${recordingsList.length} segments recorded`;
+
+    if (!recordingsList.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--muted); padding:30px;">Belum ada rekaman segmentasi. Aktifkan fitur "Enable Recording" pada rute untuk mulai merekam otomatis.</td></tr>';
+      if (mContainer) mContainer.innerHTML = '<div style="text-align:center; color:var(--muted); padding:30px;">Belum ada rekaman segmentasi.</div>';
+      return;
+    }
+
+    // 1. Desktop Table
+    tbody.innerHTML = recordingsList.map(rec => {
+      let gdriveTag = '<span class="tag tag-input">LOCAL ONLY</span>';
+      if (rec.gdrive_status === 'uploaded') {
+        gdriveTag = `<a href="${rec.gdrive_link || '#'}" target="_blank" style="color:var(--cyan); font-weight:600;"><span class="tag tag-input" style="border-color:var(--cyan);">DRIVE VIEW</span></a>`;
+      } else if (rec.gdrive_status === 'uploading') {
+        gdriveTag = '<span class="tag tag-output">UPLOADING...</span>';
+      } else if (rec.gdrive_status === 'pending') {
+        gdriveTag = '<span class="tag tag-active-src">PENDING SYNC</span>';
+      } else if (rec.gdrive_status === 'failed') {
+        gdriveTag = '<span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">SYNC FAILED</span>';
+      }
+
+      const recTime = new Date(rec.created_at).toLocaleString();
+
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:600; font-family:'JetBrains Mono'; font-size:12.5px;">${escapeHtml(rec.filename)}</div>
+            <div style="font-size:11px; color:var(--text-dim);">${rec.completed ? 'Completed segment' : 'Recording in progress...'}</div>
+          </td>
+          <td><span class="tag tag-active-src">${escapeHtml(rec.route_name)}</span></td>
+          <td style="font-family:'JetBrains Mono';">${rec.size_mb} MB</td>
+          <td style="font-size:12px; color:var(--text-dim);">${recTime}</td>
+          <td>${gdriveTag}</td>
+          <td>
+            <div class="action-group">
+              ${!rec.local_deleted 
+                ? `<a href="/api/recordings/download/${encodeURIComponent(rec.id)}" download><button class="btn-icon">Download MP4</button></a>`
+                : `<span style="font-size:11px; color:var(--muted);">Stored in Cloud</span>`
+              }
+              ${rec.gdrive_status !== 'uploaded' && !rec.local_deleted
+                ? `<button class="btn-icon" style="color:var(--cyan);" onclick="uploadRecordingNow('${escapeHtml(rec.id)}')">Sync Drive</button>`
+                : ''
+              }
+              <button class="btn-icon btn-danger" onclick="deleteRecording('${escapeHtml(rec.id)}')">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // 2. Mobile Cards
+    if (mContainer) {
+      mContainer.innerHTML = recordingsList.map(rec => {
+        let gdriveTag = '<span class="tag tag-input">LOCAL ONLY</span>';
+        if (rec.gdrive_status === 'uploaded') {
+          gdriveTag = `<a href="${rec.gdrive_link || '#'}" target="_blank" style="color:var(--cyan); font-weight:600;"><span class="tag tag-input" style="border-color:var(--cyan);">DRIVE VIEW</span></a>`;
+        } else if (rec.gdrive_status === 'uploading') {
+          gdriveTag = '<span class="tag tag-output">UPLOADING...</span>';
+        }
+
+        const recTime = new Date(rec.created_at).toLocaleTimeString();
+
+        return `
+          <div class="route-card">
+            <div class="route-card-header">
+              <div class="route-card-title">
+                <span style="font-family:'JetBrains Mono'; font-size:12px; font-weight:700;">${escapeHtml(rec.filename)}</span>
+              </div>
+              ${gdriveTag}
+            </div>
+            <div class="route-card-grid">
+              <div class="route-card-item">
+                <div class="label">Route</div>
+                <div style="font-weight:600; color:var(--cyan);">${escapeHtml(rec.route_name)}</div>
+              </div>
+              <div class="route-card-item">
+                <div class="label">Size</div>
+                <div style="font-family:'JetBrains Mono'; font-weight:600;">${rec.size_mb} MB</div>
+              </div>
+              <div class="route-card-item">
+                <div class="label">Recorded At</div>
+                <div style="font-size:11.5px; color:var(--muted);">${recTime}</div>
+              </div>
+              <div class="route-card-item">
+                <div class="label">Status</div>
+                <div style="font-size:11.5px;">${rec.completed ? 'Completed' : 'Recording...'}</div>
+              </div>
+            </div>
+            <div class="route-card-actions">
+              ${!rec.local_deleted 
+                ? `<a href="/api/recordings/download/${encodeURIComponent(rec.id)}" download style="width:100%;"><button class="btn-icon" style="width:100%;">Download MP4</button></a>`
+                : `<span style="font-size:11px; color:var(--muted); text-align:center;">Cloud Stored</span>`
+              }
+              ${rec.gdrive_status !== 'uploaded' && !rec.local_deleted
+                ? `<button class="btn-icon" style="color:var(--cyan);" onclick="uploadRecordingNow('${escapeHtml(rec.id)}')">Sync Drive</button>`
+                : ''
+              }
+              <button class="btn-icon btn-danger" onclick="deleteRecording('${escapeHtml(rec.id)}')">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:20px;">Gagal memuat daftar rekaman: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function uploadRecordingNow(id) {
+  try {
+    alert('Memulai upload ke Google Drive di latar belakang...');
+    await api(`/api/recordings/upload-now/${encodeURIComponent(id)}`, { method: 'POST' });
+    fetchRecordings();
+  } catch(e) { alert('Upload error: ' + e.message); }
+}
+
+async function deleteRecording(id) {
+  if (!confirm('Hapus file rekaman ini?')) return;
+  try {
+    await api(`/api/recordings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    fetchRecordings();
+  } catch(e) { alert(e.message); }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  fetchGdriveStatus();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('gdrive') === 'connected') {
+    alert('Google Drive berhasil terhubung! Rekaman akan otomatis disinkronkan ke Google Drive Anda.');
+    switchTab('recordings');
+  } else if (params.get('gdrive') === 'error') {
+    alert('Google Drive notice: ' + (params.get('msg') || 'Check configuration'));
+    switchTab('recordings');
+  }
+});
+
+setInterval(() => {
+  const recView = document.getElementById('view-recordings');
+  if (recView && recView.style.display !== 'none') {
+    fetchRecordings();
+  }
+}, 5000);
+
 
 async function fetchEvents() {
   const container = document.getElementById('events-container');

@@ -22,6 +22,8 @@ from functools import wraps
 from urllib.parse import urlsplit, parse_qs
 from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
 
+import gdrive_service
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "makasna-srt-secret-2026")
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "admin")
@@ -32,7 +34,9 @@ ROUTES_FILE = os.path.join(BASE_DIR, "routes.json")
 LEGACY_FORWARDS_FILE = os.path.join(BASE_DIR, "forwards.json")
 EVENTS_FILE = os.path.join(BASE_DIR, "events.json")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
+RECORDINGS_DIR = gdrive_service.RECORDINGS_DIR
 os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 MEDIAMTX_API = os.environ.get("MEDIAMTX_API", "http://127.0.0.1:9997")
 MEDIAMTX_CONF = os.environ.get("MEDIAMTX_CONF", "/etc/mediamtx/mediamtx.yml")
@@ -432,6 +436,26 @@ def build_ffmpeg_cmd(route, source_config):
         else:
             cmd.extend([durl])
 
+    # 3. Optional Internal Segmented Recording
+    if route.get("record_enabled"):
+        rec_dir = os.path.join(RECORDINGS_DIR, route_id)
+        os.makedirs(rec_dir, exist_ok=True)
+        seg_time = int(route.get("record_duration") or 900)
+        cmd.extend([
+            "-map", "0:v:0?",
+            "-map", "0:a:0?",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "160k",
+            "-ar", "48000",
+            "-f", "segment",
+            "-segment_time", str(seg_time),
+            "-segment_format", "mp4",
+            "-reset_timestamps", "1",
+            "-strftime", "1",
+            os.path.join(rec_dir, f"rec_{route_id}_%Y%m%d_%H%M%S.mp4")
+        ])
+
     return cmd
 
 
@@ -639,9 +663,74 @@ def supervisor_thread():
         time.sleep(2)
 
 
-# Start background thread
+# Start background threads
 supervisor = threading.Thread(target=supervisor_thread, daemon=True)
 supervisor.start()
+
+
+def gdrive_uploader_worker():
+    while True:
+        try:
+            cfg = gdrive_service.load_gdrive_config()
+            if cfg.get("connected") and cfg.get("auto_upload"):
+                meta = gdrive_service.scan_local_recordings()
+                routes = load_routes()
+                routes_map = {r["id"]: r for r in routes}
+
+                for key, rec in list(meta.items()):
+                    if rec.get("completed") and rec.get("gdrive_status") == "pending":
+                        route_id = rec.get("route_id")
+                        route = routes_map.get(route_id)
+                        if route and not route.get("upload_to_gdrive", True):
+                            continue
+
+                        route_name = route.get("name", rec.get("route_name", "General")) if route else rec.get("route_name", "General")
+                        file_path = rec.get("filepath")
+                        if not file_path or not os.path.exists(file_path):
+                            continue
+
+                        rec["gdrive_status"] = "uploading"
+                        gdrive_service.save_recordings_meta(meta)
+
+                        try:
+                            upload_res = gdrive_service.upload_file_to_drive(file_path, route_name=route_name)
+                            rec["gdrive_status"] = "uploaded"
+                            rec["gdrive_file_id"] = upload_res.get("file_id")
+                            rec["gdrive_link"] = upload_res.get("view_link")
+                            rec["uploaded_at"] = now_iso()
+                            gdrive_service.save_recordings_meta(meta)
+
+                            log_event(route_id, route_name, "gdrive_upload", f"Uploaded {rec['filename']} ({rec.get('size_mb')} MB) to Google Drive", "info")
+
+                            delete_local = False
+                            if route and route.get("delete_after_upload"):
+                                delete_local = True
+                            elif cfg.get("delete_after_upload"):
+                                delete_local = True
+
+                            if delete_local:
+                                try:
+                                    os.remove(file_path)
+                                    rec["local_deleted"] = True
+                                    gdrive_service.save_recordings_meta(meta)
+                                    log_event(route_id, route_name, "storage_cleanup", f"Cleaned up local file {rec['filename']} after upload", "info")
+                                except Exception:
+                                    pass
+
+                        except Exception as upload_err:
+                            rec["gdrive_status"] = "failed"
+                            rec["gdrive_error"] = str(upload_err)
+                            gdrive_service.save_recordings_meta(meta)
+                            log_event(route_id, route_name, "gdrive_error", f"Google Drive upload failed for {rec['filename']}: {upload_err}", "error")
+
+        except Exception:
+            pass
+        time.sleep(10)
+
+
+uploader_worker = threading.Thread(target=gdrive_uploader_worker, daemon=True)
+uploader_worker.start()
+
 
 
 # =========================================================================
@@ -770,6 +859,10 @@ def api_create_route():
         "primary_source": primary_source,
         "secondary_source": secondary_source,
         "destinations": destinations,
+        "record_enabled": bool(data.get("record_enabled", False)),
+        "record_duration": int(data.get("record_duration", 900)),
+        "upload_to_gdrive": bool(data.get("upload_to_gdrive", True)),
+        "delete_after_upload": bool(data.get("delete_after_upload", False)),
         "created_at": now_iso(),
         "updated_at": now_iso()
     }
@@ -826,6 +919,14 @@ def api_update_route(route_id):
         r["failover_policy"] = data["failover_policy"]
     if "destinations" in data:
         r["destinations"] = data["destinations"]
+    if "record_enabled" in data:
+        r["record_enabled"] = bool(data["record_enabled"])
+    if "record_duration" in data:
+        r["record_duration"] = int(data["record_duration"])
+    if "upload_to_gdrive" in data:
+        r["upload_to_gdrive"] = bool(data["upload_to_gdrive"])
+    if "delete_after_upload" in data:
+        r["delete_after_upload"] = bool(data["delete_after_upload"])
     r["updated_at"] = now_iso()
 
     routes[idx] = r
@@ -1112,6 +1213,176 @@ def api_srt_port():
         return jsonify({"ok": True, "port": port})
     except Exception:
         return jsonify({"ok": True, "port": 8890})
+
+
+# =========================================================================
+# Google Drive & Recording Management APIs
+# =========================================================================
+@app.route("/api/gdrive/status", methods=["GET"])
+@login_required
+def api_gdrive_status():
+    cfg = gdrive_service.load_gdrive_config()
+    creds = gdrive_service.get_credentials()
+    connected = bool(creds and creds.valid)
+    if connected != cfg.get("connected"):
+        cfg["connected"] = connected
+        gdrive_service.save_gdrive_config(cfg)
+    return jsonify({
+        "ok": True,
+        "connected": connected,
+        "email": cfg.get("connected_email", ""),
+        "target_folder": cfg.get("target_folder_name", "Makasna Video Archive"),
+        "client_id": cfg.get("client_id", ""),
+        "auto_upload": cfg.get("auto_upload", True),
+        "delete_after_upload": cfg.get("delete_after_upload", False)
+    })
+
+
+@app.route("/api/gdrive/config", methods=["POST"])
+@login_required
+def api_gdrive_save_config():
+    data = request.json or {}
+    cfg = gdrive_service.load_gdrive_config()
+    if "client_id" in data:
+        cfg["client_id"] = data["client_id"].strip()
+    if "client_secret" in data:
+        cfg["client_secret"] = data["client_secret"].strip()
+    if "target_folder_name" in data:
+        cfg["target_folder_name"] = data["target_folder_name"].strip() or "Makasna Video Archive"
+    if "auto_upload" in data:
+        cfg["auto_upload"] = bool(data["auto_upload"])
+    if "delete_after_upload" in data:
+        cfg["delete_after_upload"] = bool(data["delete_after_upload"])
+    gdrive_service.save_gdrive_config(cfg)
+    return jsonify({"ok": True, "message": "Google Drive configuration saved", "config": cfg})
+
+
+@app.route("/api/gdrive/auth-url", methods=["GET"])
+@login_required
+def api_gdrive_auth_url():
+    host = request.host
+    redirect_uri = f"http://{host}/api/gdrive/callback"
+    try:
+        url = gdrive_service.get_auth_url(redirect_uri)
+        return jsonify({"ok": True, "auth_url": url, "redirect_uri": redirect_uri})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/gdrive/callback", methods=["GET"])
+def api_gdrive_callback():
+    code = request.args.get("code")
+    if not code:
+        return redirect("/?gdrive=error&msg=No+code+provided")
+    host = request.host
+    redirect_uri = f"http://{host}/api/gdrive/callback"
+    try:
+        email = gdrive_service.exchange_code_for_token(code, redirect_uri)
+        log_event("system", "Google Drive", "gdrive_connected", f"Connected to Google account: {email}", "info")
+        return redirect("/?gdrive=connected")
+    except Exception as e:
+        return redirect(f"/?gdrive=error&msg={e}")
+
+
+@app.route("/api/gdrive/manual-auth", methods=["POST"])
+@login_required
+def api_gdrive_manual_auth():
+    data = request.json or {}
+    code = data.get("code", "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "Authorization code is required"}), 400
+    host = request.host
+    redirect_uri = f"http://{host}/api/gdrive/callback"
+    redirect_uris_to_try = [redirect_uri, "urn:ietf:wg:oauth:2.0:oob", "http://localhost"]
+    last_err = None
+    for r_uri in redirect_uris_to_try:
+        try:
+            email = gdrive_service.exchange_code_for_token(code, r_uri)
+            log_event("system", "Google Drive", "gdrive_connected", f"Connected to Google account: {email}", "info")
+            return jsonify({"ok": True, "email": email, "message": f"Successfully connected to {email}"})
+        except Exception as e:
+            last_err = e
+    return jsonify({"ok": False, "error": f"Failed to authenticate with code: {last_err}"}), 400
+
+
+@app.route("/api/gdrive/disconnect", methods=["POST"])
+@login_required
+def api_gdrive_disconnect():
+    gdrive_service.disconnect_gdrive()
+    log_event("system", "Google Drive", "gdrive_disconnected", "Google Drive account disconnected", "info")
+    return jsonify({"ok": True, "message": "Google Drive disconnected"})
+
+
+@app.route("/api/recordings", methods=["GET"])
+@login_required
+def api_list_recordings():
+    meta = gdrive_service.scan_local_recordings()
+    disk = psutil.disk_usage(RECORDINGS_DIR)
+    recordings_list = sorted(list(meta.values()), key=lambda x: x.get("created_at", ""), reverse=True)
+    return jsonify({
+        "ok": True,
+        "recordings": recordings_list,
+        "disk": {
+            "total_gb": round(disk.total / (1024**3), 1),
+            "used_gb": round(disk.used / (1024**3), 1),
+            "free_gb": round(disk.free / (1024**3), 1),
+            "percent": disk.percent
+        }
+    })
+
+
+@app.route("/api/recordings/download/<path:rel_path>", methods=["GET"])
+@login_required
+def api_download_recording(rel_path):
+    directory = os.path.dirname(os.path.join(RECORDINGS_DIR, rel_path))
+    filename = os.path.basename(rel_path)
+    if not os.path.exists(os.path.join(directory, filename)):
+        return "File not found", 404
+    return send_from_directory(directory, filename, as_attachment=True)
+
+
+@app.route("/api/recordings/upload-now/<path:rel_path>", methods=["POST"])
+@login_required
+def api_upload_recording_now(rel_path):
+    fpath = os.path.join(RECORDINGS_DIR, rel_path)
+    if not os.path.exists(fpath):
+        return jsonify({"ok": False, "error": "Local file not found"}), 404
+
+    meta = gdrive_service.load_recordings_meta()
+    key = rel_path
+    rec = meta.get(key, {})
+    route_name = rec.get("route_name", "General")
+
+    try:
+        res = gdrive_service.upload_file_to_drive(fpath, route_name=route_name)
+        if key in meta:
+            meta[key]["gdrive_status"] = "uploaded"
+            meta[key]["gdrive_file_id"] = res["file_id"]
+            meta[key]["gdrive_link"] = res["view_link"]
+            meta[key]["uploaded_at"] = now_iso()
+            gdrive_service.save_recordings_meta(meta)
+        log_event(rec.get("route_id", "system"), route_name, "gdrive_upload", f"Manual upload completed: {res['name']}", "info")
+        return jsonify({"ok": True, "file": res})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/recordings/<path:rel_path>", methods=["DELETE"])
+@login_required
+def api_delete_recording(rel_path):
+    fpath = os.path.join(RECORDINGS_DIR, rel_path)
+    if os.path.exists(fpath):
+        try:
+            os.remove(fpath)
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    meta = gdrive_service.load_recordings_meta()
+    if rel_path in meta:
+        del meta[rel_path]
+        gdrive_service.save_recordings_meta(meta)
+
+    return jsonify({"ok": True, "message": "Recording deleted"})
 
 
 @atexit.register

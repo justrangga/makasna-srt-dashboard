@@ -26,3 +26,6 @@ runtime/
 venv/
 .coverage
 htmlcov/
+gdrive_token.json
+gdrive_config.json
+recordings_meta.json
