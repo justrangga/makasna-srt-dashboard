@@ -1,47 +1,1641 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Makasna Media Dashboard</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Makasna Live Video Transport Gateway</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
-:root{color-scheme:dark;--bg:#080808;--panel:#111;--line:#303030;--muted:#999;--text:#f5f5f5;--soft:#191919}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px Poppins,Arial,sans-serif}button,input,select{font:inherit}.shell{max-width:1440px;margin:auto;padding:28px}.top,.row,.actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.top{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:20px}.top h1{font-size:24px;margin:0}.eyebrow,label,th{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}.stats{grid-column:span 3}.preview{grid-column:span 7}.health{grid-column:span 5}.wide{grid-column:1/-1}.value{font-size:27px;font-weight:600;margin-top:7px}.muted{color:var(--muted)}h2{font-size:17px;margin:0 0 16px}input,select,button{border:1px solid #444;background:#0b0b0b;color:#fff;border-radius:8px;padding:10px 12px}button{cursor:pointer;font-weight:600}button.primary{background:#fff;color:#000;border-color:#fff}button:disabled{opacity:.45;cursor:not-allowed}.controls{display:grid;grid-template-columns:2fr 1fr auto auto;gap:10px;margin-bottom:14px}video{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--line);border-radius:10px}.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{background:var(--soft);border:1px solid #292929;border-radius:9px;padding:11px}.metric b{display:block;font-size:16px;margin-top:3px}.charts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}canvas{width:100%;height:55px;background:#0b0b0b;border-radius:7px}.log{height:130px;overflow:auto;background:#080808;border:1px solid var(--line);border-radius:8px;padding:10px;font:11px ui-monospace,monospace;margin-top:12px}.stream-list{display:flex;flex-wrap:wrap;gap:8px}.stream{background:var(--soft)}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px;border-bottom:1px solid #292929}td:last-child{text-align:right}.modal{position:fixed;inset:0;background:#000d;display:grid;place-items:center;padding:20px}.modal.hidden{display:none}.dialog{width:min(620px,100%);max-height:90vh;overflow:auto}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:grid;gap:5px}.full{grid-column:1/-1}.status{border:1px solid #555;border-radius:99px;padding:5px 10px;font-size:11px}.error{color:#ddd;font-weight:600}@media(max-width:900px){.stats{grid-column:span 6}.preview,.health{grid-column:1/-1}.controls{grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1}}@media(max-width:560px){.shell{padding:16px}.stats{grid-column:1/-1}.controls,.form-grid,.metric-grid,.charts{grid-template-columns:1fr}.controls input,.full{grid-column:auto}.top{align-items:flex-start;flex-direction:column}.table-wrap{overflow:auto}}
-.dialog{width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto}.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.78)}.modal.hidden{display:none}.dialog-head{padding-bottom:16px;border-bottom:1px solid var(--line)}.icon-button{padding:7px 10px}.form-stack{display:grid;gap:16px;margin-top:18px}.field{display:grid;gap:7px}.field input,.field select{width:100%}.field-help{font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0}.label-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.small-button{padding:7px 10px;font-size:12px}.processing-options{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#0c0c0c}.processing-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.form-error{min-height:18px;color:#fff;font-size:12px;padding:0;margin:0}.form-error:not(:empty){border-left:2px solid #fff;padding-left:10px}.dialog-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:16px;border-top:1px solid var(--line)}@media(max-width:620px){.processing-grid{grid-template-columns:1fr}.dialog-actions button{flex:1}}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  color-scheme: dark;
+  --bg: #09090b;
+  --panel: #121215;
+  --panel-elevated: #18181c;
+  --panel-hover: #1f1f24;
+  --border: #27272a;
+  --border-focus: #3f3f46;
+  --muted: #a1a1aa;
+  --text: #f4f4f5;
+  --text-dim: #71717a;
+  
+  --cyan: #00e5ff;
+  --blue: #3b82f6;
+  --blue-hover: #2563eb;
+  --amber: #f59e0b;
+  --green: #10b981;
+  --red: #ef4444;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 'Inter', -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button, input, select { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* Top Header Bar */
+.top-nav {
+  height: 56px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-logo {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+}
+.brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.brand-pill {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--cyan);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-weight: 600;
+}
+
+.system-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-elevated);
+  border: 1px solid var(--border);
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.stat-label { color: var(--text-dim); text-transform: uppercase; font-size: 9.5px; font-weight: 600; }
+.stat-value { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-logout {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  transition: all 0.15s;
+  min-height: 34px;
+}
+.btn-logout:hover { background: var(--panel-hover); color: #fff; }
+
+/* App Shell */
+.app-shell {
+  display: flex;
+  flex: 1;
+}
+
+/* Desktop Sidebar */
+.sidebar {
+  width: 220px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 10px;
+  gap: 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.nav-item:hover {
+  background: var(--panel-hover);
+  color: #fff;
+}
+.nav-item.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: #fff;
+  border-left: 3px solid var(--cyan);
+  font-weight: 600;
+}
+
+/* Mobile Bottom Navigation Bar */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 58px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  z-index: 45;
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  height: 100%;
+  transition: color 0.15s;
+}
+.bottom-nav-item.active {
+  color: var(--cyan);
+}
+.bottom-nav-icon { font-size: 17px; }
+
+/* Workspace */
+.workspace {
+  flex: 1;
+  padding: 24px 28px;
+  overflow-y: auto;
+  max-width: 1600px;
+}
+
+/* Page Header */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.page-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.page-title p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+/* Action Buttons */
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: background 0.15s;
+  min-height: 38px;
+}
+.btn-primary:hover { background: var(--blue-hover); }
+
+/* Filter Bar */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.search-input {
+  flex: 1;
+  min-width: 180px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #fff;
+  font-size: 13px;
+  min-height: 38px;
+}
+.search-input:focus { outline: none; border-color: var(--cyan); }
+.filter-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #fff;
+  font-size: 13px;
+  min-height: 38px;
+}
+
+/* Desktop Table View */
+.table-container {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 820px;
+}
+th {
+  text-align: left;
+  padding: 12px 16px;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,0.25);
+  white-space: nowrap;
+}
+td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.015); }
+
+/* Mobile Cards View (displayed on smartphone) */
+.mobile-routes-list {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+.route-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.route-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.route-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.route-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: var(--panel-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+}
+.route-card-item .label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.route-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.route-card-actions button {
+  min-height: 40px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.route-card-actions .btn-danger {
+  grid-column: 1 / -1;
+}
+
+/* Badges & Dots */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-green { background: var(--green); box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+.dot-amber { background: var(--amber); }
+.dot-gray { background: #52525b; }
+.dot-red { background: var(--red); }
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tag-input { background: rgba(0, 229, 255, 0.12); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.25); }
+.tag-output { background: rgba(245, 158, 11, 0.12); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.25); }
+.tag-active-src { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+/* Action Buttons */
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.btn-icon {
+  background: var(--panel-elevated);
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  transition: all 0.15s;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.btn-icon:hover { background: var(--panel-hover); border-color: var(--border-focus); }
+.btn-icon.btn-danger:hover { background: rgba(239, 68, 68, 0.15); color: var(--red); border-color: var(--red); }
+.btn-icon.btn-start { color: var(--green); }
+.btn-icon.btn-stop { color: var(--amber); }
+
+/* Modals */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal.hidden { display: none; }
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: min(880px, 100%);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.8);
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h2 { font-size: 17px; font-weight: 700; }
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Telemetry Layout */
+.telemetry-preview-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  align-items: flex-start;
+}
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.telemetry-box {
+  background: var(--panel-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.telemetry-box-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.telemetry-box-title h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.telemetry-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.metric-tile {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+.metric-tile .label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.metric-tile .val {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 3px;
+}
+
+/* Video Preview */
+video {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Forms */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.form-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.form-control {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 9px 12px;
+  color: #fff;
+  font-size: 13px;
+  min-height: 40px;
+}
+.form-control:focus { outline: none; border-color: var(--cyan); }
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dest-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 2.2fr 1.2fr auto;
+  gap: 8px;
+  align-items: center;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+/* Events Log Table */
+.event-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.event-entry:last-child { border-bottom: none; }
+.event-time { color: var(--text-dim); min-width: 80px; }
+.event-type { font-weight: 600; min-width: 110px; }
+.event-type.started { color: var(--green); }
+.event-type.failover { color: var(--amber); }
+.event-type.stopped { color: var(--muted); }
+.event-type.error { color: var(--red); }
+.event-msg { flex: 1; margin-left: 12px; color: var(--text); }
+
+/* =========================================================================
+   MOBILE RESPONSIVENESS OVERHAUL
+   ========================================================================= */
+
+@media (max-width: 900px) {
+  .system-telemetry { display: none; }
+}
+
+@media (max-width: 768px) {
+  .workspace {
+    padding: 16px 14px 75px 14px; /* Clearance for bottom nav */
+  }
+  .sidebar {
+    display: none;
+  }
+  .bottom-nav {
+    display: flex;
+  }
+
+  /* Table / Card toggle */
+  .table-container {
+    display: none;
+  }
+  .mobile-routes-list {
+    display: flex;
+  }
+
+  /* Filter bar stacking */
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filter-select {
+    width: 100%;
+  }
+
+  /* Fullscreen Modal Experience on Smartphone */
+  .modal {
+    padding: 0;
+  }
+  .modal-card {
+    width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  .modal-footer {
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .modal-footer button {
+    width: 100%;
+    justify-content: center;
+    min-height: 42px;
+  }
+
+  .telemetry-preview-row {
+    grid-template-columns: 1fr;
+  }
+  .telemetry-grid {
+    grid-template-columns: 1fr;
+  }
+  .telemetry-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  .dest-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 12px;
+  }
+  .dest-row button.btn-danger {
+    margin-top: 4px;
+    width: 100%;
+    min-height: 38px;
+  }
+
+  .event-entry {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .event-msg {
+    margin-left: 0;
+  }
+}
 </style>
 </head>
-<body><main class="shell">
-<header class="top"><div><div class="eyebrow">Media operations</div><h1>Makasna Dashboard</h1><div class="muted">SRT ingest, local preview and relay control</div></div><div class="actions"><span class="status">User: {{ session.get('username', 'admin') }}</span><a href="/logout"><button type="button">Logout</button></a><button class="primary" onclick="openAddModal()">Add Redirect Target</button></div></header>
-<section class="grid">
-<div class="card stats"><div class="eyebrow">CPU</div><div class="value" id="cpu">--</div></div><div class="card stats"><div class="eyebrow">Memory</div><div class="value" id="ram">--</div></div><div class="card stats"><div class="eyebrow">Network RX</div><div class="value" id="rx">--</div></div><div class="card stats"><div class="eyebrow">Active streams</div><div class="value" id="count">0</div></div>
-<div class="card wide"><div class="row"><div><div class="eyebrow">SRT Port</div><div class="value" id="srt-port-val">8890</div></div><div class="actions"><input type="number" id="new-srt-port" min="1024" max="65535" placeholder="New port (e.g. 8890)"><button onclick="updateSrtPort()">Change Port</button></div></div><span id="srt-port-status" class="muted" aria-live="polite"></span></div>
-<div class="card wide"><div class="row"><div><h2>Active streams</h2><div class="muted">Choose a ready MediaMTX path for preview.</div></div></div><div id="streams" class="stream-list"></div></div>
-<div class="card preview"><h2>Live preview</h2><div class="controls"><input id="stream" maxlength="64" placeholder="Stream ID" autocomplete="off"><select id="audio"><option value="0">Audio 1</option></select><button onclick="detect()">Detect / load</button><button class="primary" onclick="startPreview()">Start</button></div><video id="video" controls playsinline></video><div class="row"><span id="preview-status" class="muted">Stopped</span><button onclick="stopPreview()">Stop</button></div></div>
-<div class="card health"><div class="row"><h2>SRT network health</h2><span class="status" id="health-state">No sample</span></div><div class="metric-grid" id="metrics"></div><div class="charts"><canvas id="rate-chart"></canvas><canvas id="rtt-chart"></canvas><canvas id="loss-chart"></canvas></div><div id="telemetry" class="log"></div></div>
-<div class="card wide"><div class="row"><div><h2>Relay management</h2><div class="muted">Audio selection and bitrate processing are preserved.</div></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Source</th><th>Destination</th><th>Audio</th><th>Processing</th><th>Status</th><th>Actions</th></tr></thead><tbody id="forwards"></tbody></table></div></div>
-</section></main>
-<div id="add-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="add-modal-title"><div class="card dialog"><div class="row dialog-head"><h2 id="add-modal-title">New Forward Target</h2><button type="button" class="icon-button" onclick="closeAddModal()" aria-label="Close">Close</button></div><form id="add-form" class="form-stack"><label class="field">Target Label / Name<input type="text" name="name" required placeholder="e.g. YouTube Live, Backup SRT"></label><label class="field">Source Stream Name / URL<input type="text" name="source" required placeholder="e.g. live or cam1" value="live"><span class="field-help">Enter a local stream name (for example, live) or a complete URL.</span></label><div class="field"><div class="label-row"><label for="audio-index">Audio Track</label><button type="button" id="detect-audio-button" class="small-button" onclick="detectAudioTracks()">Detect Audio Tracks</button></div><select id="audio-index" name="audio_index"><option value="0">Audio 1 (default)</option></select><span id="audio-detect-status" class="field-help" aria-live="polite">Defaults to the first audio track.</span></div><label class="field">Preset / Destination Type<select id="dest-preset" onchange="applyPreset(this.value)"><option value="custom">Custom URL</option><option value="youtube">YouTube Live (RTMP)</option><option value="facebook">Facebook Live (RTMP)</option><option value="twitch">Twitch (RTMP)</option><option value="srt_caller">Remote SRT Destination</option></select></label><label class="field">Destination URL / Stream Target<input type="text" id="dest-url" name="destination" required placeholder="rtmp://a.rtmp.youtube.com/live2/YOUR_STREAM_KEY"></label><label class="field">Video &amp; Audio Processing<select id="processing-mode" name="mode" onchange="processing(this.value)"><option value="copy" selected>Direct Stream Copy (0% CPU Re-encode - Recommended)</option><option value="custom">Custom Bitrate</option></select></label><div id="processing" class="processing-options" hidden><div class="processing-grid"><label class="field">Video Bitrate (kbps)<input name="video_bitrate" value="4500" inputmode="numeric"></label><label class="field">Maximum Bitrate (kbps)<input name="max_bitrate" value="5000" inputmode="numeric"></label><label class="field">Buffer Size (kbps)<input name="buffer_size" value="9000" inputmode="numeric"></label><label class="field">Audio Bitrate (kbps)<input name="audio_bitrate" value="160" inputmode="numeric"></label></div><label class="field">Encoder Preset<select name="encoder_preset"><option>ultrafast</option><option>superfast</option><option selected>veryfast</option><option>faster</option><option>fast</option><option>medium</option><option>slow</option></select></label></div><p id="add-form-error" class="form-error" role="alert" aria-live="assertive"></p><div class="dialog-actions"><button type="button" onclick="closeAddModal()">Cancel</button><button id="save-relay-button" type="submit" class="primary">Save &amp; Start</button></div></form></div></div>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script><script>
-const $=id=>document.getElementById(id), history={rate:[],rtt:[],loss:[]};let hls=null,lastState='';
-function esc(v){const d=document.createElement('div');d.textContent=String(v??'');return d.innerHTML}function log(msg){const d=document.createElement('div');d.textContent=`${new Date().toLocaleTimeString()}  ${msg}`;$('telemetry').prepend(d);while($('telemetry').children.length>60)$('telemetry').lastChild.remove()}
-async function json(url,opts){const r=await fetch(url,{cache:'no-store',...opts});let d;try{d=await r.json()}catch(e){throw Error('Malformed server response')}if(!r.ok)throw Error(d.error||`Request failed (${r.status})`);return d}
-async function fetchSrtPort(){try{const d=await json('/api/srt/port');$('srt-port-val').textContent=d.port;$('srt-port-status').textContent=d.ok?'Active port loaded':'Using default port: '+(d.error||'MediaMTX unavailable')}catch(e){$('srt-port-status').textContent=e.message}}
-async function updateSrtPort(){const port=$('new-srt-port').value;if(!confirm(`Change SRT port to ${port}? Existing SRT connections may be interrupted.`))return;$('srt-port-status').textContent='Updating...';try{const d=await json('/api/srt/port',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port})});$('srt-port-val').textContent=d.port;$('srt-port-status').textContent=d.message;log(d.message)}catch(e){$('srt-port-status').textContent=e.message;log(e.message)}}
-function choose(name){$('stream').value=name;detect()}async function stats(){try{const d=await json('/api/stats');$('cpu').textContent=d.cpu+'%';$('ram').textContent=d.ram_percent+'%';$('rx').textContent=d.rx_mbps+' Mbps';$('count').textContent=d.active_streams.length;$('streams').innerHTML=d.active_streams.map(s=>`<button class="stream" data-name="${esc(s.name)}">${esc(s.name)} · ${s.tracks} tracks</button>`).join('')||'<span class="muted">No ready streams</span>';$('streams').querySelectorAll('button').forEach(b=>b.onclick=()=>choose(b.dataset.name))}catch(e){}}
-async function detect(){const stream_id=$('stream').value.trim();try{const d=await json('/api/audio-tracks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stream_id})});$('audio').innerHTML=d.audio_streams.map(a=>`<option value="${a.selector}">Audio ${a.selector+1} · ${esc(a.codec)}</option>`).join('');if(!d.audio_streams.length)throw Error('No audio tracks found');log(`${d.audio_streams.length} audio tracks detected for ${stream_id}`)}catch(e){log(e.message)}}
-async function startPreview(){try{await stopPreview(false);const d=await json('/api/preview/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stream_id:$('stream').value.trim(),audio_index:$('audio').value})});$('preview-status').textContent='Starting';log(`Preview starting: ${d.stream_id}, Audio ${d.audio_index+1}`);pollPreview()}catch(e){$('preview-status').textContent=e.message;log(e.message)}}
-async function pollPreview(){try{const d=await json('/api/preview/status');$('preview-status').textContent=d.error||(!d.running?'Stopped':d.ready?'Live':'Starting');if(d.ready&&!$('video').dataset.url){$('video').dataset.url=d.playlist_url;if(window.Hls&&Hls.isSupported()){hls=new Hls({liveSyncDurationCount:2,maxBufferLength:10});hls.loadSource(d.playlist_url);hls.attachMedia($('video'));hls.on(Hls.Events.MANIFEST_PARSED,()=>$('video').play().catch(()=>{}))}else{$('video').src=d.playlist_url;$('video').play().catch(()=>{})}}if(d.running)setTimeout(pollPreview,1000);else if(d.error)log(d.error)}catch(e){log(e.message)}}
-async function stopPreview(call=true){if(call)try{await json('/api/preview/stop',{method:'POST'})}catch(e){}if(hls){hls.destroy();hls=null}$('video').pause();$('video').removeAttribute('src');delete $('video').dataset.url;$('video').load();$('preview-status').textContent='Stopped'}
-function draw(id,values){const c=$(id),x=c.getContext('2d'),w=c.width=c.clientWidth*devicePixelRatio,h=c.height=c.clientHeight*devicePixelRatio;x.clearRect(0,0,w,h);if(values.length<2)return;const max=Math.max(...values,1),min=Math.min(...values,0);x.strokeStyle='#ddd';x.lineWidth=1.5*devicePixelRatio;x.beginPath();values.forEach((v,i)=>{const px=i*w/(values.length-1),py=h-(v-min)/(max-min||1)*h*.8-h*.1;i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()}
-async function health(){const id=$('stream').value.trim();if(!id)return;try{const d=await json('/api/srt-health?stream_id='+encodeURIComponent(id));if(!d.connected)throw Error('No SRT publisher for selected stream');const m=d.metrics;$('health-state').textContent=m.health;const values=[['Receive rate',m.receive_mbps+' Mbps','current'],['RTT',m.rtt_ms+' ms','current'],['Loss',m.packet_loss_count+' / '+m.packet_loss_rate+'%','cumulative / current'],['Retransmitted',m.retransmitted_packets,'cumulative'],['Dropped',m.dropped_packets+' / '+m.dropped_bytes+' B','cumulative'],['Link capacity',m.link_capacity_mbps+' Mbps','current'],['Packets received',m.packets_received,'cumulative'],['Bytes received',m.bytes_received,'cumulative'],['Uptime',m.uptime_seconds==null?'Not reported':m.uptime_seconds+' s','current']];$('metrics').innerHTML=values.map(v=>`<div class="metric"><span class="eyebrow">${v[0]}</span><b>${v[1]}</b><small class="muted">${v[2]}</small></div>`).join('');[['rate',m.receive_mbps],['rtt',m.rtt_ms],['loss',m.packet_loss_rate]].forEach(([k,v])=>{history[k].push(v);if(history[k].length>40)history[k].shift();draw(k+'-chart',history[k])});if(lastState!==m.health){log(`SRT health changed to ${m.health}`);lastState=m.health}}catch(e){$('health-state').textContent='Disconnected';if(lastState!=='disconnected'){log(e.message);lastState='disconnected'}}}
-async function forwards(){try{const a=await json('/api/forwards');$('forwards').innerHTML=a.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.source)}</td><td>${esc(i.destination_label)}</td><td>Audio ${i.audio_index+1}</td><td>${esc(i.processing_summary)}</td><td>${i.running?'Running':'Stopped'}</td><td><button onclick="toggle('${i.id}',${!i.enabled})">${i.enabled?'Stop':'Start'}</button> <button onclick="removeRelay('${i.id}')">Delete</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No relays configured</td></tr>'}catch(e){}}
-async function toggle(id,enabled){await json(`/api/forwards/${id}/toggle`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});forwards()}async function removeRelay(id){if(confirm('Delete this relay?')){await json(`/api/forwards/${id}`,{method:'DELETE'});forwards()}}
-function resetAddForm(){const form=$('add-form');form.reset();$('audio-index').innerHTML='<option value="0">Audio 1 (default)</option>';$('audio-detect-status').textContent='Defaults to the first audio track.';$('add-form-error').textContent='';processing('copy')}
-function openAddModal(){$('add-modal').classList.remove('hidden');$('add-form').elements.name.focus()}
-function closeAddModal(){$('add-modal').classList.add('hidden');resetAddForm()}
-function processing(v){$('processing').hidden=v!=='custom'}
-function applyPreset(preset){const destinations={youtube:'rtmp://a.rtmp.youtube.com/live2/STREAM_KEY',facebook:'rtmps://live-api-s.facebook.com:443/rtmp/STREAM_KEY',twitch:'rtmp://live.twitch.tv/app/STREAM_KEY',srt_caller:'srt://REMOTE_IP:8890?streamid=publish:STREAM_NAME'};$('dest-url').value=destinations[preset]||''}
-function formatAudioTrack(track){const details=[track.codec,track.channel_layout||(track.channels?track.channels+' channels':null),track.sample_rate?track.sample_rate+' Hz':null,track.language,track.title].filter(Boolean);return `Audio ${track.selector+1}${details.length?' — '+details.join(', '):''}`}
-async function detectAudioTracks(){const form=$('add-form'),select=$('audio-index'),status=$('audio-detect-status'),button=$('detect-audio-button'),source=form.elements.source.value.trim();if(!source){status.textContent='Enter a source before detecting audio tracks.';return}button.disabled=true;status.textContent='Detecting audio tracks...';try{const data=await json('/api/audio-tracks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source})});if(!Array.isArray(data.audio_streams))throw Error('Malformed server response');if(!data.audio_streams.length){select.innerHTML='<option value="0">Audio 1 (default; no track detected)</option>';status.textContent='No audio tracks found on the active source.';return}select.replaceChildren();data.audio_streams.forEach(track=>{if(!Number.isInteger(track.selector)||track.selector<0)return;const option=document.createElement('option');option.value=track.selector;option.textContent=formatAudioTrack(track);select.appendChild(option)});if(!select.options.length)throw Error('Malformed server response');status.textContent=`${select.options.length} audio track(s) detected.`}catch(e){status.textContent=e.message||'Unable to detect audio tracks.'}finally{button.disabled=false}}
-$('add-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAddModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('add-modal').classList.contains('hidden'))closeAddModal()});
-$('add-form').onsubmit=async e=>{e.preventDefault();const form=e.target,button=$('save-relay-button'),error=$('add-form-error'),body=Object.fromEntries(new FormData(form));button.disabled=true;error.textContent='';try{await json('/api/forwards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});closeAddModal();await forwards()}catch(x){error.textContent=x.message||'Unable to save relay.'}finally{button.disabled=false}};stats();forwards();fetchSrtPort();setInterval(stats,3000);setInterval(health,3000);window.addEventListener('beforeunload',()=>navigator.sendBeacon('/api/preview/stop'));
-</script></body></html>
+<body>
+
+<!-- Top Navigation -->
+<header class="top-nav">
+  <div class="brand">
+    <div class="brand-logo">M</div>
+    <div class="brand-name">MAKASNA</div>
+    <span class="brand-pill">GATEWAY</span>
+  </div>
+
+  <!-- Desktop System Stats -->
+  <div class="system-telemetry">
+    <div class="stat-pill">
+      <span class="stat-label">Active</span>
+      <span class="stat-value" id="hdr-active-routes">0 / 0</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-label">CPU</span>
+      <span class="stat-value" id="hdr-cpu">--%</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-label">RAM</span>
+      <span class="stat-value" id="hdr-ram">--%</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-label">Network</span>
+      <span class="stat-value" id="hdr-net">↓ 0.00 / ↑ 0.00 Mbps</span>
+    </div>
+  </div>
+
+  <!-- User Actions -->
+  <div class="user-actions">
+    <a href="/download/booklet" target="_blank">
+      <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;">
+        📄 PDF
+      </button>
+    </a>
+    <a href="/logout"><button type="button" class="btn-logout">Logout</button></a>
+  </div>
+</header>
+
+<div class="app-shell">
+  <!-- Desktop Sidebar -->
+  <aside class="sidebar">
+    <div class="nav-item active" id="side-routes" onclick="switchTab('routes')">
+      <span>🛣️ Routes</span>
+    </div>
+    <div class="nav-item" id="side-events" onclick="switchTab('events')">
+      <span>📋 Event Log</span>
+    </div>
+    <div class="nav-item" onclick="openSrtPortModal()">
+      <span>⚙️ Settings / Port</span>
+    </div>
+  </aside>
+
+  <!-- Main Workspace -->
+  <main class="workspace">
+    <!-- VIEW 1: Routes -->
+    <div id="view-routes">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Routes Workspace</h1>
+          <p>The route is the unit of operation. Configure sources, destination fan-out, and failover.</p>
+        </div>
+        <button class="btn-primary" onclick="openAddRouteModal()">
+          <span>+ Add Route</span>
+        </button>
+      </div>
+
+      <div class="filter-bar">
+        <input type="text" id="route-search" class="search-input" placeholder="Search routes by name..." oninput="renderRoutes()">
+        <select id="route-filter-status" class="filter-select" onchange="renderRoutes()">
+          <option value="all">All Status</option>
+          <option value="running">Running</option>
+          <option value="stopped">Stopped</option>
+        </select>
+        <select id="route-filter-schema" class="filter-select" onchange="renderRoutes()">
+          <option value="all">All Protocols</option>
+          <option value="srt">SRT</option>
+          <option value="udp">UDP</option>
+          <option value="rtmp">RTMP</option>
+        </select>
+      </div>
+
+      <!-- Desktop Table View -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Status / Route Name</th>
+              <th>Active Source</th>
+              <th>Input Endpoint</th>
+              <th>Fan-out Destinations</th>
+              <th>Telemetry Quickview</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="routes-tbody">
+            <tr><td colspan="6" style="text-align:center; color:var(--muted); padding:30px;">Loading routes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Smartphone Mobile Cards View -->
+      <div class="mobile-routes-list" id="mobile-routes-container">
+        <div style="text-align:center; color:var(--muted); padding:30px;">Loading routes...</div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: Events -->
+    <div id="view-events" style="display:none;">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Gateway Event Log</h1>
+          <p>Historical audit trail of route transitions, failover actions, and pipeline events.</p>
+        </div>
+        <button class="btn-icon" onclick="fetchEvents()">Refresh Events</button>
+      </div>
+
+      <div class="table-container" id="events-container">
+        <div style="padding:20px; color:var(--muted)">Loading events...</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Mobile Bottom Navigation Bar -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-item active" id="bnav-routes" onclick="switchTab('routes')">
+    <span class="bottom-nav-icon">🛣️</span>
+    <span>Routes</span>
+  </div>
+  <div class="bottom-nav-item" id="bnav-events" onclick="switchTab('events')">
+    <span class="bottom-nav-icon">📋</span>
+    <span>Events</span>
+  </div>
+  <div class="bottom-nav-item" id="bnav-settings" onclick="openSrtPortModal()">
+    <span class="bottom-nav-icon">⚙️</span>
+    <span>Settings</span>
+  </div>
+</nav>
+
+<!-- MODAL: Telemetry & Inspection -->
+<div id="modal-telemetry" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <h2 id="telem-route-name">Route Telemetry</h2>
+        <span id="telem-route-id" style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted)"></span>
+      </div>
+      <button class="btn-icon" onclick="closeTelemetryModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Live Video & Failover Section -->
+      <div class="telemetry-preview-row">
+        <div>
+          <video id="telem-video" controls playsinline></video>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+            <span id="preview-state" style="font-size:12px; color:var(--muted)">Live Web Preview Feed</span>
+            <button class="btn-icon" onclick="reloadPreview()">🔄 Reload</button>
+          </div>
+        </div>
+
+        <!-- Failover Control Box -->
+        <div class="telemetry-box">
+          <div class="telemetry-box-title">
+            <h3>Source Failover</h3>
+            <span class="tag tag-active-src" id="telem-active-source-badge">PRIMARY ACTIVE</span>
+          </div>
+          <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+            Policy: <b id="telem-failover-policy" style="color:#fff;">Maintain primary</b>
+          </p>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button id="btn-switch-primary" class="btn-icon" onclick="switchSource('primary')">Select Primary</button>
+            <button id="btn-switch-secondary" class="btn-icon" onclick="switchSource('secondary')">Select Secondary</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inbound & Outbound Telemetry Grid -->
+      <div class="telemetry-grid">
+        <!-- Inbound Source Stats -->
+        <div class="telemetry-box">
+          <div class="telemetry-box-title">
+            <h3>Source Statistics (Ingest)</h3>
+            <span id="telem-health-badge" class="tag tag-input">HEALTHY</span>
+          </div>
+          <div class="telemetry-metrics-grid">
+            <div class="metric-tile">
+              <div class="label">Receive Rate</div>
+              <div class="val" id="m-rate">↓ 0.00 Mbps</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">RTT Latency</div>
+              <div class="val" id="m-rtt">0.0 ms</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">Packet Loss</div>
+              <div class="val" id="m-loss">0.00%</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">Dropped Pkts</div>
+              <div class="val" id="m-drop">0</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">Retransmitted</div>
+              <div class="val" id="m-retrans">0</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">Link Capacity</div>
+              <div class="val" id="m-capacity">0.0 Mbps</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">Resolution</div>
+              <div class="val" id="m-res">1920x1080</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">Framerate</div>
+              <div class="val" id="m-fps">50 fps</div>
+            </div>
+            <div class="metric-tile">
+              <div class="label">Total Ingested</div>
+              <div class="val" id="m-bytes">0.0 MB</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Outbound Destination Stats -->
+        <div class="telemetry-box">
+          <div class="telemetry-box-title">
+            <h3>Destination Fan-out</h3>
+            <span class="tag tag-output" id="telem-dest-count">0 OUTPUTS</span>
+          </div>
+          <div id="telem-destinations-list" style="display:flex; flex-direction:column; gap:8px;">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-icon" style="grid-column:1/-1; justify-content:center; min-height:42px;" onclick="closeTelemetryModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add / Edit Route -->
+<div id="modal-route" class="modal hidden">
+  <div class="modal-card" style="width:min(840px, 100%);">
+    <div class="modal-header">
+      <h2 id="modal-route-title">New Gateway Route</h2>
+      <button class="btn-icon" onclick="closeRouteModal()">✕</button>
+    </div>
+
+    <form id="route-form" onsubmit="handleRouteFormSubmit(event)">
+      <div class="modal-body">
+        <input type="hidden" id="rf-id">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Route Label / Event Name</label>
+            <input type="text" id="rf-name" class="form-control" required placeholder="e.g. Venue Contribution - Main Feed">
+          </div>
+          <div class="form-group">
+            <label>Failover Switch Policy</label>
+            <select id="rf-policy" class="form-control">
+              <option value="maintain_primary">Maintain Primary (Prefer primary; return on recovery)</option>
+              <option value="maintain_stability">Maintain Stability (Stay on active until failure)</option>
+              <option value="manual_switchback">Manual Switchback (Auto failover; manual return)</option>
+              <option value="manual">Manual Selection Only</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Primary Source Config -->
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:14px;">
+          <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--cyan); margin-bottom:10px;">Primary Contribution Source</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Protocol / Mode</label>
+              <select id="rf-p-type" class="form-control">
+                <option value="srt_listener">SRT Listener (Wait for remote caller)</option>
+                <option value="srt_caller">SRT Caller (Connect to remote endpoint)</option>
+                <option value="local_stream">Local MediaMTX Path (RTSP/RTMP)</option>
+                <option value="udp">UDP Ingest</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Port / Target Port</label>
+              <input type="number" id="rf-p-port" class="form-control" value="12100">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Stream ID / Path Name</label>
+              <input type="text" id="rf-p-streamid" class="form-control" value="venue_feed">
+            </div>
+            <div class="form-group">
+              <label>SRT Latency Buffer (ms)</label>
+              <input type="number" id="rf-p-latency" class="form-control" value="200">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Passphrase (Optional AES encryption)</label>
+            <input type="password" id="rf-p-passphrase" class="form-control" placeholder="Leave empty for cleartext">
+          </div>
+        </div>
+
+        <!-- Secondary Source Config -->
+        <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--muted);">Secondary Source (Failover)</h4>
+            <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
+              <input type="checkbox" id="rf-s-enabled" onchange="toggleSecondarySource(this.checked)"> Enable Secondary
+            </label>
+          </div>
+          <div id="rf-secondary-fields" style="opacity:0.4; pointer-events:none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Protocol / Mode</label>
+                <select id="rf-s-type" class="form-control">
+                  <option value="srt_listener">SRT Listener</option>
+                  <option value="srt_caller">SRT Caller</option>
+                  <option value="udp">UDP Ingest</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Port</label>
+                <input type="number" id="rf-s-port" class="form-control" value="12101">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Stream ID</label>
+                <input type="text" id="rf-s-streamid" class="form-control" value="venue_backup">
+              </div>
+              <div class="form-group">
+                <label>Latency Buffer (ms)</label>
+                <input type="number" id="rf-s-latency" class="form-control" value="200">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fan-out Destinations -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--amber);">Multi-Destination Fan-out</h4>
+            <button type="button" class="btn-icon" onclick="addDestinationRow()">+ Add Destination</button>
+          </div>
+          <div id="destinations-container">
+            <!-- Rows added dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-icon" onclick="closeRouteModal()">Cancel</button>
+        <button type="submit" class="btn-primary">Save &amp; Start Route</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: SRT Port -->
+<div id="modal-srt-port" class="modal hidden">
+  <div class="modal-card" style="width:min(420px, 100%);">
+    <div class="modal-header">
+      <h2>Global Settings &amp; SRT Port</h2>
+      <button class="btn-icon" onclick="closeSrtPortModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">
+        MediaMTX listens on this port for incoming SRT connections. Default is <b>8890</b>.
+      </p>
+      <div class="form-group">
+        <label>MediaMTX SRT Port</label>
+        <input type="number" id="input-srt-port" class="form-control" min="1024" max="65535" value="8890">
+      </div>
+      <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--muted);">
+        <b style="color:#fff;">Documentation:</b><br>
+        Download the 22-page solution booklet:
+        <div style="margin-top:8px;">
+          <a href="/download/booklet" target="_blank">
+            <button type="button" class="btn-primary" style="width:100%; justify-content:center;">
+              📄 Download Solution Booklet (PDF)
+            </button>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-icon" onclick="closeSrtPortModal()">Cancel</button>
+      <button type="button" class="btn-primary" onclick="saveSrtPort()">Update Port</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script>
+let currentRoutes = [];
+let activeTelemetryRouteId = null;
+let telemTimer = null;
+let hlsInstance = null;
+
+async function api(url, opts = {}) {
+  const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...opts });
+  if (res.status === 401) {
+    window.location.href = '/login';
+    return;
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// System stats poller
+async function pollSystemStats() {
+  try {
+    const d = await api('/api/system/stats');
+    if (d.ok) {
+      const s = d.stats;
+      document.getElementById('hdr-cpu').textContent = `${s.cpu}%`;
+      document.getElementById('hdr-ram').textContent = `${s.ram_percent}%`;
+      document.getElementById('hdr-net').textContent = `↓ ${s.rx_mbps.toFixed(2)} / ↑ ${s.tx_mbps.toFixed(2)} Mbps`;
+      document.getElementById('hdr-active-routes').textContent = `${s.active_routes} / ${s.total_routes}`;
+    }
+  } catch(e) {}
+}
+setInterval(pollSystemStats, 2000);
+pollSystemStats();
+
+// Routes poller & renderer
+async function fetchRoutes() {
+  try {
+    const d = await api('/api/routes');
+    if (d.ok) {
+      currentRoutes = d.routes;
+      renderRoutes();
+    }
+  } catch(e) {}
+}
+setInterval(fetchRoutes, 3000);
+fetchRoutes();
+
+function renderRoutes() {
+  const tbody = document.getElementById('routes-tbody');
+  const mContainer = document.getElementById('mobile-routes-container');
+  const search = document.getElementById('route-search').value.toLowerCase().trim();
+  const filterStatus = document.getElementById('route-filter-status').value;
+  const filterSchema = document.getElementById('route-filter-schema').value;
+
+  const filtered = currentRoutes.filter(r => {
+    if (search && !r.name.toLowerCase().includes(search) && !r.id.toLowerCase().includes(search)) return false;
+    if (filterStatus === 'running' && !r.running) return false;
+    if (filterStatus === 'stopped' && r.running) return false;
+    if (filterSchema !== 'all') {
+      const pType = r.primary_source.type.toLowerCase();
+      if (!pType.includes(filterSchema)) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    const emptyHtml = `<div style="text-align:center; color:var(--muted); padding:36px;">No routes configured or matching search. Tap "+ Add Route" to start.</div>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--muted); padding:36px;">No routes matching criteria.</td></tr>`;
+    mContainer.innerHTML = emptyHtml;
+    return;
+  }
+
+  // 1. Render Desktop Table
+  tbody.innerHTML = filtered.map(r => {
+    const dotClass = r.running ? 'dot-green' : 'dot-gray';
+    const statusText = r.running ? 'Running' : 'Stopped';
+    const activeSrc = (r.current_active_source || 'primary').toUpperCase();
+    
+    const p = r.primary_source;
+    const inputTag = `${p.type.toUpperCase()}:${p.port || p.stream_id}`;
+
+    const destTags = (r.destinations || []).map(d => {
+      let label = d.type.toUpperCase();
+      try {
+        if (d.url.includes('://')) {
+          const u = new URL(d.url);
+          label = `${d.type.toUpperCase()}:${u.port || u.hostname}`;
+        }
+      } catch(e) {}
+      return `<span class="tag tag-output">${label}</span>`;
+    }).join(' ') || '<span style="color:var(--text-dim)">None</span>';
+
+    let qview = '<span style="color:var(--text-dim)">--</span>';
+    if (r.running && r.stats) {
+      qview = `<span style="font-family:'JetBrains Mono'; font-size:12px;">↓ ${r.stats.receive_rate_mbps || 0} Mbps · ${r.stats.rtt_ms || 0}ms</span>`;
+    }
+
+    return `
+      <tr>
+        <td>
+          <div class="status-indicator">
+            <span class="dot ${dotClass}"></span>
+            <span style="font-weight:600;">${escapeHtml(r.name)}</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">ID: ${r.id} · ${statusText}</div>
+        </td>
+        <td><span class="tag tag-active-src">${activeSrc}</span></td>
+        <td><span class="tag tag-input">${inputTag}</span></td>
+        <td><div style="display:flex; flex-wrap:wrap; gap:4px;">${destTags}</div></td>
+        <td>${qview}</td>
+        <td>
+          <div class="action-group">
+            ${r.running 
+              ? `<button class="btn-icon btn-stop" onclick="stopRoute('${r.id}')">⏹ Stop</button>`
+              : `<button class="btn-icon btn-start" onclick="startRoute('${r.id}')">▶ Start</button>`
+            }
+            <button class="btn-icon" onclick="inspectRoute('${r.id}')">📊 Inspect</button>
+            <button class="btn-icon" onclick="cloneRoute('${r.id}')">📋</button>
+            <button class="btn-icon" onclick="editRoute('${r.id}')">✏️</button>
+            <button class="btn-icon btn-danger" onclick="deleteRoute('${r.id}')">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // 2. Render Smartphone Mobile Cards
+  mContainer.innerHTML = filtered.map(r => {
+    const dotClass = r.running ? 'dot-green' : 'dot-gray';
+    const statusText = r.running ? 'Running' : 'Stopped';
+    const activeSrc = (r.current_active_source || 'primary').toUpperCase();
+    const p = r.primary_source;
+    const inputTag = `${p.type.toUpperCase()}:${p.port || p.stream_id}`;
+    
+    let rateText = '--';
+    let rttText = '--';
+    if (r.running && r.stats) {
+      rateText = `↓ ${r.stats.receive_rate_mbps || 0} Mbps`;
+      rttText = `${r.stats.rtt_ms || 0} ms`;
+    }
+
+    return `
+      <div class="route-card">
+        <div class="route-card-header">
+          <div class="route-card-title">
+            <span class="dot ${dotClass}"></span>
+            <span>${escapeHtml(r.name)}</span>
+          </div>
+          <span class="tag tag-active-src">${statusText}</span>
+        </div>
+
+        <div class="route-card-grid">
+          <div class="route-card-item">
+            <div class="label">Active Source</div>
+            <div style="font-weight:600; color:var(--cyan);">${activeSrc}</div>
+          </div>
+          <div class="route-card-item">
+            <div class="label">Ingest Port / ID</div>
+            <div style="font-family:'JetBrains Mono'; font-weight:600;">${inputTag}</div>
+          </div>
+          <div class="route-card-item">
+            <div class="label">Receive Bitrate</div>
+            <div style="font-family:'JetBrains Mono'; font-weight:600;">${rateText}</div>
+          </div>
+          <div class="route-card-item">
+            <div class="label">RTT Latency</div>
+            <div style="font-family:'JetBrains Mono'; font-weight:600;">${rttText}</div>
+          </div>
+        </div>
+
+        <div class="route-card-actions">
+          ${r.running 
+            ? `<button class="btn-icon btn-stop" onclick="stopRoute('${r.id}')">⏹ Stop</button>`
+            : `<button class="btn-icon btn-start" onclick="startRoute('${r.id}')">▶ Start</button>`
+          }
+          <button class="btn-icon" onclick="inspectRoute('${r.id}')">📊 Inspect</button>
+          <button class="btn-icon" onclick="editRoute('${r.id}')">✏️ Edit</button>
+          <button class="btn-icon" onclick="cloneRoute('${r.id}')">📋 Copy</button>
+          <button class="btn-icon btn-danger" onclick="deleteRoute('${r.id}')">🗑 Delete Route</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Route actions
+async function startRoute(id) {
+  try {
+    await api(`/api/routes/${id}/start`, { method: 'POST' });
+    fetchRoutes();
+  } catch(e) { alert(e.message); }
+}
+
+async function stopRoute(id) {
+  try {
+    await api(`/api/routes/${id}/stop`, { method: 'POST' });
+    fetchRoutes();
+  } catch(e) { alert(e.message); }
+}
+
+async function cloneRoute(id) {
+  try {
+    await api(`/api/routes/${id}/clone`, { method: 'POST' });
+    fetchRoutes();
+  } catch(e) { alert(e.message); }
+}
+
+async function deleteRoute(id) {
+  if (!confirm("Delete this route?")) return;
+  try {
+    await api(`/api/routes/${id}`, { method: 'DELETE' });
+    fetchRoutes();
+  } catch(e) { alert(e.message); }
+}
+
+// Telemetry Inspection Modal
+async function inspectRoute(id) {
+  activeTelemetryRouteId = id;
+  const route = currentRoutes.find(r => r.id === id);
+  if (!route) return;
+
+  document.getElementById('telem-route-name').textContent = route.name;
+  document.getElementById('telem-route-id').textContent = `ID: ${route.id} | ${route.primary_source.type}:${route.primary_source.port || route.primary_source.stream_id}`;
+  document.getElementById('telem-failover-policy').textContent = route.failover_policy.replace('_', ' ');
+
+  document.getElementById('modal-telemetry').classList.remove('hidden');
+
+  loadRoutePreview(id);
+  pollTelemetry();
+  if (telemTimer) clearInterval(telemTimer);
+  telemTimer = setInterval(pollTelemetry, 1500);
+}
+
+function closeTelemetryModal() {
+  document.getElementById('modal-telemetry').classList.add('hidden');
+  if (telemTimer) clearInterval(telemTimer);
+  telemTimer = null;
+  activeTelemetryRouteId = null;
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+}
+
+async function pollTelemetry() {
+  if (!activeTelemetryRouteId) return;
+  try {
+    const d = await api(`/api/routes/${activeTelemetryRouteId}/telemetry`);
+    if (!d.ok) return;
+
+    document.getElementById('telem-active-source-badge').textContent = `${(d.active_source || 'PRIMARY').toUpperCase()} ACTIVE`;
+
+    const m = d.metrics || {};
+    document.getElementById('m-rate').textContent = `↓ ${m.receive_rate_mbps || 0} Mbps`;
+    document.getElementById('m-rtt').textContent = `${m.rtt_ms || 0} ms`;
+    document.getElementById('m-loss').textContent = `${m.packet_loss_pct || 0}%`;
+    document.getElementById('m-drop').textContent = m.dropped_packets || 0;
+    document.getElementById('m-retrans').textContent = m.retransmitted_packets || 0;
+    document.getElementById('m-capacity').textContent = `${m.link_capacity_mbps || 0} Mbps`;
+    document.getElementById('m-res').textContent = m.resolution || 'Waiting';
+    document.getElementById('m-fps').textContent = m.framerate || '--';
+    document.getElementById('m-bytes').textContent = `${m.total_bytes_mb || 0} MB`;
+
+    document.getElementById('telem-health-badge').textContent = m.health || 'RUNNING';
+
+    const destList = document.getElementById('telem-destinations-list');
+    document.getElementById('telem-dest-count').textContent = `${(d.destinations || []).length} OUTPUTS`;
+    destList.innerHTML = (d.destinations || []).map((dest, i) => `
+      <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-weight:600; font-size:12.5px;">${escapeHtml(dest.label || `Destination ${i+1}`)}</div>
+          <div style="font-size:10.5px; font-family:'JetBrains Mono'; color:var(--muted);">${escapeHtml(dest.url)}</div>
+        </div>
+        <div style="text-align:right;">
+          <span class="tag tag-output">${dest.mode === 'copy' ? 'COPY' : `${dest.video_bitrate}k`}</span>
+        </div>
+      </div>
+    `).join('') || '<div style="color:var(--muted); font-size:12px;">No egress destinations configured.</div>';
+
+  } catch(e) {}
+}
+
+async function switchSource(target) {
+  if (!activeTelemetryRouteId) return;
+  try {
+    await api(`/api/routes/${activeTelemetryRouteId}/switch-source`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: target })
+    });
+    pollTelemetry();
+    reloadPreview();
+  } catch(e) { alert(e.message); }
+}
+
+async function loadRoutePreview(routeId) {
+  const video = document.getElementById('telem-video');
+  const d = await api(`/api/routes/${routeId}/preview`);
+  const streamUrl = d.hls_url;
+
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+
+  if (Hls.isSupported()) {
+    hlsInstance = new Hls({ liveSyncDurationCount: 2, maxBufferLength: 8 });
+    hlsInstance.loadSource(streamUrl);
+    hlsInstance.attachMedia(video);
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(()=>{}));
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = streamUrl;
+    video.play().catch(()=>{});
+  }
+}
+
+function reloadPreview() {
+  if (activeTelemetryRouteId) loadRoutePreview(activeTelemetryRouteId);
+}
+
+// Add / Edit Route Form
+let destinationCount = 0;
+function openAddRouteModal() {
+  document.getElementById('modal-route-title').textContent = 'New Gateway Route';
+  document.getElementById('route-form').reset();
+  document.getElementById('rf-id').value = '';
+  document.getElementById('destinations-container').innerHTML = '';
+  destinationCount = 0;
+  addDestinationRow();
+  document.getElementById('modal-route').classList.remove('hidden');
+}
+
+function editRoute(id) {
+  const r = currentRoutes.find(item => item.id === id);
+  if (!r) return;
+  document.getElementById('modal-route-title').textContent = `Edit: ${r.name}`;
+  document.getElementById('rf-id').value = r.id;
+  document.getElementById('rf-name').value = r.name;
+  document.getElementById('rf-policy').value = r.failover_policy || 'maintain_primary';
+
+  // Primary
+  document.getElementById('rf-p-type').value = r.primary_source.type;
+  document.getElementById('rf-p-port').value = r.primary_source.port;
+  document.getElementById('rf-p-streamid').value = r.primary_source.stream_id;
+  document.getElementById('rf-p-latency').value = r.primary_source.latency || 200;
+  document.getElementById('rf-p-passphrase').value = r.primary_source.passphrase || '';
+
+  // Secondary
+  const s = r.secondary_source || {};
+  document.getElementById('rf-s-enabled').checked = Boolean(s.enabled);
+  toggleSecondarySource(Boolean(s.enabled));
+  document.getElementById('rf-s-type').value = s.type || 'srt_listener';
+  document.getElementById('rf-s-port').value = s.port || 12101;
+  document.getElementById('rf-s-streamid').value = s.stream_id || '';
+  document.getElementById('rf-s-latency').value = s.latency || 200;
+
+  // Destinations
+  const container = document.getElementById('destinations-container');
+  container.innerHTML = '';
+  destinationCount = 0;
+  (r.destinations || []).forEach(d => {
+    addDestinationRow(d);
+  });
+  if (!r.destinations || !r.destinations.length) addDestinationRow();
+
+  document.getElementById('modal-route').classList.remove('hidden');
+}
+
+function closeRouteModal() {
+  document.getElementById('modal-route').classList.add('hidden');
+}
+
+function toggleSecondarySource(enabled) {
+  const el = document.getElementById('rf-secondary-fields');
+  el.style.opacity = enabled ? '1' : '0.4';
+  el.style.pointerEvents = enabled ? 'auto' : 'none';
+}
+
+function addDestinationRow(data = {}) {
+  destinationCount++;
+  const container = document.getElementById('destinations-container');
+  const div = document.createElement('div');
+  div.className = 'dest-row';
+  div.id = `dest-row-${destinationCount}`;
+  div.innerHTML = `
+    <input type="text" class="form-control" name="dest_label" placeholder="Label (e.g. Production)" value="${escapeHtml(data.label || 'Production SRT')}">
+    <select class="form-control" name="dest_type">
+      <option value="srt_caller" ${data.type==='srt_caller'?'selected':''}>SRT Caller</option>
+      <option value="udp" ${data.type==='udp'?'selected':''}>UDP Push</option>
+      <option value="rtmp" ${data.type==='rtmp'?'selected':''}>RTMP Push</option>
+    </select>
+    <input type="text" class="form-control" name="dest_url" required placeholder="URL (e.g. srt://192.168.1.100:12300)" value="${escapeHtml(data.url || '')}">
+    <select class="form-control" name="dest_mode">
+      <option value="copy" ${data.mode==='copy'?'selected':''}>Direct Copy (0% CPU)</option>
+      <option value="custom" ${data.mode==='custom'?'selected':''}>Custom Bitrate</option>
+    </select>
+    <button type="button" class="btn-icon btn-danger" onclick="this.parentElement.remove()">✕ Remove</button>
+  `;
+  container.appendChild(div);
+}
+
+async function handleRouteFormSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById('rf-id').value;
+
+  const destRows = document.querySelectorAll('.dest-row');
+  const destinations = [];
+  destRows.forEach(row => {
+    const label = row.querySelector('[name="dest_label"]').value.trim();
+    const type = row.querySelector('[name="dest_type"]').value;
+    const url = row.querySelector('[name="dest_url"]').value.trim();
+    const mode = row.querySelector('[name="dest_mode"]').value;
+    if (url) {
+      destinations.push({ label, type, url, mode, video_bitrate: 4500, audio_bitrate: 160 });
+    }
+  });
+
+  const payload = {
+    name: document.getElementById('rf-name').value.trim(),
+    failover_policy: document.getElementById('rf-policy').value,
+    primary_source: {
+      type: document.getElementById('rf-p-type').value,
+      port: parseInt(document.getElementById('rf-p-port').value) || 12100,
+      stream_id: document.getElementById('rf-p-streamid').value.trim(),
+      latency: parseInt(document.getElementById('rf-p-latency').value) || 200,
+      passphrase: document.getElementById('rf-p-passphrase').value.trim()
+    },
+    secondary_source: {
+      enabled: document.getElementById('rf-s-enabled').checked,
+      type: document.getElementById('rf-s-type').value,
+      port: parseInt(document.getElementById('rf-s-port').value) || 12101,
+      stream_id: document.getElementById('rf-s-streamid').value.trim(),
+      latency: parseInt(document.getElementById('rf-s-latency').value) || 200
+    },
+    destinations: destinations
+  };
+
+  try {
+    if (id) {
+      await api(`/api/routes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await api('/api/routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+    closeRouteModal();
+    fetchRoutes();
+  } catch(err) {
+    alert(err.message);
+  }
+}
+
+// Tab switcher (Desktop + Mobile)
+function switchTab(tab) {
+  document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.bottom-nav-item').forEach(el => el.classList.remove('active'));
+
+  if (tab === 'routes') {
+    const s = document.getElementById('side-routes');
+    if (s) s.classList.add('active');
+    const b = document.getElementById('bnav-routes');
+    if (b) b.classList.add('active');
+    document.getElementById('view-routes').style.display = 'block';
+    document.getElementById('view-events').style.display = 'none';
+  } else if (tab === 'events') {
+    const s = document.getElementById('side-events');
+    if (s) s.classList.add('active');
+    const b = document.getElementById('bnav-events');
+    if (b) b.classList.add('active');
+    document.getElementById('view-routes').style.display = 'none';
+    document.getElementById('view-events').style.display = 'block';
+    fetchEvents();
+  }
+}
+
+async function fetchEvents() {
+  const container = document.getElementById('events-container');
+  try {
+    const d = await api('/api/events');
+    if (!d.events || !d.events.length) {
+      container.innerHTML = '<div style="padding:24px; color:var(--muted); text-align:center;">No events recorded yet.</div>';
+      return;
+    }
+    container.innerHTML = d.events.map(ev => {
+      const time = new Date(ev.timestamp).toLocaleTimeString();
+      return `
+        <div class="event-entry">
+          <div style="display:flex; gap:10px; align-items:center;">
+            <span class="event-time">${time}</span>
+            <span class="event-type ${ev.type}">${escapeHtml(ev.type.toUpperCase())}</span>
+            <span style="font-weight:600; color:var(--cyan);">${escapeHtml(ev.route_name || ev.route_id)}</span>
+          </div>
+          <span class="event-msg">${escapeHtml(ev.message)}</span>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = `<div style="padding:20px; color:var(--red);">Failed to load events: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+// Global SRT Port Modal
+async function openSrtPortModal() {
+  try {
+    const d = await api('/api/srt/port');
+    document.getElementById('input-srt-port').value = d.port || 8890;
+    document.getElementById('modal-srt-port').classList.remove('hidden');
+  } catch(e) { alert(e.message); }
+}
+
+function closeSrtPortModal() {
+  document.getElementById('modal-srt-port').classList.add('hidden');
+}
+
+async function saveSrtPort() {
+  const port = parseInt(document.getElementById('input-srt-port').value);
+  try {
+    await api('/api/srt/port', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ port })
+    });
+    alert(`Global SRT port updated to ${port}`);
+    closeSrtPortModal();
+  } catch(e) { alert(e.message); }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>

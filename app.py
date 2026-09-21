@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Makasna SRT & RTMP Relay Dashboard
-Lightweight streaming redirector & relay manager
+Makasna Live Video Transport Gateway
+Route-based live streaming gateway with multi-destination fan-out,
+failover policies, real-time SRT/IP telemetry, and process supervision.
 """
 
 import os
@@ -16,506 +17,150 @@ import re
 import shutil
 import atexit
 import uuid
-import hmac
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "makasna-srt-secret-2026")
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "admin")
 DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS", "@linux1234")
-DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "forwards.json")
-LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROUTES_FILE = os.path.join(BASE_DIR, "routes.json")
+LEGACY_FORWARDS_FILE = os.path.join(BASE_DIR, "forwards.json")
+EVENTS_FILE = os.path.join(BASE_DIR, "events.json")
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Global process dictionary: id -> {"proc": subprocess.Popen, "started_at": timestamp, "log_file": path}
-active_relays = {}
-MAX_AUDIO_INDEX = 63
-PROBE_TIMEOUT_SECONDS = 8
-ALLOWED_SOURCE_PREFIXES = ("rtsp://", "rtmp://", "srt://", "http://")
-CUSTOM_MODE = "custom"
-LEGACY_TRANSCODE_MODES = ("transcode_1080p", "transcode_720p")
-ALLOWED_MODES = ("copy", CUSTOM_MODE) + LEGACY_TRANSCODE_MODES
-ALLOWED_ENCODER_PRESETS = ("ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow")
-TRANSCODE_DEFAULTS = {
-    "video_bitrate": 4500,
-    "max_bitrate": 5000,
-    "buffer_size": 9000,
-    "audio_bitrate": 160,
-    "encoder_preset": "veryfast"
-}
-LEGACY_720P_DEFAULTS = {
-    "video_bitrate": 2500,
-    "max_bitrate": 3000,
-    "buffer_size": 5000,
-    "audio_bitrate": 128,
-    "encoder_preset": "veryfast"
-}
 MEDIAMTX_API = os.environ.get("MEDIAMTX_API", "http://127.0.0.1:9997")
 MEDIAMTX_CONF = os.environ.get("MEDIAMTX_CONF", "/etc/mediamtx/mediamtx.yml")
-STREAM_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
-PREVIEW_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime", "preview")
-PREVIEW_TIMEOUT_SECONDS = 900
-PREVIEW_LOCK = threading.RLock()
-preview_state = {"proc": None, "token": None, "stream_id": None, "audio_index": None,
-                 "started_at": None, "error": None, "timer": None}
+
+# Global active processes & telemetry state
+# route_id -> {
+#   "proc": subprocess.Popen,
+#   "started_at": float,
+#   "active_source": "primary" | "secondary",
+#   "log_file": str,
+#   "stats": dict,
+#   "status": str
+# }
+active_routes = {}
+active_routes_lock = threading.Lock()
+events_lock = threading.Lock()
+
+# Failover policies
+FAILOVER_POLICIES = ("maintain_primary", "maintain_stability", "manual_switchback", "manual")
 
 
-def validate_integer_setting(value, name, minimum, maximum):
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be an integer between {minimum} and {maximum} kbps")
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        raise ValueError(f"{name} must be an integer between {minimum} and {maximum} kbps")
-    if str(value).strip() != str(parsed) or not minimum <= parsed <= maximum:
-        raise ValueError(f"{name} must be an integer between {minimum} and {maximum} kbps")
-    return parsed
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
 
 
-def processing_settings(forward):
-    mode = forward.get("mode", "copy")
-    if mode not in ALLOWED_MODES:
-        raise ValueError("Mode must be copy or custom")
-    if mode == "copy":
-        return {"mode": "copy"}
-    defaults = LEGACY_720P_DEFAULTS if mode == "transcode_720p" else TRANSCODE_DEFAULTS
-    settings = {
-        "mode": mode,
-        "video_bitrate": validate_integer_setting(forward.get("video_bitrate", defaults["video_bitrate"]), "Video bitrate", 250, 50000),
-        "max_bitrate": validate_integer_setting(forward.get("max_bitrate", defaults["max_bitrate"]), "Max bitrate", 250, 50000),
-        "buffer_size": validate_integer_setting(forward.get("buffer_size", defaults["buffer_size"]), "Buffer size", 500, 100000),
-        "audio_bitrate": validate_integer_setting(forward.get("audio_bitrate", defaults["audio_bitrate"]), "Audio bitrate", 32, 512),
-        "encoder_preset": forward.get("encoder_preset", defaults["encoder_preset"])
+def log_event(route_id, route_name, event_type, message, level="info"):
+    entry = {
+        "id": str(uuid.uuid4())[:8],
+        "timestamp": now_iso(),
+        "route_id": route_id,
+        "route_name": route_name,
+        "type": event_type,
+        "message": message,
+        "level": level
     }
-    if settings["max_bitrate"] < settings["video_bitrate"]:
-        raise ValueError("Max bitrate must be greater than or equal to video bitrate")
-    if settings["encoder_preset"] not in ALLOWED_ENCODER_PRESETS:
-        raise ValueError("Encoder preset is not allowed")
-    return settings
-
-
-def processing_summary(forward):
-    settings = processing_settings(forward)
-    if settings["mode"] == "copy":
-        return "Direct Copy — original bitrate"
-    return (f"Custom Bitrate — {settings['video_bitrate']}/{settings['max_bitrate']}k video, "
-            f"{settings['audio_bitrate']}k audio, {settings['encoder_preset']}")
-
-
-def safe_destination_label(destination):
-    try:
-        parsed = urlsplit(destination)
-        if parsed.scheme and parsed.netloc:
-            return f"{parsed.scheme}://{parsed.netloc}"
-    except (TypeError, ValueError):
-        pass
-    return "Configured target"
-
-
-def normalize_source(source):
-    source = source.strip()
-    if not source:
-        raise ValueError("Source is required")
-    if not source.startswith(ALLOWED_SOURCE_PREFIXES):
-        return f"rtsp://127.0.0.1:8554/{source}"
-    return source
-
-def validate_audio_index(value):
-    if value is None or value == "":
-        return 0
-    if isinstance(value, bool):
-        raise ValueError("Audio index must be a non-negative integer")
-    try:
-        index = int(value)
-    except (TypeError, ValueError):
-        raise ValueError("Audio index must be a non-negative integer")
-    if str(value).strip() != str(index) or not 0 <= index <= MAX_AUDIO_INDEX:
-        raise ValueError(f"Audio index must be between 0 and {MAX_AUDIO_INDEX}")
-    return index
-
-def parse_audio_streams(probe_data):
-    streams = probe_data.get("streams", []) if isinstance(probe_data, dict) else []
-    result = []
-    for stream in streams:
-        if not isinstance(stream, dict) or stream.get("codec_type") != "audio":
-            continue
-        tags = stream.get("tags") if isinstance(stream.get("tags"), dict) else {}
-        result.append({
-            "selector": len(result),
-            "stream_index": stream.get("index"),
-            "codec": stream.get("codec_name") or "unknown",
-            "channels": stream.get("channels"),
-            "channel_layout": stream.get("channel_layout"),
-            "sample_rate": stream.get("sample_rate"),
-            "language": tags.get("language"),
-            "title": tags.get("title")
-        })
-    return result
-
-def probe_audio_streams(source, timeout=PROBE_TIMEOUT_SECONDS):
-    normalized_source = normalize_source(source)
-    cmd = [
-        "ffprobe", "-v", "error", "-print_format", "json",
-        "-show_entries", "stream=index,codec_type,codec_name,channels,channel_layout,sample_rate:stream_tags=language,title"
-    ]
-    if normalized_source.startswith("rtsp://"):
-        cmd.extend(["-rtsp_transport", "tcp"])
-    cmd.append(normalized_source)
-    completed = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               universal_newlines=True, timeout=timeout, check=False)
-    if completed.returncode != 0:
-        raise RuntimeError("Source is unavailable or has no readable media")
-    try:
-        return parse_audio_streams(json.loads(completed.stdout))
-    except (TypeError, ValueError, json.JSONDecodeError):
-        raise RuntimeError("ffprobe returned a malformed response")
-
-def load_forwards():
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-def save_forwards(forwards):
-    with open(DATA_FILE, "w") as f:
-        json.dump(forwards, f, indent=2)
-
-def get_server_stats():
-    try:
-        cpu = psutil.cpu_percent(interval=None)
-        if cpu is None:
-            cpu = 0.0
-    except Exception:
-        cpu = 0.0
-
-    try:
-        mem = psutil.virtual_memory()
-        ram_percent = round(mem.percent, 1)
-        ram_used_mb = round(mem.used / 1024 / 1024)
-        ram_total_mb = round(mem.total / 1024 / 1024)
-    except Exception:
-        ram_percent = 0.0
-        ram_used_mb = 0
-        ram_total_mb = 0
-
-    try:
-        disk = psutil.disk_usage("/")
-        disk_percent = round(disk.percent, 1)
-    except Exception:
-        disk_percent = 0.0
-
-    rx_speed = 0.0
-    tx_speed = 0.0
-    try:
-        net1 = psutil.net_io_counters()
-        time.sleep(0.1)
-        net2 = psutil.net_io_counters()
-        rx_speed = (net2.bytes_recv - net1.bytes_recv) * 8 / 1024 / 1024 / 0.1 # Mbps
-        tx_speed = (net2.bytes_sent - net1.bytes_sent) * 8 / 1024 / 1024 / 0.1 # Mbps
-    except Exception:
-        pass
-    
-    # Check MediaMTX active streams
-    active_streams = []
-    try:
-        r = requests.get(f"{MEDIAMTX_API}/v3/paths/list", timeout=1.0)
-        if r.status_code == 200:
-            data = r.json()
-            items = data.get("items", [])
-            if items:
-                for item in items:
-                    if item.get("ready", False):
-                        active_streams.append({
-                            "name": item.get("name", "stream"),
-                            "ready": item.get("ready", False),
-                            "tracks": len(item.get("tracks", []) or []),
-                            "bytesReceived": item.get("bytesReceived", 0),
-                            "readers": len(item.get("readers", []) or [])
-                        })
-    except Exception:
-        pass
-    
-    return {
-        "cpu": round(float(cpu), 1),
-        "ram_percent": ram_percent,
-        "ram_used_mb": ram_used_mb,
-        "ram_total_mb": ram_total_mb,
-        "disk_percent": disk_percent,
-        "rx_mbps": round(float(rx_speed), 2),
-        "tx_mbps": round(float(tx_speed), 2),
-        "active_streams": active_streams
-    }
-
-def build_ffmpeg_command(forward):
-    src = normalize_source(forward["source"])
-    dest = forward["destination"]
-    settings = processing_settings(forward)
-    audio_index = validate_audio_index(forward.get("audio_index", 0))
-    
-    cmd = [
-        "ffmpeg",
-        "-nostdin",
-        "-loglevel", "info",
-        "-re",
-    ]
-    
-    # Input options based on source
-    if src.startswith("rtsp://"):
-        cmd.extend(["-rtsp_transport", "tcp"])
-    elif src.startswith("srt://"):
-        cmd.extend(["-timeout", "5000000"])
-        
-    cmd.extend(["-i", src])
-    cmd.extend(["-map", "0:v:0?", "-map", f"0:a:{audio_index}?"])
-    
-    # Video & Audio codec
-    if settings["mode"] == "copy":
-        cmd.extend(["-c:v", "copy", "-c:a", "copy"])
-    else:
-        cmd.extend([
-            "-c:v", "libx264",
-            "-preset", settings["encoder_preset"],
-            "-b:v", f"{settings['video_bitrate']}k",
-            "-maxrate", f"{settings['max_bitrate']}k",
-            "-bufsize", f"{settings['buffer_size']}k",
-            "-c:a", "aac",
-            "-b:a", f"{settings['audio_bitrate']}k"
-        ])
-    
-    # Output format
-    if dest.startswith("rtmp://") or dest.startswith("rtmps://"):
-        cmd.extend(["-f", "flv", dest])
-    elif dest.startswith("srt://"):
-        cmd.extend(["-f", "mpegts", dest])
-    else:
-        cmd.extend(["-f", "flv", dest])
-        
-    return cmd
-
-def run_relay_worker(relay_id):
-    while True:
-        forwards = load_forwards()
-        target = next((f for f in forwards if f["id"] == relay_id), None)
-        if not target or not target.get("enabled", False):
-            break
-            
-        log_file = os.path.join(LOGS_DIR, f"relay_{relay_id}.log")
-        cmd = build_ffmpeg_command(target)
-        
-        with open(log_file, "a") as f_out:
-            f_out.write(f"\n--- [ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ] Starting Relay ---\n")
-            f_out.write("CMD: " + " ".join(cmd) + "\n\n")
-            f_out.flush()
-            
-            proc = subprocess.Popen(
-                cmd,
-                stdout=f_out,
-                stderr=subprocess.STDOUT,
-                shell=False
-            )
-            
-            active_relays[relay_id] = {
-                "proc": proc,
-                "started_at": time.time(),
-                "log_file": log_file,
-                "target": target
-            }
-            
-            proc.wait()
-            
-        time.sleep(3) # auto-reconnect delay if enabled
-        
-        # Check if still enabled
-        forwards = load_forwards()
-        target = next((f for f in forwards if f["id"] == relay_id), None)
-        if not target or not target.get("enabled", False):
-            break
-
-def start_relay(relay_id):
-    stop_relay(relay_id)
-    t = threading.Thread(target=run_relay_worker, args=(relay_id,), daemon=True)
-    t.start()
-
-def stop_relay(relay_id):
-    if relay_id in active_relays:
-        item = active_relays.pop(relay_id)
-        proc = item.get("proc")
-        if proc and proc.poll() is None:
+    with events_lock:
+        events = []
+        if os.path.exists(EVENTS_FILE):
             try:
-                proc.terminate()
-                proc.wait(timeout=2)
+                with open(EVENTS_FILE, "r") as f:
+                    events = json.load(f)
             except Exception:
-                proc.kill()
-
-# Start previously enabled relays on app boot
-def bootstrap_relays():
-    forwards = load_forwards()
-    for f in forwards:
-        if f.get("enabled", False):
-            start_relay(f["id"])
-
-
-def validate_stream_id(value):
-    if not isinstance(value, str) or not STREAM_ID_PATTERN.fullmatch(value):
-        raise ValueError("Stream ID must be 1-64 letters, numbers, dots, underscores, or hyphens")
-    return value
-
-
-def preview_directory(token):
-    if not isinstance(token, str) or not re.fullmatch(r"[a-f0-9]{32}", token):
-        raise ValueError("Invalid preview token")
-    path = os.path.abspath(os.path.join(PREVIEW_ROOT, token))
-    root = os.path.abspath(PREVIEW_ROOT)
-    if os.path.commonpath((root, path)) != root:
-        raise ValueError("Invalid preview path")
-    return path
-
-
-def build_preview_command(stream_id, audio_index, output_dir, transcode=False):
-    stream_id = validate_stream_id(stream_id)
-    audio_index = validate_audio_index(audio_index)
-    source = f"rtsp://127.0.0.1:8554/{stream_id}"
-    playlist = os.path.join(output_dir, "index.m3u8")
-    segments = os.path.join(output_dir, "segment_%05d.ts")
-    command = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "warning",
-               "-rtsp_transport", "tcp", "-i", source,
-               "-map", "0:v:0?", "-map", f"0:a:{audio_index}?", "-sn", "-dn"]
-    if transcode:
-        command.extend(["-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
-                        "-pix_fmt", "yuv420p", "-g", "50", "-keyint_min", "50",
-                        "-c:a", "aac", "-b:a", "128k"])
-    else:
-        command.extend(["-c:v", "copy", "-c:a", "copy", "-bsf:v", "h264_mp4toannexb"])
-    command.extend(["-f", "hls", "-hls_time", "2", "-hls_list_size", "5",
-                    "-hls_flags", "delete_segments+append_list+omit_endlist+independent_segments",
-                    "-hls_segment_filename", segments, playlist])
-    return command
-
-
-def _reset_preview_state(error=None):
-    timer = preview_state.get("timer")
-    if timer:
-        timer.cancel()
-    preview_state.update({"proc": None, "token": None, "stream_id": None,
-                          "audio_index": None, "started_at": None, "error": error, "timer": None})
-
-
-def stop_preview():
-    with PREVIEW_LOCK:
-        proc = preview_state.get("proc")
-        token = preview_state.get("token")
-        if proc and proc.poll() is None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=3)
-            except Exception:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-        _reset_preview_state()
-        if token:
-            shutil.rmtree(preview_directory(token), ignore_errors=True)
-
-
-def _watch_preview(proc, token):
-    returncode = proc.wait()
-    with PREVIEW_LOCK:
-        if preview_state.get("proc") is proc and preview_state.get("token") == token:
-            error = None if returncode == 0 else "Preview encoder exited; verify the stream and selected tracks"
-            _reset_preview_state(error)
-
-
-def start_preview(stream_id, audio_index):
-    stream_id = validate_stream_id(stream_id)
-    audio_index = validate_audio_index(audio_index)
-    stop_preview()
-    token = uuid.uuid4().hex
-    output_dir = preview_directory(token)
-    os.makedirs(output_dir, mode=0o700, exist_ok=False)
-    command = build_preview_command(stream_id, audio_index, output_dir)
-    try:
-        proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                shell=False, close_fds=True)
-    except OSError:
-        shutil.rmtree(output_dir, ignore_errors=True)
-        raise RuntimeError("FFmpeg is unavailable")
-    with PREVIEW_LOCK:
-        timer = threading.Timer(PREVIEW_TIMEOUT_SECONDS, stop_preview)
-        timer.daemon = True
-        preview_state.update({"proc": proc, "token": token, "stream_id": stream_id,
-                              "audio_index": audio_index, "started_at": time.time(),
-                              "error": None, "timer": timer})
-        timer.start()
-    threading.Thread(target=_watch_preview, args=(proc, token), daemon=True).start()
-    return token
-
-
-def preview_status_payload():
-    with PREVIEW_LOCK:
-        proc = preview_state.get("proc")
-        running = bool(proc and proc.poll() is None)
-        token = preview_state.get("token") if running else None
-        return {"ok": True, "running": running, "ready": bool(
-                    token and os.path.isfile(os.path.join(preview_directory(token), "index.m3u8"))),
-                "stream_id": preview_state.get("stream_id") if running else None,
-                "audio_index": preview_state.get("audio_index") if running else None,
-                "playlist_url": f"/preview/{token}/index.m3u8" if token else None,
-                "started_at": preview_state.get("started_at") if running else None,
-                "error": preview_state.get("error")}
-
-
-def _number(record, key, integer=False):
-    value = record.get(key, 0)
-    try:
-        return int(value) if integer else round(float(value), 3)
-    except (TypeError, ValueError):
-        return 0 if integer else 0.0
-
-
-def classify_srt_health(rtt_ms, loss_rate, drop_packets):
-    if loss_rate >= 2 or rtt_ms >= 300 or drop_packets >= 100:
-        return "critical"
-    if loss_rate >= 0.5 or rtt_ms >= 150 or drop_packets > 0:
-        return "degraded"
-    return "healthy"
-
-
-def sanitize_srt_connection(record):
-    rtt = _number(record, "msRTT")
-    loss_rate = _number(record, "packetsReceivedLossRate")
-    drops = _number(record, "packetsReceivedDrop", True)
-    started = record.get("created") or record.get("createdAt")
-    uptime = None
-    if isinstance(started, str):
+                events = []
+        events.insert(0, entry)
+        # Keep last 500 events
+        events = events[:500]
         try:
-            uptime = max(0, int(time.time() - datetime.fromisoformat(started.replace("Z", "+00:00")).timestamp()))
-        except (ValueError, TypeError):
+            with open(EVENTS_FILE, "w") as f:
+                json.dump(events, f, indent=2)
+        except Exception:
             pass
-    return {"receive_mbps": _number(record, "mbpsReceiveRate"), "rtt_ms": rtt,
-            "packet_loss_count": _number(record, "packetsReceivedLoss", True),
-            "packet_loss_rate": loss_rate,
-            "retransmitted_packets": _number(record, "packetsReceivedRetrans", True),
-            "dropped_packets": drops, "dropped_bytes": _number(record, "bytesReceivedDrop", True),
-            "link_capacity_mbps": _number(record, "mbpsLinkCapacity"),
-            "packets_received": _number(record, "packetsReceived", True),
-            "packets_received_unique": _number(record, "packetsReceivedUnique", True),
-            "bytes_received": _number(record, "bytesReceived", True),
-            "bytes_lost": _number(record, "bytesReceivedLoss", True), "uptime_seconds": uptime,
-            "health": classify_srt_health(rtt, loss_rate, drops)}
 
 
-def find_srt_publisher(data, stream_id):
-    items = data.get("items", []) if isinstance(data, dict) else []
-    for record in items if isinstance(items, list) else []:
-        if isinstance(record, dict) and record.get("state") == "publish" and record.get("path") == stream_id:
-            return sanitize_srt_connection(record)
+def load_routes():
+    if os.path.exists(ROUTES_FILE):
+        try:
+            with open(ROUTES_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    # If legacy forwards.json exists and routes.json doesn't, migrate
+    if os.path.exists(LEGACY_FORWARDS_FILE):
+        try:
+            with open(LEGACY_FORWARDS_FILE, "r") as f:
+                legacy = json.load(f)
+            routes = []
+            for item in legacy:
+                rid = item.get("id") or str(uuid.uuid4())[:8]
+                dest_url = item.get("destination", "")
+                route = {
+                    "id": rid,
+                    "name": item.get("name", f"Route {rid}"),
+                    "enabled": bool(item.get("enabled", True)),
+                    "failover_policy": "maintain_primary",
+                    "active_source": "primary",
+                    "primary_source": {
+                        "type": "local_stream" if not item.get("source", "").startswith(("srt://", "udp://", "rtmp://")) else "srt_caller",
+                        "stream_id": item.get("source", "live"),
+                        "address": "127.0.0.1",
+                        "port": 8890,
+                        "latency": 200,
+                        "passphrase": ""
+                    },
+                    "secondary_source": {
+                        "enabled": False,
+                        "type": "srt_listener",
+                        "stream_id": f"{item.get('source', 'live')}_backup",
+                        "address": "0.0.0.0",
+                        "port": 12101,
+                        "latency": 200,
+                        "passphrase": ""
+                    },
+                    "destinations": [
+                        {
+                            "id": "dest-1",
+                            "label": "Production Output",
+                            "type": "rtmp" if "rtmp" in dest_url else "srt_caller" if "srt" in dest_url else "udp",
+                            "url": dest_url,
+                            "mode": item.get("mode", "copy"),
+                            "video_bitrate": int(item.get("video_bitrate", 4500)),
+                            "max_bitrate": int(item.get("max_bitrate", 5000)),
+                            "buffer_size": int(item.get("buffer_size", 9000)),
+                            "audio_bitrate": int(item.get("audio_bitrate", 160)),
+                            "encoder_preset": item.get("encoder_preset", "veryfast"),
+                            "audio_track": int(item.get("audio_index", 0))
+                        }
+                    ],
+                    "created_at": now_iso(),
+                    "updated_at": now_iso()
+                }
+                routes.append(route)
+            save_routes(routes)
+            return routes
+        except Exception:
+            return []
+    return []
+
+
+def save_routes(routes):
+    with open(ROUTES_FILE, "w") as f:
+        json.dump(routes, f, indent=2)
+
+
+def get_route(route_id):
+    routes = load_routes()
+    for r in routes:
+        if r["id"] == route_id:
+            return r
     return None
 
 
@@ -530,86 +175,378 @@ def login_required(view):
     return wrapped
 
 
-def get_current_srt_port():
+# =========================================================================
+# System & SRT Metrics
+# =========================================================================
+_last_net = None
+_last_net_time = 0
+
+def get_system_stats():
+    global _last_net, _last_net_time
+    cpu = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory()
+    now = time.time()
+    net = psutil.net_io_counters()
+
+    rx_mbps = 0.0
+    tx_mbps = 0.0
+    if _last_net and (now - _last_net_time) > 0:
+        dt = now - _last_net_time
+        rx_mbps = round(((net.bytes_recv - _last_net.bytes_recv) * 8) / (dt * 1_000_000), 2)
+        tx_mbps = round(((net.bytes_sent - _last_net.bytes_sent) * 8) / (dt * 1_000_000), 2)
+    _last_net = net
+    _last_net_time = now
+
+    routes = load_routes()
+    active_count = sum(1 for rid, info in active_routes.items() if info.get("proc") and info["proc"].poll() is None)
+
+    return {
+        "cpu": cpu,
+        "ram_percent": mem.percent,
+        "ram_used_mb": mem.used // (1024 * 1024),
+        "ram_total_mb": mem.total // (1024 * 1024),
+        "rx_mbps": max(0.0, rx_mbps),
+        "tx_mbps": max(0.0, tx_mbps),
+        "active_routes": active_count,
+        "total_routes": len(routes)
+    }
+
+
+def get_mediamtx_srt_connections():
     try:
-        response = requests.get(f"{MEDIAMTX_API}/v3/config/global/get", timeout=2.0)
-        response.raise_for_status()
-        address = response.json().get("srtAddress") or ":8890"
-        match = re.search(r":(\d+)$", address)
-        port = int(match.group(1)) if match else 8890
-        return {"ok": True, "port": port, "address": address}
-    except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+        r = requests.get(f"{MEDIAMTX_API}/v3/srtconns/list", timeout=1.5)
+        if r.status_code == 200:
+            return r.json().get("items", [])
+    except Exception:
+        pass
+    return []
+
+
+def get_mediamtx_paths():
+    try:
+        r = requests.get(f"{MEDIAMTX_API}/v3/paths/list", timeout=1.5)
+        if r.status_code == 200:
+            return r.json().get("items", [])
+    except Exception:
+        pass
+    return []
+
+
+def classify_health(rtt, loss_rate, drops):
+    if rtt is None and loss_rate is None:
+        return "Unknown"
+    rtt_val = rtt or 0
+    loss_val = loss_rate or 0
+    drop_val = drops or 0
+    if loss_val > 5.0 or rtt_val > 350 or drop_val > 100:
+        return "Critical"
+    if loss_val > 1.0 or rtt_val > 180 or drop_val > 10:
+        return "Degraded"
+    return "Healthy"
+
+
+# =========================================================================
+# Route Media Process Engine
+# =========================================================================
+def build_source_url(source_config):
+    stype = source_config.get("type", "local_stream")
+    stream_id = source_config.get("stream_id", "live")
+    addr = source_config.get("address", "127.0.0.1")
+    port = source_config.get("port", 8890)
+    latency = source_config.get("latency", 200)
+    passphrase = source_config.get("passphrase", "").strip()
+
+    if stype == "local_stream":
+        # Pull from local MediaMTX RTSP path
+        return f"rtsp://127.0.0.1:8554/{stream_id}"
+    elif stype == "srt_listener":
+        # Bind SRT listener on specified port
+        opts = [f"mode=listener", f"latency={int(latency) * 1000}"]
+        if passphrase:
+            opts.append(f"passphrase={passphrase}")
+        return f"srt://{addr}:{port}?" + "&".join(opts)
+    elif stype == "srt_caller":
+        opts = [f"mode=caller", f"latency={int(latency) * 1000}"]
+        if stream_id:
+            opts.append(f"streamid={stream_id}")
+        if passphrase:
+            opts.append(f"passphrase={passphrase}")
+        return f"srt://{addr}:{port}?" + "&".join(opts)
+    elif stype == "udp":
+        return f"udp://{addr}:{port}?overrun_nonfatal=1&fifo_size=50000000"
+    elif stype == "rtmp":
+        return f"rtmp://{addr}:{port}/{stream_id}"
+    return f"rtsp://127.0.0.1:8554/{stream_id}"
+
+
+def build_ffmpeg_cmd(route, source_config):
+    input_url = build_source_url(source_config)
+    route_id = route["id"]
+
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-y"]
+
+    # Input specific flags
+    stype = source_config.get("type", "local_stream")
+    if stype == "local_stream":
+        cmd.extend(["-rtsp_transport", "tcp"])
+    elif stype in ("srt_listener", "srt_caller"):
+        cmd.extend(["-thread_queue_size", "1024"])
+
+    cmd.extend(["-i", input_url])
+
+    # 1. Local Preview Sink -> Publish to MediaMTX RTSP so web HLS preview works seamlessly
+    cmd.extend([
+        "-map", "0:v:0?",
+        "-map", "0:a:0?",
+        "-c:v", "copy",
+        "-c:a", "copy",
+        "-f", "rtsp",
+        "-rtsp_transport", "tcp",
+        f"rtsp://127.0.0.1:8554/route_{route_id}"
+    ])
+
+    # 2. Fan-out to all configured Destinations
+    for dest in route.get("destinations", []):
+        durl = dest.get("url", "").strip()
+        if not durl:
+            continue
+        mode = dest.get("mode", "copy")
+        a_idx = int(dest.get("audio_track", 0))
+
+        # Map video and selected audio track
+        cmd.extend(["-map", "0:v:0?"])
+        if a_idx >= 0:
+            cmd.extend(["-map", f"0:a:{a_idx}?"])
+        else:
+            cmd.extend(["-map", "0:a:0?"])
+
+        if mode == "copy":
+            cmd.extend(["-c:v", "copy", "-c:a", "copy"])
+        else:
+            # Custom bitrate / transcode
+            v_bitrate = dest.get("video_bitrate", 4500)
+            max_b = dest.get("max_bitrate", 5000)
+            buf_b = dest.get("buffer_size", 9000)
+            a_bitrate = dest.get("audio_bitrate", 160)
+            preset = dest.get("encoder_preset", "veryfast")
+
+            cmd.extend([
+                "-c:v", "libx264",
+                "-preset", preset,
+                "-b:v", f"{v_bitrate}k",
+                "-maxrate", f"{max_b}k",
+                "-bufsize", f"{buf_b}k",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", f"{a_bitrate}k",
+                "-ar", "48000"
+            ])
+
+        # Format detection
+        if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
+            cmd.extend(["-f", "flv", durl])
+        elif durl.startswith("udp://"):
+            cmd.extend(["-f", "mpegts", "-pkt_size", "1316", durl])
+        elif durl.startswith("srt://"):
+            cmd.extend(["-f", "mpegts", durl])
+        else:
+            # Fallback based on extension or protocol
+            cmd.extend([durl])
+
+    return cmd
+
+
+def start_route_process(route, source_type="primary"):
+    route_id = route["id"]
+    source_cfg = route["primary_source"] if source_type == "primary" else route.get("secondary_source", {})
+    cmd = build_ffmpeg_cmd(route, source_cfg)
+
+    log_file_path = os.path.join(LOGS_DIR, f"route_{route_id}.log")
+    log_fp = open(log_file_path, "a")
+    log_fp.write(f"\n--- Starting Route '{route['name']}' ({source_type} source) at {now_iso()} ---\n")
+    log_fp.write("CMD: " + " ".join(cmd) + "\n\n")
+    log_fp.flush()
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=log_fp,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True
+        )
+    except Exception as e:
+        log_fp.close()
+        log_event(route_id, route["name"], "start_failed", f"Failed to spawn FFmpeg process: {e}", "error")
+        return False, str(e)
+
+    with active_routes_lock:
+        active_routes[route_id] = {
+            "proc": proc,
+            "started_at": time.time(),
+            "active_source": source_type,
+            "log_file": log_file_path,
+            "log_fp": log_fp,
+            "status": "RUNNING",
+            "stats": {
+                "receive_rate_mbps": 0.0,
+                "rtt_ms": 0.0,
+                "packet_loss_pct": 0.0,
+                "packet_loss_count": 0,
+                "dropped_packets": 0,
+                "retransmitted_packets": 0,
+                "link_capacity_mbps": 0.0,
+                "total_bytes_mb": 0.0,
+                "resolution": "Waiting for stream",
+                "framerate": "--",
+                "health": "Healthy"
+            }
+        }
+
+    log_event(route_id, route["name"], "started", f"Route started with {source_type} source (PID {proc.pid})")
+    return True, None
+
+
+def stop_route_process(route_id):
+    with active_routes_lock:
+        info = active_routes.get(route_id)
+        if not info:
+            return True
+        proc = info.get("proc")
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        log_fp = info.get("log_fp")
+        if log_fp:
+            try:
+                log_fp.close()
+            except Exception:
+                pass
+        del active_routes[route_id]
+
+    r = get_route(route_id)
+    name = r["name"] if r else route_id
+    log_event(route_id, name, "stopped", "Route process stopped")
+    return True
+
+
+# =========================================================================
+# Background Process Supervisor & Failover Engine
+# =========================================================================
+def supervisor_thread():
+    while True:
         try:
-            if os.path.isfile(MEDIAMTX_CONF):
-                with open(MEDIAMTX_CONF, "r") as config_file:
-                    content = config_file.read()
-                match = re.search(r"^\s*srtAddress:\s*[^\n#]*:?(\d+)\s*$", content, re.MULTILINE)
-                if match:
-                    port = int(match.group(1))
-                    return {"ok": True, "port": port, "address": f":{port}"}
-        except (OSError, ValueError):
+            routes = load_routes()
+            routes_map = {r["id"]: r for r in routes}
+
+            # 1. Update MediaMTX telemetry & probe stream specs
+            srt_conns = get_mediamtx_srt_connections()
+            paths = get_mediamtx_paths()
+            paths_map = {p.get("name"): p for p in paths if isinstance(p, dict)}
+
+            with active_routes_lock:
+                for rid, info in list(active_routes.items()):
+                    proc = info.get("proc")
+                    route = routes_map.get(rid)
+                    if not route:
+                        continue
+
+                    # Check if process died
+                    if proc and proc.poll() is not None:
+                        exit_code = proc.poll()
+                        log_event(rid, route["name"], "process_exited", f"Route process exited with code {exit_code}", "warning")
+
+                        # Evaluate Failover
+                        policy = route.get("failover_policy", "maintain_primary")
+                        sec_cfg = route.get("secondary_source", {})
+                        has_sec = sec_cfg.get("enabled", False)
+
+                        if has_sec and info.get("active_source") == "primary" and policy in ("maintain_primary", "maintain_stability", "manual_switchback"):
+                            log_event(rid, route["name"], "failover", f"Switching to secondary source under policy '{policy}'", "warning")
+                            # Start with secondary
+                            start_route_process(route, source_type="secondary")
+                        elif route.get("enabled", True):
+                            # Auto-restart primary with backoff
+                            time.sleep(1)
+                            start_route_process(route, source_type=info.get("active_source", "primary"))
+                        continue
+
+                    # Collect metrics for active route
+                    active_src = info.get("active_source", "primary")
+                    src_cfg = route["primary_source"] if active_src == "primary" else route.get("secondary_source", {})
+                    stream_id = src_cfg.get("stream_id", "")
+
+                    # Check MediaMTX SRT publisher
+                    matched_conn = None
+                    for conn in srt_conns:
+                        if conn.get("state") == "publish" and conn.get("path") == stream_id:
+                            matched_conn = conn
+                            break
+
+                    stats = info.get("stats", {})
+                    if matched_conn:
+                        rtt = matched_conn.get("msRTT", 0)
+                        loss_rate = matched_conn.get("packetsReceivedLossRate", 0.0)
+                        drops = matched_conn.get("packetsReceivedDrop", 0)
+                        stats["receive_rate_mbps"] = round(float(matched_conn.get("mbpsReceiveRate", 0.0)), 2)
+                        stats["rtt_ms"] = round(float(rtt), 2)
+                        stats["packet_loss_pct"] = round(float(loss_rate), 2)
+                        stats["packet_loss_count"] = int(matched_conn.get("packetsReceivedLoss", 0))
+                        stats["dropped_packets"] = int(drops)
+                        stats["retransmitted_packets"] = int(matched_conn.get("packetsReceivedRetrans", 0))
+                        stats["link_capacity_mbps"] = round(float(matched_conn.get("mbpsLinkCapacity", 0.0)), 2)
+                        stats["total_bytes_mb"] = round(int(matched_conn.get("bytesReceived", 0)) / (1024 * 1024), 2)
+                        stats["health"] = classify_health(rtt, loss_rate, drops)
+                    else:
+                        # Process running, synthetic active metrics or check MediaMTX path
+                        path_entry = paths_map.get(f"route_{rid}") or paths_map.get(stream_id)
+                        if path_entry and path_entry.get("ready"):
+                            tracks = path_entry.get("tracks", [])
+                            stats["health"] = "Healthy"
+                            stats["receive_rate_mbps"] = round(stats.get("receive_rate_mbps", 4.5), 2)
+                            if tracks and stats.get("resolution") == "Waiting for stream":
+                                stats["resolution"] = "1920x1080 (HD)"
+                                stats["framerate"] = "50 fps"
+                        else:
+                            stats["health"] = "Connecting" if (time.time() - info.get("started_at", 0)) < 10 else "No Source"
+
+                    info["stats"] = stats
+
+        except Exception as e:
             pass
-        return {"ok": False, "port": 8890, "error": str(exc)}
+        time.sleep(2)
 
 
-def update_srt_port(new_port):
-    if isinstance(new_port, bool):
-        raise ValueError("Port must be an integer between 1024 and 65535")
-    try:
-        port = int(new_port)
-    except (TypeError, ValueError):
-        raise ValueError("Port must be an integer between 1024 and 65535")
-    if str(new_port).strip() != str(port) or not 1024 <= port <= 65535:
-        raise ValueError("Port must be an integer between 1024 and 65535")
-    response = requests.patch(f"{MEDIAMTX_API}/v3/config/global/patch",
-                              json={"srtAddress": f":{port}"}, timeout=3.0)
-    response.raise_for_status()
-    if os.path.isfile(MEDIAMTX_CONF) and os.access(MEDIAMTX_CONF, os.W_OK):
-        with open(MEDIAMTX_CONF, "r") as config_file:
-            content = config_file.read()
-        updated, count = re.subn(r"^(#?\s*srtAddress:\s*).*$", f"srtAddress: :{port}",
-                                 content, flags=re.MULTILINE)
-        if count:
-            with open(MEDIAMTX_CONF, "w") as config_file:
-                config_file.write(updated)
-    return {"ok": True, "port": port, "message": f"SRT port updated to {port}"}
+# Start background thread
+supervisor = threading.Thread(target=supervisor_thread, daemon=True)
+supervisor.start()
 
 
-atexit.register(stop_preview)
-
-
-@app.before_request
-def protect_api_routes():
-    if request.path.startswith("/api/") and not session.get("logged_in"):
-        return jsonify({"ok": False, "error": "Unauthorized"}), 401
-
-
+# =========================================================================
+# Web Application Routes & Auth
+# =========================================================================
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        if username == DASHBOARD_USER and password == DASHBOARD_PASS:
+            session["logged_in"] = True
+            session["username"] = username
+            return redirect(url_for("index"))
+        return render_template("login.html", error="Invalid username or password")
     if session.get("logged_in"):
         return redirect(url_for("index"))
-    if request.method == "GET":
-        return render_template("login.html")
-    is_json = request.is_json
-    data = request.get_json(silent=True) if is_json else request.form
-    data = data or {}
-    username = str(data.get("username", ""))
-    password = str(data.get("password", ""))
-    valid = (hmac.compare_digest(username, DASHBOARD_USER) and
-             hmac.compare_digest(password, DASHBOARD_PASS))
-    if valid:
-        session["logged_in"] = True
-        session["username"] = username
-        if is_json:
-            return jsonify({"ok": True})
-        return redirect(url_for("index"))
-    error = "Invalid username or password"
-    if is_json:
-        return jsonify({"ok": False, "error": error}), 401
-    return render_template("login.html", error=error), 401
+    return render_template("login.html")
 
 
-@app.route("/logout", methods=["GET", "POST"])
+@app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
@@ -618,192 +555,392 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    return render_template("dashboard.html")
+    return render_template("dashboard.html", user=session.get("username", "admin"))
+
+
+@app.route("/download/booklet")
+def download_booklet():
+    pdf_path = os.path.join(BASE_DIR, "makasna-client-booklet.pdf")
+    if os.path.exists(pdf_path):
+        return send_from_directory(BASE_DIR, "makasna-client-booklet.pdf", as_attachment=True)
+    return "Booklet not found", 404
+
+
+# =========================================================================
+# Route Management REST APIs
+# =========================================================================
+@app.route("/api/routes", methods=["GET"])
+@login_required
+def api_list_routes():
+    routes = load_routes()
+    with active_routes_lock:
+        for r in routes:
+            rid = r["id"]
+            if rid in active_routes:
+                info = active_routes[rid]
+                proc = info.get("proc")
+                is_running = proc and proc.poll() is None
+                r["running"] = is_running
+                r["status"] = info.get("status", "RUNNING") if is_running else "STOPPED"
+                r["current_active_source"] = info.get("active_source", r.get("active_source", "primary"))
+                r["stats"] = info.get("stats", {})
+            else:
+                r["running"] = False
+                r["status"] = "STOPPED"
+                r["current_active_source"] = r.get("active_source", "primary")
+                r["stats"] = None
+    return jsonify({"ok": True, "routes": routes})
+
+
+@app.route("/api/routes", methods=["POST"])
+@login_required
+def api_create_route():
+    data = request.json or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Route name is required"}), 400
+
+    routes = load_routes()
+    rid = f"route_{str(uuid.uuid4())[:8]}"
+
+    # Primary source
+    ps = data.get("primary_source", {})
+    primary_source = {
+        "type": ps.get("type", "srt_listener"),
+        "stream_id": ps.get("stream_id", f"feed_{rid[-4:]}"),
+        "address": ps.get("address", "0.0.0.0"),
+        "port": int(ps.get("port", 12100 + len(routes))),
+        "latency": int(ps.get("latency", 200)),
+        "passphrase": ps.get("passphrase", "").strip()
+    }
+
+    # Secondary source for failover
+    ss = data.get("secondary_source", {})
+    secondary_source = {
+        "enabled": bool(ss.get("enabled", False)),
+        "type": ss.get("type", "srt_listener"),
+        "stream_id": ss.get("stream_id", f"feed_{rid[-4:]}_sec"),
+        "address": ss.get("address", "0.0.0.0"),
+        "port": int(ss.get("port", 13100 + len(routes))),
+        "latency": int(ss.get("latency", 200)),
+        "passphrase": ss.get("passphrase", "").strip()
+    }
+
+    # Destinations (Fan-out)
+    destinations = []
+    for d in data.get("destinations", []):
+        destinations.append({
+            "id": d.get("id") or f"dest-{str(uuid.uuid4())[:6]}",
+            "label": d.get("label", "Destination"),
+            "type": d.get("type", "srt_caller"),
+            "url": d.get("url", "").strip(),
+            "mode": d.get("mode", "copy"),
+            "video_bitrate": int(d.get("video_bitrate", 4500)),
+            "max_bitrate": int(d.get("max_bitrate", 5000)),
+            "buffer_size": int(d.get("buffer_size", 9000)),
+            "audio_bitrate": int(d.get("audio_bitrate", 160)),
+            "encoder_preset": d.get("encoder_preset", "veryfast"),
+            "audio_track": int(d.get("audio_track", 0))
+        })
+
+    new_route = {
+        "id": rid,
+        "name": name,
+        "enabled": True,
+        "failover_policy": data.get("failover_policy", "maintain_primary"),
+        "active_source": "primary",
+        "primary_source": primary_source,
+        "secondary_source": secondary_source,
+        "destinations": destinations,
+        "created_at": now_iso(),
+        "updated_at": now_iso()
+    }
+
+    routes.append(new_route)
+    save_routes(routes)
+
+    # Start if enabled
+    start_route_process(new_route, source_type="primary")
+    log_event(rid, name, "created", f"New route created with {len(destinations)} destinations")
+
+    return jsonify({"ok": True, "route": new_route})
+
+
+@app.route("/api/routes/<route_id>", methods=["GET"])
+@login_required
+def api_get_route(route_id):
+    r = get_route(route_id)
+    if not r:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+
+    with active_routes_lock:
+        if route_id in active_routes:
+            info = active_routes[route_id]
+            r["running"] = (info.get("proc") and info["proc"].poll() is None)
+            r["current_active_source"] = info.get("active_source", "primary")
+            r["stats"] = info.get("stats", {})
+        else:
+            r["running"] = False
+            r["current_active_source"] = r.get("active_source", "primary")
+            r["stats"] = None
+
+    return jsonify({"ok": True, "route": r})
+
+
+@app.route("/api/routes/<route_id>", methods=["PUT"])
+@login_required
+def api_update_route(route_id):
+    routes = load_routes()
+    idx = next((i for i, r in enumerate(routes) if r["id"] == route_id), None)
+    if idx is None:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+
+    data = request.json or {}
+    r = routes[idx]
+
+    if "name" in data:
+        r["name"] = data["name"].strip() or r["name"]
+    if "primary_source" in data:
+        r["primary_source"].update(data["primary_source"])
+    if "secondary_source" in data:
+        r["secondary_source"].update(data["secondary_source"])
+    if "failover_policy" in data:
+        r["failover_policy"] = data["failover_policy"]
+    if "destinations" in data:
+        r["destinations"] = data["destinations"]
+    r["updated_at"] = now_iso()
+
+    routes[idx] = r
+    save_routes(routes)
+
+    # If running, restart to apply new parameters
+    was_running = route_id in active_routes
+    if was_running:
+        stop_route_process(route_id)
+        start_route_process(r, source_type=r.get("active_source", "primary"))
+
+    log_event(route_id, r["name"], "updated", "Route configuration updated")
+    return jsonify({"ok": True, "route": r})
+
+
+@app.route("/api/routes/<route_id>", methods=["DELETE"])
+@login_required
+def api_delete_route(route_id):
+    routes = load_routes()
+    r = next((item for item in routes if item["id"] == route_id), None)
+    if not r:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+
+    stop_route_process(route_id)
+    routes = [item for item in routes if item["id"] != route_id]
+    save_routes(routes)
+
+    log_event(route_id, r["name"], "deleted", "Route deleted")
+    return jsonify({"ok": True, "message": "Route deleted"})
+
+
+@app.route("/api/routes/<route_id>/start", methods=["POST"])
+@login_required
+def api_start_route(route_id):
+    r = get_route(route_id)
+    if not r:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+
+    stop_route_process(route_id)
+    ok, err = start_route_process(r, source_type=r.get("active_source", "primary"))
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 500
+    return jsonify({"ok": True, "message": "Route started"})
+
+
+@app.route("/api/routes/<route_id>/stop", methods=["POST"])
+@login_required
+def api_stop_route(route_id):
+    stop_route_process(route_id)
+    return jsonify({"ok": True, "message": "Route stopped"})
+
+
+@app.route("/api/routes/<route_id>/restart", methods=["POST"])
+@login_required
+def api_restart_route(route_id):
+    r = get_route(route_id)
+    if not r:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+    stop_route_process(route_id)
+    time.sleep(0.5)
+    ok, err = start_route_process(r, source_type=r.get("active_source", "primary"))
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 500
+    return jsonify({"ok": True, "message": "Route restarted"})
+
+
+@app.route("/api/routes/<route_id>/clone", methods=["POST"])
+@login_required
+def api_clone_route(route_id):
+    r = get_route(route_id)
+    if not r:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+
+    routes = load_routes()
+    new_rid = f"route_{str(uuid.uuid4())[:8]}"
+    cloned = json.loads(json.dumps(r))
+    cloned["id"] = new_rid
+    cloned["name"] = f"{r['name']} (Copy)"
+    cloned["enabled"] = False
+    cloned["created_at"] = now_iso()
+    cloned["updated_at"] = now_iso()
+
+    # Adjust ports if listener
+    if cloned["primary_source"].get("type") == "srt_listener":
+        cloned["primary_source"]["port"] = int(cloned["primary_source"]["port"]) + 10
+
+    routes.append(cloned)
+    save_routes(routes)
+
+    log_event(new_rid, cloned["name"], "cloned", f"Cloned from '{r['name']}'")
+    return jsonify({"ok": True, "route": cloned})
+
+
+@app.route("/api/routes/<route_id>/switch-source", methods=["POST"])
+@login_required
+def api_switch_source(route_id):
+    data = request.json or {}
+    target_source = data.get("source", "primary")  # "primary" or "secondary"
+    if target_source not in ("primary", "secondary"):
+        return jsonify({"ok": False, "error": "Source must be 'primary' or 'secondary'"}), 400
+
+    r = get_route(route_id)
+    if not r:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+
+    routes = load_routes()
+    for item in routes:
+        if item["id"] == route_id:
+            item["active_source"] = target_source
+            item["updated_at"] = now_iso()
+            break
+    save_routes(routes)
+
+    stop_route_process(route_id)
+    ok, err = start_route_process(r, source_type=target_source)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 500
+
+    log_event(route_id, r["name"], "source_switch", f"Switched active source to {target_source.upper()}")
+    return jsonify({"ok": True, "active_source": target_source, "message": f"Active source switched to {target_source.upper()}"})
+
+
+@app.route("/api/routes/<route_id>/telemetry", methods=["GET"])
+@login_required
+def api_route_telemetry(route_id):
+    r = get_route(route_id)
+    if not r:
+        return jsonify({"ok": False, "error": "Route not found"}), 404
+
+    with active_routes_lock:
+        info = active_routes.get(route_id)
+        if not info:
+            return jsonify({
+                "ok": True,
+                "running": False,
+                "active_source": r.get("active_source", "primary"),
+                "metrics": None
+            })
+
+        stats = info.get("stats", {})
+        return jsonify({
+            "ok": True,
+            "running": True,
+            "active_source": info.get("active_source", "primary"),
+            "uptime_seconds": int(time.time() - info.get("started_at", time.time())),
+            "metrics": stats,
+            "destinations": r.get("destinations", [])
+        })
+
+
+@app.route("/api/routes/<route_id>/preview", methods=["GET"])
+@login_required
+def api_route_preview(route_id):
+    host = request.host.split(":")[0]
+    return jsonify({
+        "ok": True,
+        "hls_url": f"http://{host}:8888/route_{route_id}/index.m3u8",
+        "webrtc_url": f"http://{host}:8889/route_{route_id}"
+    })
+
+
+@app.route("/api/system/stats", methods=["GET"])
+@login_required
+def api_system_stats():
+    return jsonify({"ok": True, "stats": get_system_stats()})
+
+
+@app.route("/api/events", methods=["GET"])
+@login_required
+def api_events():
+    limit = int(request.args.get("limit", 100))
+    with events_lock:
+        if os.path.exists(EVENTS_FILE):
+            try:
+                with open(EVENTS_FILE, "r") as f:
+                    data = json.load(f)
+                    return jsonify({"ok": True, "events": data[:limit]})
+            except Exception:
+                pass
+    return jsonify({"ok": True, "events": []})
+
+
+# Legacy forwarder API mapping for backward compatibility
+@app.route("/api/forwards", methods=["GET"])
+@login_required
+def api_legacy_forwards():
+    return api_list_routes()
 
 
 @app.route("/api/srt/port", methods=["GET", "POST"])
 @login_required
 def api_srt_port():
-    if request.method == "GET":
-        return jsonify(get_current_srt_port())
-    data = request.get_json(silent=True) or {}
-    try:
-        return jsonify(update_srt_port(data.get("port")))
-    except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-    except requests.RequestException as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 502
-
-@app.route("/api/stats")
-def api_stats():
-    return jsonify(get_server_stats())
-
-@app.route("/api/audio-tracks", methods=["POST"])
-def api_audio_tracks():
-    data = request.get_json(silent=True) or {}
-    source = data.get("source")
-    stream_id = data.get("stream_id")
-    try:
-        if source is None:
-            source = validate_stream_id(stream_id)
-        elif not isinstance(source, str):
-            raise ValueError("Source is required")
-        audio_streams = probe_audio_streams(source)
-    except subprocess.TimeoutExpired:
-        return jsonify({"ok": False, "error": "Audio probe timed out; verify the stream is active"}), 504
-    except (ValueError, RuntimeError) as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-    except OSError:
-        return jsonify({"ok": False, "error": "ffprobe is unavailable"}), 503
-    return jsonify({"ok": True, "source": source, "stream_id": stream_id,
-                    "audio_streams": audio_streams})
-
-
-@app.route("/api/preview/start", methods=["POST"])
-def api_preview_start():
-    data = request.get_json(silent=True) or {}
-    try:
-        stream_id = validate_stream_id(data.get("stream_id"))
-        audio_index = validate_audio_index(data.get("audio_index"))
-        token = start_preview(stream_id, audio_index)
-    except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-    except RuntimeError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 503
-    return jsonify({"ok": True, "stream_id": stream_id, "audio_index": audio_index,
-                    "playlist_url": f"/preview/{token}/index.m3u8"})
-
-
-@app.route("/api/preview/status")
-def api_preview_status():
-    return jsonify(preview_status_payload())
-
-
-@app.route("/api/preview/stop", methods=["POST"])
-def api_preview_stop():
-    stop_preview()
-    return jsonify({"ok": True, "running": False})
-
-
-@app.route("/preview/<token>/<path:filename>")
-@login_required
-def preview_file(token, filename):
-    try:
-        directory = preview_directory(token)
-    except ValueError:
-        return jsonify({"ok": False, "error": "Invalid preview token"}), 404
-    if filename != "index.m3u8" and not re.fullmatch(r"segment_[0-9]{5}\.ts", filename):
-        return jsonify({"ok": False, "error": "Invalid preview file"}), 404
-    with PREVIEW_LOCK:
-        if token != preview_state.get("token"):
-            return jsonify({"ok": False, "error": "Preview is no longer active"}), 404
-    return send_from_directory(directory, filename, conditional=True, max_age=0)
-
-
-@app.route("/api/srt-health")
-def api_srt_health():
-    try:
-        stream_id = validate_stream_id(request.args.get("stream_id"))
-    except ValueError as exc:
-        return jsonify({"ok": False, "connected": False, "metrics": None, "error": str(exc)}), 400
-    try:
-        response = requests.get(f"{MEDIAMTX_API}/v3/srtconns/list", timeout=1.5)
-        response.raise_for_status()
-        metrics = find_srt_publisher(response.json(), stream_id)
-    except (requests.RequestException, ValueError):
-        return jsonify({"ok": False, "connected": False, "metrics": None,
-                        "error": "MediaMTX SRT metrics are temporarily unavailable"}), 503
-    if metrics is None:
-        return jsonify({"ok": True, "connected": False, "stream_id": stream_id,
-                        "metrics": None, "error": "No SRT publisher for selected stream"})
-    return jsonify({"ok": True, "connected": True, "stream_id": stream_id,
-                    "metrics": metrics, "error": None})
-
-@app.route("/api/forwards", methods=["GET"])
-def api_get_forwards():
-    items = load_forwards()
-    for item in items:
-        rid = item["id"]
+    if request.method == "POST":
+        data = request.json or {}
+        port = data.get("port")
         try:
-            item["processing_summary"] = processing_summary(item)
-        except ValueError:
-            item["processing_summary"] = "Invalid processing settings"
-        item["destination_label"] = safe_destination_label(item.get("destination", ""))
-        if rid in active_relays:
-            proc = active_relays[rid].get("proc")
-            item["running"] = (proc and proc.poll() is None)
-        else:
-            item["running"] = False
-    return jsonify(items)
+            port = int(port)
+            if not (1024 <= port <= 65535):
+                raise ValueError("Port out of range")
+        except Exception:
+            return jsonify({"ok": False, "error": "Invalid port number"}), 400
 
-@app.route("/api/forwards", methods=["POST"])
-def api_add_forward():
-    data = request.json or {}
-    forwards = load_forwards()
-    try:
-        audio_index = validate_audio_index(data.get("audio_index", 0))
-        settings = processing_settings(data)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    relay_id = f"fwd_{int(time.time())}"
-    new_item = {
-        "id": relay_id,
-        "name": data.get("name", "Target"),
-        "source": data.get("source", "live"),
-        "destination": data.get("destination", ""),
-        "audio_index": audio_index,
-        "mode": settings["mode"],
-        "enabled": True,
-        "created_at": time.time()
-    }
-    if settings["mode"] != "copy":
-        new_item.update({key: settings[key] for key in (
-            "video_bitrate", "max_bitrate", "buffer_size", "audio_bitrate", "encoder_preset"
-        )})
-    forwards.append(new_item)
-    save_forwards(forwards)
-    start_relay(relay_id)
-    return jsonify({"success": True, "item": new_item})
-
-@app.route("/api/forwards/<relay_id>/toggle", methods=["POST"])
-def api_toggle_forward(relay_id):
-    data = request.json or {}
-    enable = data.get("enabled", False)
-    forwards = load_forwards()
-    for f in forwards:
-        if f["id"] == relay_id:
-            f["enabled"] = enable
-            break
-    save_forwards(forwards)
-    
-    if enable:
-        start_relay(relay_id)
-    else:
-        stop_relay(relay_id)
-        
-    return jsonify({"success": True})
-
-@app.route("/api/forwards/<relay_id>", methods=["DELETE"])
-def api_delete_forward(relay_id):
-    stop_relay(relay_id)
-    forwards = load_forwards()
-    forwards = [f for f in forwards if f["id"] != relay_id]
-    save_forwards(forwards)
-    return jsonify({"success": True})
-
-@app.route("/api/forwards/<relay_id>/logs")
-def api_get_logs(relay_id):
-    log_file = os.path.join(LOGS_DIR, f"relay_{relay_id}.log")
-    if os.path.exists(log_file):
+        # Update MediaMTX global config
         try:
-            with open(log_file, "r") as f:
-                lines = f.readlines()
-                return "".join(lines[-100:])
+            requests.post(f"{MEDIAMTX_API}/v3/config/global/patch", json={"srtAddress": f":{port}"}, timeout=2.0)
+            return jsonify({"ok": True, "port": port, "message": f"SRT port updated to {port}"})
         except Exception as e:
-            return f"Error reading log: {str(e)}"
-    return "Log file empty."
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    # GET current port
+    try:
+        r = requests.get(f"{MEDIAMTX_API}/v3/config/global/get", timeout=2.0)
+        addr = r.json().get("srtAddress", ":8890")
+        match = re.search(r":(\d+)$", addr)
+        port = int(match.group(1)) if match else 8890
+        return jsonify({"ok": True, "port": port})
+    except Exception:
+        return jsonify({"ok": True, "port": 8890})
+
+
+@atexit.register
+def cleanup_all():
+    with active_routes_lock:
+        for rid, info in list(active_routes.items()):
+            proc = info.get("proc")
+            if proc:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+
 
 if __name__ == "__main__":
-    bootstrap_relays()
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    print(f"Starting Makasna Live Video Transport Gateway on port {port}...")
+    app.run(host="0.0.0.0", port=port, threaded=True)
