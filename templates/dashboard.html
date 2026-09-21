@@ -973,13 +973,22 @@ video {
       <div class="page-header">
         <div class="page-title">
           <h1>Gateway Event Log</h1>
-          <p>Historical audit trail of route transitions, failover actions, and pipeline events.</p>
+          <p>Audit trail of route transitions, failover actions, and pipeline events.</p>
         </div>
-        <button class="btn-icon" onclick="fetchEvents()">Refresh Events</button>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn-icon" onclick="fetchEvents()">Refresh Events</button>
+          <button class="btn-icon btn-danger" onclick="clearAllEvents()">Clear Event Log</button>
+        </div>
       </div>
 
-      <div class="table-container" id="events-container">
-        <div style="padding:20px; color:var(--muted)">Loading events...</div>
+      <div style="background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; display:flex; flex-direction:column;">
+        <div style="padding:12px 16px; background:rgba(0,0,0,0.25); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; font-size:12px; font-family:'JetBrains Mono';">
+          <span style="color:var(--muted);">Fixed Viewport (<span id="events-count-label">0</span> events)</span>
+          <span style="color:var(--cyan);">Scrolls inside box</span>
+        </div>
+        <div id="events-container" style="height:540px; max-height:65vh; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch;">
+          <div style="padding:20px; color:var(--muted)">Loading events...</div>
+        </div>
       </div>
     </div>
 
@@ -2914,13 +2923,17 @@ setInterval(() => {
 
 async function fetchEvents() {
   const container = document.getElementById('events-container');
+  const countLabel = document.getElementById('events-count-label');
   try {
     const d = await api('/api/events');
-    if (!d.events || !d.events.length) {
-      container.innerHTML = '<div style="padding:24px; color:var(--muted); text-align:center;">No events recorded yet.</div>';
+    const events = d.events || [];
+    if (countLabel) countLabel.textContent = events.length;
+
+    if (!events.length) {
+      container.innerHTML = '<div style="padding:30px; color:var(--muted); text-align:center;">Belum ada catatan aktivitas / event log kosong.</div>';
       return;
     }
-    container.innerHTML = d.events.map(ev => {
+    container.innerHTML = events.map(ev => {
       const time = new Date(ev.timestamp).toLocaleTimeString();
       return `
         <div class="event-entry">
@@ -2936,6 +2949,15 @@ async function fetchEvents() {
   } catch(e) {
     container.innerHTML = `<div style="padding:20px; color:var(--red);">Failed to load events: ${escapeHtml(e.message)}</div>`;
   }
+}
+
+async function clearAllEvents() {
+  if (!confirm('Apakah Anda yakin ingin menghapus seluruh riwayat Gateway Event Log?')) return;
+  try {
+    const res = await api('/api/events', { method: 'DELETE' });
+    alert(res.message || 'Event log berhasil dibersihkan');
+    fetchEvents();
+  } catch(e) { alert(e.message); }
 }
 
 // Global SRT Port Modal

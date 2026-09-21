@@ -1171,6 +1171,8 @@ def api_system_stats():
 def api_events():
     limit = int(request.args.get("limit", 100))
     with events_lock:
+        if _events_cache is not None:
+            return jsonify({"ok": True, "events": list(_events_cache[:limit])})
         if os.path.exists(EVENTS_FILE):
             try:
                 with open(EVENTS_FILE, "r") as f:
@@ -1179,6 +1181,23 @@ def api_events():
             except Exception:
                 pass
     return jsonify({"ok": True, "events": []})
+
+
+@app.route("/api/events", methods=["DELETE"])
+@login_required
+def api_clear_events():
+    global _events_cache, _events_dirty
+    with events_lock:
+        _events_cache = []
+        _events_dirty = True
+        try:
+            with open(EVENTS_FILE, "w") as f:
+                json.dump([], f)
+            _events_dirty = False
+        except Exception:
+            pass
+    return jsonify({"ok": True, "message": "All events cleared successfully"})
+
 
 
 # Legacy forwarder API mapping for backward compatibility
