@@ -1305,6 +1305,21 @@ def api_gdrive_manual_auth():
     return jsonify({"ok": False, "error": f"Failed to authenticate with code: {last_err}"}), 400
 
 
+@app.route("/api/gdrive/service-account", methods=["POST"])
+@login_required
+def api_gdrive_service_account():
+    data = request.json or {}
+    json_data = data.get("json_content")
+    if not json_data:
+        return jsonify({"ok": False, "error": "JSON content is required"}), 400
+    try:
+        email = gdrive_service.save_service_account_json(json_data)
+        log_event("system", "Google Drive", "gdrive_connected", f"Connected via Service Account: {email}", "info")
+        return jsonify({"ok": True, "email": email, "message": f"Service Account successfully connected: {email}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
 @app.route("/api/gdrive/disconnect", methods=["POST"])
 @login_required
 def api_gdrive_disconnect():

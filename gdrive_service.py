@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 try:
     from google.oauth2.credentials import Credentials
+    from google.oauth2 import service_account
     from google_auth_oauthlib.flow import Flow
     from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
@@ -24,6 +25,7 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "gdrive_config.json")
 TOKEN_FILE = os.path.join(BASE_DIR, "gdrive_token.json")
+SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, "gdrive_service_account.json")
 RECORDINGS_DIR = os.path.join(BASE_DIR, "recordings")
 META_FILE = os.path.join(BASE_DIR, "recordings_meta.json")
 
@@ -69,6 +71,18 @@ def save_gdrive_config(cfg):
 def get_credentials():
     if not GOOGLE_LIBS_AVAILABLE:
         return None
+
+    # 1. Check if Service Account JSON exists (highest stability, never expires)
+    if os.path.exists(SERVICE_ACCOUNT_FILE):
+        try:
+            return service_account.Credentials.from_service_account_file(
+                SERVICE_ACCOUNT_FILE,
+                scopes=SCOPES
+            )
+        except Exception as e:
+            print(f"[GDrive] Error loading service account: {e}")
+
+    # 2. Check if OAuth Token exists
     cfg = load_gdrive_config()
     client_id = cfg.get("client_id") or DEFAULT_CLIENT_ID
     client_secret = cfg.get("client_secret") or DEFAULT_CLIENT_SECRET
@@ -91,7 +105,6 @@ def get_credentials():
 
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            # Save refreshed token
             with open(TOKEN_FILE, "w") as f:
                 json.dump({
                     "token": creds.token,
@@ -103,6 +116,32 @@ def get_credentials():
     except Exception as e:
         print(f"[GDrive] Error loading credentials: {e}")
         return None
+
+
+def save_service_account_json(json_content):
+    if not GOOGLE_LIBS_AVAILABLE:
+        raise RuntimeError("Google API libraries not installed.")
+
+    if isinstance(json_content, str):
+        data = json.loads(json_content)
+    else:
+        data = json_content
+
+    client_email = data.get("client_email")
+    if not client_email:
+        raise ValueError("Invalid Service Account JSON: 'client_email' not found.")
+
+    with open(SERVICE_ACCOUNT_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+    cfg = load_gdrive_config()
+    cfg["connected"] = True
+    cfg["auth_mode"] = "service_account"
+    cfg["connected_email"] = f"{client_email} (Service Account)"
+    save_gdrive_config(cfg)
+
+    return client_email
+
 
 
 def get_auth_url(redirect_uri):
@@ -190,10 +229,16 @@ def disconnect_gdrive():
     cfg = load_gdrive_config()
     cfg["connected"] = False
     cfg["connected_email"] = ""
+    cfg["auth_mode"] = "none"
     save_gdrive_config(cfg)
     if os.path.exists(TOKEN_FILE):
         try:
             os.remove(TOKEN_FILE)
+        except Exception:
+            pass
+    if os.path.exists(SERVICE_ACCOUNT_FILE):
+        try:
+            os.remove(SERVICE_ACCOUNT_FILE)
         except Exception:
             pass
     return True

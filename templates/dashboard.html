@@ -1003,6 +1003,21 @@ video {
               <button class="btn-icon" style="white-space:nowrap;" onclick="submitManualGdriveCode()">Submit Code</button>
             </div>
           </div>
+
+          <!-- Service Account Integration (Recommended / No Redirect Issues) -->
+          <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div>
+                <b style="color:#fff; font-size:12.5px;">Cara Cepat: Google Service Account (Bebas Error Redirect)</b>
+                <div style="font-size:11px; color:var(--muted);">Paste isi file JSON Key dari Service Account Google Cloud Anda di bawah ini:</div>
+              </div>
+            </div>
+            <textarea id="gdrive-sa-json" class="form-control" rows="3" style="font-family:'JetBrains Mono'; font-size:11px; resize:vertical;" placeholder='{"type": "service_account", "project_id": "...", "private_key": "...", "client_email": "..."}'></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:8px;">
+              <span style="font-size:11px; color:var(--muted);">*Cukup bagikan (Share) folder Google Drive ke email service account sebagai Editor.</span>
+              <button type="button" class="btn-primary" style="background:var(--cyan); color:#000;" onclick="submitServiceAccountJson()">Connect Service Account</button>
+            </div>
+          </div>
         </div>
 
         <!-- Storage Bar -->
@@ -2293,6 +2308,32 @@ async function submitManualGdriveCode() {
     });
     alert(res.message);
     document.getElementById('gdrive-manual-code').value = '';
+    fetchGdriveStatus();
+    toggleGdriveSettings();
+  } catch(e) { alert(e.message); }
+}
+
+async function submitServiceAccountJson() {
+  const text = document.getElementById('gdrive-sa-json').value.trim();
+  if (!text) {
+    alert('Paste isi file JSON Service Account terlebih dahulu');
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch(e) {
+    alert('Format JSON tidak valid: ' + e.message);
+    return;
+  }
+  try {
+    const res = await api('/api/gdrive/service-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ json_content: parsed })
+    });
+    alert(res.message);
+    document.getElementById('gdrive-sa-json').value = '';
     fetchGdriveStatus();
     toggleGdriveSettings();
   } catch(e) { alert(e.message); }
