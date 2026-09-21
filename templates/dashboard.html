@@ -445,8 +445,8 @@ tr:hover td { background: rgba(255,255,255,0.015); }
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  width: min(880px, 100%);
-  max-height: 92vh;
+  width: min(920px, 94vw);
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -472,6 +472,7 @@ form#route-form {
 .modal-body {
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -493,6 +494,73 @@ form#route-form {
   gap: 10px;
   flex-shrink: 0;
 }
+
+/* Destination Card Component */
+.dest-card {
+  background: var(--panel-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.dest-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.dest-label-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 380px;
+  font-weight: 600;
+  min-height: 34px !important;
+  padding: 6px 10px !important;
+}
+
+.dest-mode-select {
+  min-height: 34px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  color: var(--cyan) !important;
+  border-color: rgba(0, 229, 255, 0.3) !important;
+}
+
+.dest-fields-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 2fr;
+  gap: 12px;
+  width: 100%;
+}
+
+.dest-proc-panel {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dest-proc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px 14px;
+}
+
 
 /* Telemetry Layout */
 .telemetry-preview-row {
@@ -695,14 +763,22 @@ video {
     grid-template-columns: 1fr;
     gap: 10px;
   }
-  .dest-row, .dest-main-row {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
+  .dest-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
-  .dest-row button.btn-danger, .dest-main-row button.btn-danger {
-    margin-top: 4px;
-    width: 100%;
-    min-height: 38px;
+  .dest-label-input {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .dest-fields-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .dest-proc-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .event-entry {
@@ -1602,9 +1678,8 @@ function addDestinationRow(data = {}) {
   destinationCount++;
   const container = document.getElementById('destinations-container');
   const div = document.createElement('div');
-  div.className = 'dest-row-wrapper';
-  div.id = `dest-wrapper-${destinationCount}`;
-  div.style = "background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;";
+  div.className = 'dest-card';
+  div.id = `dest-card-${destinationCount}`;
 
   const mode = data.mode || 'copy';
   const scale = data.scale || 'original';
@@ -1615,68 +1690,92 @@ function addDestinationRow(data = {}) {
   const atrack = data.audio_track || 0;
 
   div.innerHTML = `
-    <div style="display:grid; grid-template-columns: 1.4fr 1fr 2fr 1.2fr auto; gap:8px; align-items:center;" class="dest-main-row">
-      <input type="text" class="form-control" name="dest_label" placeholder="Output Label" value="${escapeHtml(data.label || 'Production SRT')}">
-      <select class="form-control" name="dest_type">
-        <option value="srt_caller" ${data.type==='srt_caller'?'selected':''}>SRT Caller (Push)</option>
-        <option value="srt_listener" ${data.type==='srt_listener'?'selected':''}>SRT Listener (Serve)</option>
-        <option value="udp" ${data.type==='udp'?'selected':''}>UDP Push</option>
-        <option value="rtmp" ${data.type==='rtmp'?'selected':''}>RTMP Push</option>
-      </select>
-      <input type="text" class="form-control" name="dest_url" required placeholder="URL (e.g. srt://192.168.1.50:9000)" value="${escapeHtml(data.url || '')}">
-      <select class="form-control" name="dest_mode" onchange="toggleProcessing(this, ${destinationCount})">
-        <option value="copy" ${mode==='copy'?'selected':''}>Direct Copy (0% CPU)</option>
-        <option value="transcode" ${mode==='transcode'?'selected':''}>Transcode &amp; Process</option>
-      </select>
-      <button type="button" class="btn-icon btn-danger" onclick="this.closest('.dest-row-wrapper').remove()">Remove</button>
+    <!-- Top Bar of Destination Card -->
+    <div class="dest-card-header">
+      <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+        <span class="tag tag-output" style="font-weight:700;">OUTPUT #${destinationCount}</span>
+        <input type="text" class="form-control dest-label-input" name="dest_label" placeholder="Output Label" value="${escapeHtml(data.label || `Output ${destinationCount}`)}">
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <select class="form-control dest-mode-select" name="dest_mode" onchange="toggleProcessing(this, ${destinationCount})">
+          <option value="copy" ${mode==='copy'?'selected':''}>Direct Copy (0% CPU)</option>
+          <option value="transcode" ${mode==='transcode'?'selected':''}>Transcode &amp; Process</option>
+        </select>
+        <button type="button" class="btn-icon btn-danger" style="padding:6px 12px; min-height:34px;" onclick="this.closest('.dest-card').remove()" title="Remove Output">✕ Remove</button>
+      </div>
     </div>
 
-    <!-- Processing Pipeline Settings Panel -->
-    <div id="dest-proc-${destinationCount}" style="display:${mode==='transcode'?'grid':'none'}; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-size:12px;">
-      <div>
-        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Resolution</label>
-        <select class="form-control" name="dest_scale" style="padding:6px 8px; font-size:12px; min-height:34px;">
-          <option value="original" ${scale==='original'?'selected':''}>Original</option>
-          <option value="1080p" ${scale==='1080p'?'selected':''}>1080p (1920x1080)</option>
-          <option value="720p" ${scale==='720p'?'selected':''}>720p (1280x720)</option>
-          <option value="576p" ${scale==='576p'?'selected':''}>576p (PAL SD)</option>
-          <option value="480p" ${scale==='480p'?'selected':''}>480p (854x480)</option>
+    <!-- Target Endpoint & Protocol Settings -->
+    <div class="dest-fields-grid">
+      <div class="form-group" style="margin:0;">
+        <label>Protocol</label>
+        <select class="form-control" name="dest_type">
+          <option value="srt_caller" ${data.type==='srt_caller'?'selected':''}>SRT Caller (Push)</option>
+          <option value="srt_listener" ${data.type==='srt_listener'?'selected':''}>SRT Listener (Serve)</option>
+          <option value="udp" ${data.type==='udp'?'selected':''}>UDP Push</option>
+          <option value="rtmp" ${data.type==='rtmp'?'selected':''}>RTMP Push (Live/CDN)</option>
         </select>
       </div>
-      <div>
-        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Framerate</label>
-        <select class="form-control" name="dest_fps" style="padding:6px 8px; font-size:12px; min-height:34px;">
-          <option value="original" ${fps==='original'?'selected':''}>Original</option>
-          <option value="50" ${fps==='50'?'selected':''}>50 fps (Broadcast)</option>
-          <option value="60" ${fps==='60'?'selected':''}>60 fps (NTSC)</option>
-          <option value="25" ${fps==='25'?'selected':''}>25 fps</option>
-          <option value="30" ${fps==='30'?'selected':''}>30 fps</option>
-        </select>
+      <div class="form-group" style="margin:0;">
+        <label>Target Endpoint URL</label>
+        <input type="text" class="form-control" name="dest_url" required placeholder="e.g. srt://192.168.1.50:9000 or rtmp://a.rtmp.youtube.com/live2/key" value="${escapeHtml(data.url || '')}">
       </div>
-      <div>
-        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Video Bitrate (k)</label>
-        <input type="number" class="form-control" name="dest_vbitrate" value="${vbitrate}" style="padding:6px 8px; font-size:12px; min-height:34px;">
+    </div>
+
+    <!-- Processing Pipeline Panel -->
+    <div id="dest-proc-${destinationCount}" class="dest-proc-panel" style="display:${mode==='transcode'?'flex':'none'};">
+      <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--cyan); letter-spacing:0.06em;">
+        Transcode &amp; Signal Processing Engine
       </div>
-      <div>
-        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Audio Track</label>
-        <select class="form-control" name="dest_atrack" style="padding:6px 8px; font-size:12px; min-height:34px;">
-          <option value="0" ${atrack==0?'selected':''}>Track 1 (Default)</option>
-          <option value="1" ${atrack==1?'selected':''}>Track 2</option>
-          <option value="2" ${atrack==2?'selected':''}>Track 3</option>
-          <option value="3" ${atrack==3?'selected':''}>Track 4</option>
-        </select>
-      </div>
-      <div>
-        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Audio Codec</label>
-        <select class="form-control" name="dest_acodec" style="padding:6px 8px; font-size:12px; min-height:34px;">
-          <option value="copy" ${acodec==='copy'?'selected':''}>Stream Copy</option>
-          <option value="aac" ${acodec==='aac'?'selected':''}>AAC (Broadcast)</option>
-          <option value="opus" ${acodec==='opus'?'selected':''}>Opus</option>
-        </select>
-      </div>
-      <div style="display:flex; align-items:center; gap:6px; margin-top:16px;">
-        <input type="checkbox" name="dest_deint" ${deint?'checked':''} id="chk-deint-${destinationCount}">
-        <label for="chk-deint-${destinationCount}" style="color:var(--text); font-size:11px; cursor:pointer;">Deinterlace</label>
+      <div class="dest-proc-grid">
+        <div class="form-group" style="margin:0;">
+          <label>Resolution Scale</label>
+          <select class="form-control" name="dest_scale">
+            <option value="original" ${scale==='original'?'selected':''}>Original</option>
+            <option value="1080p" ${scale==='1080p'?'selected':''}>1080p (1920x1080)</option>
+            <option value="720p" ${scale==='720p'?'selected':''}>720p (1280x720)</option>
+            <option value="576p" ${scale==='576p'?'selected':''}>576p (PAL SD)</option>
+            <option value="480p" ${scale==='480p'?'selected':''}>480p (854x480)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Framerate</label>
+          <select class="form-control" name="dest_fps">
+            <option value="original" ${fps==='original'?'selected':''}>Original</option>
+            <option value="50" ${fps==='50'?'selected':''}>50 fps (Broadcast PAL)</option>
+            <option value="60" ${fps==='60'?'selected':''}>60 fps (Broadcast NTSC)</option>
+            <option value="25" ${fps==='25'?'selected':''}>25 fps</option>
+            <option value="30" ${fps==='30'?'selected':''}>30 fps</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Video Bitrate (kbps)</label>
+          <input type="number" class="form-control" name="dest_vbitrate" value="${vbitrate}">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Audio Source Track</label>
+          <select class="form-control" name="dest_atrack">
+            <option value="0" ${atrack==0?'selected':''}>Track 1 (Default)</option>
+            <option value="1" ${atrack==1?'selected':''}>Track 2</option>
+            <option value="2" ${atrack==2?'selected':''}>Track 3</option>
+            <option value="3" ${atrack==3?'selected':''}>Track 4</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Audio Codec</label>
+          <select class="form-control" name="dest_acodec">
+            <option value="copy" ${acodec==='copy'?'selected':''}>Stream Copy</option>
+            <option value="aac" ${acodec==='aac'?'selected':''}>AAC (Broadcast 48kHz)</option>
+            <option value="opus" ${acodec==='opus'?'selected':''}>Opus</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0; justify-content:center;">
+          <label style="opacity:0; pointer-events:none; font-size:10px;">Options</label>
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; color:var(--text); text-transform:none;">
+            <input type="checkbox" name="dest_deint" ${deint?'checked':''} id="chk-deint-${destinationCount}">
+            <span>Deinterlace (1080i)</span>
+          </label>
+        </div>
       </div>
     </div>
   `;
@@ -1686,7 +1785,7 @@ function addDestinationRow(data = {}) {
 function toggleProcessing(selectEl, id) {
   const panel = document.getElementById(`dest-proc-${id}`);
   if (panel) {
-    panel.style.display = selectEl.value === 'transcode' ? 'grid' : 'none';
+    panel.style.display = selectEl.value === 'transcode' ? 'flex' : 'none';
   }
 }
 
@@ -1694,9 +1793,9 @@ async function handleRouteFormSubmit(e) {
   e.preventDefault();
   const id = document.getElementById('rf-id').value;
 
-  const destWrappers = document.querySelectorAll('.dest-row-wrapper');
+  const destCards = document.querySelectorAll('.dest-card');
   const destinations = [];
-  destWrappers.forEach(row => {
+  destCards.forEach(row => {
     const label = row.querySelector('[name="dest_label"]').value.trim();
     const type = row.querySelector('[name="dest_type"]').value;
     const url = row.querySelector('[name="dest_url"]').value.trim();
@@ -1719,6 +1818,7 @@ async function handleRouteFormSubmit(e) {
       });
     }
   });
+
 
   const pType = document.getElementById('rf-p-type').value;
   const pUrl = document.getElementById('rf-p-url').value.trim();
