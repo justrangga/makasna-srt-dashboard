@@ -1257,11 +1257,19 @@ def api_gdrive_save_config():
     return jsonify({"ok": True, "message": "Google Drive configuration saved", "config": cfg})
 
 
+def get_oauth_redirect_uri(req):
+    proto = req.headers.get("X-Forwarded-Proto", req.scheme)
+    host = req.host
+    # Public domain names must use https per Google OAuth security policy
+    if not re.match(r"^\d+\.\d+\.\d+\.\d+", host) and not host.startswith("localhost") and not host.startswith("127.0.0.1"):
+        proto = "https"
+    return f"{proto}://{host}/api/gdrive/callback"
+
+
 @app.route("/api/gdrive/auth-url", methods=["GET"])
 @login_required
 def api_gdrive_auth_url():
-    host = request.host
-    redirect_uri = f"http://{host}/api/gdrive/callback"
+    redirect_uri = get_oauth_redirect_uri(request)
     try:
         url = gdrive_service.get_auth_url(redirect_uri)
         return jsonify({"ok": True, "auth_url": url, "redirect_uri": redirect_uri})
@@ -1274,8 +1282,7 @@ def api_gdrive_callback():
     code = request.args.get("code")
     if not code:
         return redirect("/?gdrive=error&msg=No+code+provided")
-    host = request.host
-    redirect_uri = f"http://{host}/api/gdrive/callback"
+    redirect_uri = get_oauth_redirect_uri(request)
     try:
         email = gdrive_service.exchange_code_for_token(code, redirect_uri)
         log_event("system", "Google Drive", "gdrive_connected", f"Connected to Google account: {email}", "info")
@@ -1292,8 +1299,15 @@ def api_gdrive_manual_auth():
     if not code:
         return jsonify({"ok": False, "error": "Authorization code is required"}), 400
     host = request.host
-    redirect_uri = f"http://{host}/api/gdrive/callback"
-    redirect_uris_to_try = [redirect_uri, "urn:ietf:wg:oauth:2.0:oob", "http://localhost"]
+    redirect_uris_to_try = [
+        get_oauth_redirect_uri(request),
+        f"https://{host}/api/gdrive/callback",
+        f"http://{host}/api/gdrive/callback",
+        "https://stream.makasna.com/api/gdrive/callback",
+        "http://stream.makasna.com/api/gdrive/callback",
+        "urn:ietf:wg:oauth:2.0:oob",
+        "http://localhost"
+    ]
     last_err = None
     for r_uri in redirect_uris_to_try:
         try:
