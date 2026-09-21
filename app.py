@@ -352,12 +352,14 @@ def build_ffmpeg_cmd(route, source_config):
 
     cmd.extend(["-i", input_url])
 
-    # 1. Local Preview Sink -> Publish to MediaMTX RTMP (FLV) which supports AAC ADTS without global header errors
+    # 1. Local Preview Sink -> Publish to MediaMTX RTMP (FLV) with AAC audio for universal browser compatibility
     cmd.extend([
         "-map", "0:v:0?",
         "-map", "0:a:0?",
         "-c:v", "copy",
-        "-c:a", "copy",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-ar", "48000",
         "-f", "flv",
         f"rtmp://127.0.0.1:1935/route_{route_id}"
     ])
@@ -378,7 +380,10 @@ def build_ffmpeg_cmd(route, source_config):
             cmd.extend(["-map", "0:a:0?"])
 
         if mode == "copy":
-            cmd.extend(["-c:v", "copy", "-c:a", "copy"])
+            if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
+                cmd.extend(["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"])
+            else:
+                cmd.extend(["-c:v", "copy", "-c:a", "copy"])
         else:
             # Custom bitrate / transcode & processing
             v_codec = dest.get("video_codec", "libx264")
