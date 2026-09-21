@@ -1218,6 +1218,7 @@ let currentRoutes = [];
 let activeTelemetryRouteId = null;
 let telemTimer = null;
 let hlsInstance = null;
+let lastRenderedJson = '';
 
 async function api(url, opts = {}) {
   const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...opts });
@@ -1243,7 +1244,7 @@ async function pollSystemStats() {
     }
   } catch(e) {}
 }
-setInterval(pollSystemStats, 2000);
+setInterval(pollSystemStats, 3500);
 pollSystemStats();
 
 // Routes poller & renderer
@@ -1256,7 +1257,7 @@ async function fetchRoutes() {
     }
   } catch(e) {}
 }
-setInterval(fetchRoutes, 3000);
+setInterval(fetchRoutes, 4000);
 fetchRoutes();
 
 function renderRoutes() {
@@ -1276,6 +1277,10 @@ function renderRoutes() {
     }
     return true;
   });
+
+  const jsonKey = JSON.stringify(filtered) + search + filterStatus + filterSchema;
+  if (jsonKey === lastRenderedJson) return;
+  lastRenderedJson = jsonKey;
 
   if (!filtered.length) {
     const emptyHtml = `<div style="text-align:center; color:var(--muted); padding:36px;">No routes configured or matching search. Tap "+ Add Route" to start.</div>`;
@@ -1442,7 +1447,7 @@ async function inspectRoute(id) {
   loadRoutePreview(id);
   pollTelemetry();
   if (telemTimer) clearInterval(telemTimer);
-  telemTimer = setInterval(pollTelemetry, 1500);
+  telemTimer = setInterval(pollTelemetry, 2500);
 }
 
 function closeTelemetryModal() {

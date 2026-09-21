@@ -58,7 +58,11 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+_events_cache = None
+_events_dirty = False
+
 def log_event(route_id, route_name, event_type, message, level="info"):
+    global _events_cache, _events_dirty
     entry = {
         "id": str(uuid.uuid4())[:8],
         "timestamp": now_iso(),
@@ -69,28 +73,43 @@ def log_event(route_id, route_name, event_type, message, level="info"):
         "level": level
     }
     with events_lock:
-        events = []
-        if os.path.exists(EVENTS_FILE):
-            try:
-                with open(EVENTS_FILE, "r") as f:
-                    events = json.load(f)
-            except Exception:
-                events = []
-        events.insert(0, entry)
-        # Keep last 500 events
-        events = events[:500]
-        try:
-            with open(EVENTS_FILE, "w") as f:
-                json.dump(events, f, indent=2)
-        except Exception:
-            pass
+        if _events_cache is None:
+            if os.path.exists(EVENTS_FILE):
+                try:
+                    with open(EVENTS_FILE, "r") as f:
+                        _events_cache = json.load(f)
+                except Exception:
+                    _events_cache = []
+            else:
+                _events_cache = []
+        _events_cache.insert(0, entry)
+        if len(_events_cache) > 300:
+            del _events_cache[300:]
+        _events_dirty = True
 
+def flush_events_to_disk():
+    global _events_dirty
+    with events_lock:
+        if _events_dirty and _events_cache is not None:
+            try:
+                with open(EVENTS_FILE, "w") as f:
+                    json.dump(_events_cache, f, indent=2)
+                _events_dirty = False
+            except Exception:
+                pass
+
+
+_routes_cache = None
 
 def load_routes():
+    global _routes_cache
+    if _routes_cache is not None:
+        return list(_routes_cache)
     if os.path.exists(ROUTES_FILE):
         try:
             with open(ROUTES_FILE, "r") as f:
-                return json.load(f)
+                _routes_cache = json.load(f)
+                return list(_routes_cache)
         except Exception:
             return []
     # If legacy forwards.json exists and routes.json doesn't, migrate
@@ -152,6 +171,8 @@ def load_routes():
 
 
 def save_routes(routes):
+    global _routes_cache
+    _routes_cache = list(routes)
     with open(ROUTES_FILE, "w") as f:
         json.dump(routes, f, indent=2)
 
@@ -249,13 +270,15 @@ def classify_health(rtt, loss_rate, drops):
 # Route Media Process Engine
 # =========================================================================
 def build_source_url(source_config):
-    custom_url = source_config.get("url", "").strip()
-    if custom_url and custom_url.startswith(("srt://", "udp://", "rtmp://", "rtsp://", "http://", "https://")):
-        return custom_url
+    # Check if a direct URL was provided in url, address, or stream_id
+    for key in ("url", "address", "stream_id"):
+        val = str(source_config.get(key) or "").strip()
+        if val.startswith(("srt://", "udp://", "rtmp://", "rtsp://", "http://", "https://")):
+            return val
 
     stype = source_config.get("type", "local_stream")
-    stream_id = source_config.get("stream_id", "live").strip()
-    addr = source_config.get("address", "127.0.0.1").strip()
+    stream_id = str(source_config.get("stream_id") or "live").strip()
+    addr = str(source_config.get("address") or "127.0.0.1").strip()
     port = source_config.get("port", 8890)
     latency = source_config.get("latency", 200)
     passphrase = source_config.get("passphrase", "").strip()
@@ -488,9 +511,17 @@ def stop_route_process(route_id):
 # =========================================================================
 # Background Process Supervisor & Failover Engine
 # =========================================================================
+route_backoffs = {}
+
 def supervisor_thread():
+    last_flush = time.time()
     while True:
         try:
+            now = time.time()
+            if now - last_flush > 5:
+                flush_events_to_disk()
+                last_flush = now
+
             routes = load_routes()
             routes_map = {r["id"]: r for r in routes}
 
@@ -509,7 +540,20 @@ def supervisor_thread():
                     # Check if process died
                     if proc and proc.poll() is not None:
                         exit_code = proc.poll()
-                        log_event(rid, route["name"], "process_exited", f"Route process exited with code {exit_code}", "warning")
+                        try:
+                            proc.wait(timeout=0.1) # Clean up zombie process
+                        except Exception:
+                            pass
+
+                        bo = route_backoffs.setdefault(rid, {"failures": 0, "next_retry": 0, "last_code": None})
+                        if bo["last_code"] != exit_code:
+                            log_event(rid, route["name"], "process_exited", f"Process stopped (exit code {exit_code})", "warning")
+                            bo["last_code"] = exit_code
+
+                        bo["failures"] += 1
+                        # Backoff delay: 5s, 10s, 20s, 30s
+                        backoff = min(30, 5 * (2 ** min(bo["failures"] - 1, 3)))
+                        bo["next_retry"] = now + backoff
 
                         # Evaluate Failover
                         policy = route.get("failover_policy", "maintain_primary")
@@ -518,12 +562,18 @@ def supervisor_thread():
 
                         if has_sec and info.get("active_source") == "primary" and policy in ("maintain_primary", "maintain_stability", "manual_switchback"):
                             log_event(rid, route["name"], "failover", f"Switching to secondary source under policy '{policy}'", "warning")
-                            # Start with secondary
                             start_route_process(route, source_type="secondary")
+                            bo["failures"] = 0
+                            bo["last_code"] = None
                         elif route.get("enabled", True):
-                            # Auto-restart primary with backoff
-                            time.sleep(1)
-                            start_route_process(route, source_type=info.get("active_source", "primary"))
+                            if bo["failures"] <= 4:
+                                info["status"] = f"RECONNECTING IN {int(backoff)}s"
+                                info["stats"]["health"] = "Disconnected"
+                                if now >= bo["next_retry"]:
+                                    start_route_process(route, source_type=info.get("active_source", "primary"))
+                            else:
+                                info["status"] = "OFFLINE (Peer Unreachable)"
+                                info["stats"]["health"] = "Disconnected"
                         continue
 
                     # Collect metrics for active route
