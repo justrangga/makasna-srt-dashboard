@@ -249,26 +249,36 @@ def classify_health(rtt, loss_rate, drops):
 # Route Media Process Engine
 # =========================================================================
 def build_source_url(source_config):
+    custom_url = source_config.get("url", "").strip()
+    if custom_url and custom_url.startswith(("srt://", "udp://", "rtmp://", "rtsp://", "http://", "https://")):
+        return custom_url
+
     stype = source_config.get("type", "local_stream")
-    stream_id = source_config.get("stream_id", "live")
-    addr = source_config.get("address", "127.0.0.1")
+    stream_id = source_config.get("stream_id", "live").strip()
+    addr = source_config.get("address", "127.0.0.1").strip()
     port = source_config.get("port", 8890)
     latency = source_config.get("latency", 200)
     passphrase = source_config.get("passphrase", "").strip()
 
     if stype == "local_stream":
         # Pull from local MediaMTX RTSP path
-        return f"rtsp://127.0.0.1:8554/{stream_id}"
+        return f"rtsp://127.0.0.1:8554/{stream_id or 'live'}"
     elif stype == "srt_listener":
-        # Bind SRT listener on specified port
+        # Bind SRT listener on specified port (listen for incoming push)
         opts = [f"mode=listener", f"latency={int(latency) * 1000}"]
         if passphrase:
             opts.append(f"passphrase={passphrase}")
         return f"srt://{addr}:{port}?" + "&".join(opts)
     elif stype == "srt_caller":
+        # Connect / pull from remote external SRT server
         opts = [f"mode=caller", f"latency={int(latency) * 1000}"]
         if stream_id:
             opts.append(f"streamid={stream_id}")
+        if passphrase:
+            opts.append(f"passphrase={passphrase}")
+        return f"srt://{addr}:{port}?" + "&".join(opts)
+    elif stype == "srt_rendezvous":
+        opts = [f"mode=rendezvous", f"latency={int(latency) * 1000}"]
         if passphrase:
             opts.append(f"passphrase={passphrase}")
         return f"srt://{addr}:{port}?" + "&".join(opts)
@@ -276,7 +286,32 @@ def build_source_url(source_config):
         return f"udp://{addr}:{port}?overrun_nonfatal=1&fifo_size=50000000"
     elif stype == "rtmp":
         return f"rtmp://{addr}:{port}/{stream_id}"
-    return f"rtsp://127.0.0.1:8554/{stream_id}"
+    return f"rtsp://127.0.0.1:8554/{stream_id or 'live'}"
+
+
+def build_video_filters(dest):
+    filters = []
+    # Deinterlace (essential for broadcast 1080i sources)
+    if dest.get("deinterlace"):
+        filters.append("bwdif=mode=1")
+
+    # Resolution scaling
+    scale = dest.get("scale", "original")
+    if scale == "1080p":
+        filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
+    elif scale == "720p":
+        filters.append("scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+    elif scale == "576p":
+        filters.append("scale=1024:576:force_original_aspect_ratio=decrease,pad=1024:576:(ow-iw)/2:(oh-ih)/2")
+    elif scale == "480p":
+        filters.append("scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2")
+
+    # Framerate conversion
+    fps = str(dest.get("fps", "original")).strip()
+    if fps in ("25", "30", "50", "60"):
+        filters.append(f"fps={fps}")
+
+    return ",".join(filters) if filters else None
 
 
 def build_ffmpeg_cmd(route, source_config):
@@ -287,9 +322,9 @@ def build_ffmpeg_cmd(route, source_config):
 
     # Input specific flags
     stype = source_config.get("type", "local_stream")
-    if stype == "local_stream":
+    if stype == "local_stream" or input_url.startswith("rtsp://"):
         cmd.extend(["-rtsp_transport", "tcp"])
-    elif stype in ("srt_listener", "srt_caller"):
+    elif stype in ("srt_listener", "srt_caller", "srt_rendezvous") or input_url.startswith("srt://"):
         cmd.extend(["-thread_queue_size", "1024"])
 
     cmd.extend(["-i", input_url])
@@ -323,24 +358,38 @@ def build_ffmpeg_cmd(route, source_config):
         if mode == "copy":
             cmd.extend(["-c:v", "copy", "-c:a", "copy"])
         else:
-            # Custom bitrate / transcode
-            v_bitrate = dest.get("video_bitrate", 4500)
-            max_b = dest.get("max_bitrate", 5000)
-            buf_b = dest.get("buffer_size", 9000)
-            a_bitrate = dest.get("audio_bitrate", 160)
+            # Custom bitrate / transcode & processing
+            v_codec = dest.get("video_codec", "libx264")
+            v_bitrate = int(dest.get("video_bitrate", 4500))
+            max_b = int(dest.get("max_bitrate", int(v_bitrate * 1.15)))
+            buf_b = int(dest.get("buffer_size", int(v_bitrate * 2)))
             preset = dest.get("encoder_preset", "veryfast")
 
+            vf = build_video_filters(dest)
+            if vf:
+                cmd.extend(["-vf", vf])
+
             cmd.extend([
-                "-c:v", "libx264",
+                "-c:v", v_codec,
                 "-preset", preset,
                 "-b:v", f"{v_bitrate}k",
                 "-maxrate", f"{max_b}k",
                 "-bufsize", f"{buf_b}k",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac",
-                "-b:a", f"{a_bitrate}k",
-                "-ar", "48000"
+                "-pix_fmt", "yuv420p"
             ])
+
+            # Audio processing
+            a_codec = dest.get("audio_codec", "aac")
+            if a_codec == "copy":
+                cmd.extend(["-c:a", "copy"])
+            else:
+                a_bitrate = int(dest.get("audio_bitrate", 160))
+                a_sample_rate = int(dest.get("audio_sample_rate", 48000))
+                cmd.extend([
+                    "-c:a", a_codec,
+                    "-b:a", f"{a_bitrate}k",
+                    "-ar", str(a_sample_rate)
+                ])
 
         # Format detection
         if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
@@ -350,10 +399,10 @@ def build_ffmpeg_cmd(route, source_config):
         elif durl.startswith("srt://"):
             cmd.extend(["-f", "mpegts", durl])
         else:
-            # Fallback based on extension or protocol
             cmd.extend([durl])
 
     return cmd
+
 
 
 def start_route_process(route, source_type="primary"):
@@ -867,6 +916,74 @@ def api_route_preview(route_id):
         "hls_url": f"http://{host}:8888/route_{route_id}/index.m3u8",
         "webrtc_url": f"http://{host}:8889/route_{route_id}"
     })
+
+
+@app.route("/api/probe", methods=["POST"])
+@login_required
+def api_probe_source():
+    data = request.json or {}
+    source_cfg = data.get("source", {})
+    if isinstance(source_cfg, str):
+        input_url = source_cfg.strip()
+    else:
+        input_url = build_source_url(source_cfg)
+
+    if not input_url:
+        return jsonify({"ok": False, "error": "Source URL or configuration is required"}), 400
+
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "stream=index,codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels:stream_tags=language,title",
+        "-of", "json",
+        "-analyzeduration", "2000000",
+        "-probesize", "2000000"
+    ]
+    if input_url.startswith("rtsp://"):
+        cmd.extend(["-rtsp_transport", "tcp"])
+    cmd.extend(["-i", input_url])
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if proc.returncode != 0:
+            err = proc.stderr.strip() or "Connection timed out or peer not broadcasting"
+            return jsonify({"ok": False, "error": f"Stream probe failed: {err}", "input_url": input_url})
+
+        info = json.loads(proc.stdout)
+        streams = info.get("streams", [])
+        video = []
+        audio = []
+        for s in streams:
+            ctype = s.get("codec_type")
+            if ctype == "video":
+                fps_eval = s.get("r_frame_rate", "")
+                fps = None
+                if "/" in fps_eval:
+                    num, den = fps_eval.split("/")
+                    if float(den) > 0:
+                        fps = round(float(num) / float(den), 2)
+                video.append({
+                    "index": s.get("index"),
+                    "codec": s.get("codec_name"),
+                    "width": s.get("width"),
+                    "height": s.get("height"),
+                    "fps": fps
+                })
+            elif ctype == "audio":
+                tags = s.get("tags") or {}
+                audio.append({
+                    "index": s.get("index"),
+                    "codec": s.get("codec_name"),
+                    "channels": s.get("channels"),
+                    "sample_rate": s.get("sample_rate"),
+                    "language": tags.get("language", "und"),
+                    "title": tags.get("title", "")
+                })
+        return jsonify({"ok": True, "video_streams": video, "audio_streams": audio, "input_url": input_url})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "Stream probe timed out (remote server not broadcasting or unreachable)", "input_url": input_url})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc), "input_url": input_url})
 
 
 @app.route("/api/system/stats", methods=["GET"])

@@ -980,19 +980,29 @@ video {
           <div class="form-row">
             <div class="form-group">
               <label>Protocol / Mode</label>
-              <select id="rf-p-type" class="form-control">
-                <option value="srt_listener">SRT Listener (Wait for remote caller)</option>
-                <option value="srt_caller">SRT Caller (Connect to remote endpoint)</option>
+              <select id="rf-p-type" class="form-control" onchange="handleSourceTypeChange(this.value)">
+                <option value="srt_listener">SRT Listener (Wait for remote sender to push)</option>
+                <option value="srt_caller">SRT Caller (Pull from remote server/encoder)</option>
+                <option value="srt_rendezvous">SRT Rendezvous (NAT Traversal)</option>
+                <option value="direct_url">Direct Stream URL (Full srt://, rtmp://, udp://)</option>
                 <option value="local_stream">Local MediaMTX Path (RTSP/RTMP)</option>
                 <option value="udp">UDP Ingest</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Port / Target Port</label>
+            <div class="form-group" id="rf-p-port-group">
+              <label id="rf-p-port-label">Port / Target Port</label>
               <input type="number" id="rf-p-port" class="form-control" value="12100">
             </div>
           </div>
-          <div class="form-row">
+          <div class="form-group" id="rf-p-addr-group" style="display:none;">
+            <label>Remote Server Address / Host (IP or Domain)</label>
+            <input type="text" id="rf-p-addr" class="form-control" placeholder="e.g. 103.120.x.x or srt.remote-broadcaster.com">
+          </div>
+          <div class="form-group" id="rf-p-url-group" style="display:none;">
+            <label>Direct Stream URL</label>
+            <input type="text" id="rf-p-url" class="form-control" placeholder="srt://remote-server:9000?streamid=feed1&latency=200">
+          </div>
+          <div class="form-row" id="rf-p-details-row">
             <div class="form-group">
               <label>Stream ID / Path Name</label>
               <input type="text" id="rf-p-streamid" class="form-control" value="venue_feed">
@@ -1006,6 +1016,14 @@ video {
             <label>Passphrase (Optional AES encryption)</label>
             <input type="password" id="rf-p-passphrase" class="form-control" placeholder="Leave empty for cleartext">
           </div>
+          <!-- Stream Probe Button & Live Result Box -->
+          <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+            <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;" onclick="probeCurrentSource()">
+              Detect / Probe Remote Stream Specs
+            </button>
+            <span id="probe-status" style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted)"></span>
+          </div>
+          <div id="probe-result-box" style="display:none; margin-top:8px; padding:10px; background:rgba(0,229,255,0.06); border:1px solid rgba(0,229,255,0.2); border-radius:6px; font-size:11.5px; font-family:'JetBrains Mono';"></div>
         </div>
 
         <!-- Secondary Source Config -->
@@ -1439,11 +1457,17 @@ function editRoute(id) {
   document.getElementById('rf-policy').value = r.failover_policy || 'maintain_primary';
 
   // Primary
-  document.getElementById('rf-p-type').value = r.primary_source.type;
-  document.getElementById('rf-p-port').value = r.primary_source.port;
-  document.getElementById('rf-p-streamid').value = r.primary_source.stream_id;
-  document.getElementById('rf-p-latency').value = r.primary_source.latency || 200;
-  document.getElementById('rf-p-passphrase').value = r.primary_source.passphrase || '';
+  const p = r.primary_source || {};
+  document.getElementById('rf-p-type').value = p.type || 'srt_listener';
+  handleSourceTypeChange(p.type || 'srt_listener');
+  document.getElementById('rf-p-port').value = p.port || 12100;
+  document.getElementById('rf-p-addr').value = p.address || '';
+  document.getElementById('rf-p-url').value = p.url || '';
+  document.getElementById('rf-p-streamid').value = p.stream_id || '';
+  document.getElementById('rf-p-latency').value = p.latency || 200;
+  document.getElementById('rf-p-passphrase').value = p.passphrase || '';
+  document.getElementById('probe-status').textContent = '';
+  document.getElementById('probe-result-box').style.display = 'none';
 
   // Secondary
   const s = r.secondary_source || {};
@@ -1476,50 +1500,217 @@ function toggleSecondarySource(enabled) {
   el.style.pointerEvents = enabled ? 'auto' : 'none';
 }
 
+function handleSourceTypeChange(type) {
+  const addrGroup = document.getElementById('rf-p-addr-group');
+  const urlGroup = document.getElementById('rf-p-url-group');
+  const portLabel = document.getElementById('rf-p-port-label');
+  const portGroup = document.getElementById('rf-p-port-group');
+  const detailsRow = document.getElementById('rf-p-details-row');
+
+  if (type === 'srt_caller') {
+    addrGroup.style.display = 'flex';
+    urlGroup.style.display = 'none';
+    portGroup.style.display = 'flex';
+    portLabel.textContent = 'Remote Server Port';
+    detailsRow.style.display = 'grid';
+  } else if (type === 'direct_url') {
+    addrGroup.style.display = 'none';
+    urlGroup.style.display = 'flex';
+    portGroup.style.display = 'none';
+    detailsRow.style.display = 'none';
+  } else {
+    addrGroup.style.display = 'none';
+    urlGroup.style.display = 'none';
+    portGroup.style.display = 'flex';
+    portLabel.textContent = 'Listen Port / Target Port';
+    detailsRow.style.display = 'grid';
+  }
+}
+
+async function probeCurrentSource() {
+  const statusEl = document.getElementById('probe-status');
+  const resultBox = document.getElementById('probe-result-box');
+  statusEl.textContent = 'Probing remote stream...';
+  resultBox.style.display = 'none';
+
+  const type = document.getElementById('rf-p-type').value;
+  const sourcePayload = {
+    type: type,
+    url: document.getElementById('rf-p-url').value.trim(),
+    address: document.getElementById('rf-p-addr').value.trim() || '127.0.0.1',
+    port: parseInt(document.getElementById('rf-p-port').value) || 12100,
+    stream_id: document.getElementById('rf-p-streamid').value.trim(),
+    latency: parseInt(document.getElementById('rf-p-latency').value) || 200,
+    passphrase: document.getElementById('rf-p-passphrase').value.trim()
+  };
+
+  try {
+    const res = await api('/api/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: sourcePayload })
+    });
+
+    if (res.ok) {
+      statusEl.textContent = 'Stream verified active!';
+      let html = `<b style="color:var(--cyan);">Input Target:</b> ${escapeHtml(res.input_url)}<br>`;
+      if (res.video_streams && res.video_streams.length) {
+        const v = res.video_streams[0];
+        html += `<b style="color:#fff;">Video:</b> ${v.width}x${v.height} @ ${v.fps || '--'} fps (${v.codec.toUpperCase()})<br>`;
+      } else {
+        html += `<b style="color:var(--amber);">Video:</b> No video track detected<br>`;
+      }
+      if (res.audio_streams && res.audio_streams.length) {
+        html += `<b style="color:#fff;">Audio Tracks:</b> `;
+        html += res.audio_streams.map(a => `[#${a.index}: ${a.codec} ${a.channels}ch ${a.sample_rate}Hz]`).join(' ');
+      }
+      resultBox.innerHTML = html;
+      resultBox.style.display = 'block';
+    } else {
+      statusEl.textContent = 'Probe error';
+      resultBox.innerHTML = `<span style="color:var(--red);">${escapeHtml(res.error)}</span>`;
+      resultBox.style.display = 'block';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Error';
+    resultBox.innerHTML = `<span style="color:var(--red);">${escapeHtml(e.message)}</span>`;
+    resultBox.style.display = 'block';
+  }
+}
+
 function addDestinationRow(data = {}) {
   destinationCount++;
   const container = document.getElementById('destinations-container');
   const div = document.createElement('div');
-  div.className = 'dest-row';
-  div.id = `dest-row-${destinationCount}`;
+  div.className = 'dest-row-wrapper';
+  div.id = `dest-wrapper-${destinationCount}`;
+  div.style = "background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;";
+
+  const mode = data.mode || 'copy';
+  const scale = data.scale || 'original';
+  const fps = data.fps || 'original';
+  const deint = Boolean(data.deinterlace);
+  const vbitrate = data.video_bitrate || 4500;
+  const acodec = data.audio_codec || 'copy';
+  const atrack = data.audio_track || 0;
+
   div.innerHTML = `
-    <input type="text" class="form-control" name="dest_label" placeholder="Label (e.g. Production)" value="${escapeHtml(data.label || 'Production SRT')}">
-    <select class="form-control" name="dest_type">
-      <option value="srt_caller" ${data.type==='srt_caller'?'selected':''}>SRT Caller</option>
-      <option value="udp" ${data.type==='udp'?'selected':''}>UDP Push</option>
-      <option value="rtmp" ${data.type==='rtmp'?'selected':''}>RTMP Push</option>
-    </select>
-    <input type="text" class="form-control" name="dest_url" required placeholder="URL (e.g. srt://192.168.1.100:12300)" value="${escapeHtml(data.url || '')}">
-    <select class="form-control" name="dest_mode">
-      <option value="copy" ${data.mode==='copy'?'selected':''}>Direct Copy (0% CPU)</option>
-      <option value="custom" ${data.mode==='custom'?'selected':''}>Custom Bitrate</option>
-    </select>
-    <button type="button" class="btn-icon btn-danger" onclick="this.parentElement.remove()">Remove</button>
+    <div style="display:grid; grid-template-columns: 1.4fr 1fr 2fr 1.2fr auto; gap:8px; align-items:center;" class="dest-main-row">
+      <input type="text" class="form-control" name="dest_label" placeholder="Output Label" value="${escapeHtml(data.label || 'Production SRT')}">
+      <select class="form-control" name="dest_type">
+        <option value="srt_caller" ${data.type==='srt_caller'?'selected':''}>SRT Caller (Push)</option>
+        <option value="srt_listener" ${data.type==='srt_listener'?'selected':''}>SRT Listener (Serve)</option>
+        <option value="udp" ${data.type==='udp'?'selected':''}>UDP Push</option>
+        <option value="rtmp" ${data.type==='rtmp'?'selected':''}>RTMP Push</option>
+      </select>
+      <input type="text" class="form-control" name="dest_url" required placeholder="URL (e.g. srt://192.168.1.50:9000)" value="${escapeHtml(data.url || '')}">
+      <select class="form-control" name="dest_mode" onchange="toggleProcessing(this, ${destinationCount})">
+        <option value="copy" ${mode==='copy'?'selected':''}>Direct Copy (0% CPU)</option>
+        <option value="transcode" ${mode==='transcode'?'selected':''}>Transcode &amp; Process</option>
+      </select>
+      <button type="button" class="btn-icon btn-danger" onclick="this.closest('.dest-row-wrapper').remove()">Remove</button>
+    </div>
+
+    <!-- Processing Pipeline Settings Panel -->
+    <div id="dest-proc-${destinationCount}" style="display:${mode==='transcode'?'grid':'none'}; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-size:12px;">
+      <div>
+        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Resolution</label>
+        <select class="form-control" name="dest_scale" style="padding:6px 8px; font-size:12px; min-height:34px;">
+          <option value="original" ${scale==='original'?'selected':''}>Original</option>
+          <option value="1080p" ${scale==='1080p'?'selected':''}>1080p (1920x1080)</option>
+          <option value="720p" ${scale==='720p'?'selected':''}>720p (1280x720)</option>
+          <option value="576p" ${scale==='576p'?'selected':''}>576p (PAL SD)</option>
+          <option value="480p" ${scale==='480p'?'selected':''}>480p (854x480)</option>
+        </select>
+      </div>
+      <div>
+        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Framerate</label>
+        <select class="form-control" name="dest_fps" style="padding:6px 8px; font-size:12px; min-height:34px;">
+          <option value="original" ${fps==='original'?'selected':''}>Original</option>
+          <option value="50" ${fps==='50'?'selected':''}>50 fps (Broadcast)</option>
+          <option value="60" ${fps==='60'?'selected':''}>60 fps (NTSC)</option>
+          <option value="25" ${fps==='25'?'selected':''}>25 fps</option>
+          <option value="30" ${fps==='30'?'selected':''}>30 fps</option>
+        </select>
+      </div>
+      <div>
+        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Video Bitrate (k)</label>
+        <input type="number" class="form-control" name="dest_vbitrate" value="${vbitrate}" style="padding:6px 8px; font-size:12px; min-height:34px;">
+      </div>
+      <div>
+        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Audio Track</label>
+        <select class="form-control" name="dest_atrack" style="padding:6px 8px; font-size:12px; min-height:34px;">
+          <option value="0" ${atrack==0?'selected':''}>Track 1 (Default)</option>
+          <option value="1" ${atrack==1?'selected':''}>Track 2</option>
+          <option value="2" ${atrack==2?'selected':''}>Track 3</option>
+          <option value="3" ${atrack==3?'selected':''}>Track 4</option>
+        </select>
+      </div>
+      <div>
+        <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; font-weight:600; display:block; margin-bottom:4px;">Audio Codec</label>
+        <select class="form-control" name="dest_acodec" style="padding:6px 8px; font-size:12px; min-height:34px;">
+          <option value="copy" ${acodec==='copy'?'selected':''}>Stream Copy</option>
+          <option value="aac" ${acodec==='aac'?'selected':''}>AAC (Broadcast)</option>
+          <option value="opus" ${acodec==='opus'?'selected':''}>Opus</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; margin-top:16px;">
+        <input type="checkbox" name="dest_deint" ${deint?'checked':''} id="chk-deint-${destinationCount}">
+        <label for="chk-deint-${destinationCount}" style="color:var(--text); font-size:11px; cursor:pointer;">Deinterlace</label>
+      </div>
+    </div>
   `;
   container.appendChild(div);
+}
+
+function toggleProcessing(selectEl, id) {
+  const panel = document.getElementById(`dest-proc-${id}`);
+  if (panel) {
+    panel.style.display = selectEl.value === 'transcode' ? 'grid' : 'none';
+  }
 }
 
 async function handleRouteFormSubmit(e) {
   e.preventDefault();
   const id = document.getElementById('rf-id').value;
 
-  const destRows = document.querySelectorAll('.dest-row');
+  const destWrappers = document.querySelectorAll('.dest-row-wrapper');
   const destinations = [];
-  destRows.forEach(row => {
+  destWrappers.forEach(row => {
     const label = row.querySelector('[name="dest_label"]').value.trim();
     const type = row.querySelector('[name="dest_type"]').value;
     const url = row.querySelector('[name="dest_url"]').value.trim();
     const mode = row.querySelector('[name="dest_mode"]').value;
+    const scale = row.querySelector('[name="dest_scale"]') ? row.querySelector('[name="dest_scale"]').value : 'original';
+    const fps = row.querySelector('[name="dest_fps"]') ? row.querySelector('[name="dest_fps"]').value : 'original';
+    const vbitrate = row.querySelector('[name="dest_vbitrate"]') ? parseInt(row.querySelector('[name="dest_vbitrate"]').value) || 4500 : 4500;
+    const atrack = row.querySelector('[name="dest_atrack"]') ? parseInt(row.querySelector('[name="dest_atrack"]').value) || 0 : 0;
+    const acodec = row.querySelector('[name="dest_acodec"]') ? row.querySelector('[name="dest_acodec"]').value : 'copy';
+    const deint = row.querySelector('[name="dest_deint"]') ? row.querySelector('[name="dest_deint"]').checked : false;
+
     if (url) {
-      destinations.push({ label, type, url, mode, video_bitrate: 4500, audio_bitrate: 160 });
+      destinations.push({
+        label, type, url, mode, scale, fps, deinterlace: deint,
+        video_bitrate: vbitrate,
+        audio_track: atrack,
+        audio_codec: acodec,
+        audio_bitrate: 160,
+        audio_sample_rate: 48000
+      });
     }
   });
+
+  const pType = document.getElementById('rf-p-type').value;
+  const pUrl = document.getElementById('rf-p-url').value.trim();
+  const pAddr = document.getElementById('rf-p-addr').value.trim() || '127.0.0.1';
 
   const payload = {
     name: document.getElementById('rf-name').value.trim(),
     failover_policy: document.getElementById('rf-policy').value,
     primary_source: {
-      type: document.getElementById('rf-p-type').value,
+      type: pType,
+      url: pUrl,
+      address: pAddr,
       port: parseInt(document.getElementById('rf-p-port').value) || 12100,
       stream_id: document.getElementById('rf-p-streamid').value.trim(),
       latency: parseInt(document.getElementById('rf-p-latency').value) || 200,
@@ -1555,6 +1746,7 @@ async function handleRouteFormSubmit(e) {
     alert(err.message);
   }
 }
+
 
 // Tab switcher (Desktop + Mobile)
 function switchTab(tab) {
