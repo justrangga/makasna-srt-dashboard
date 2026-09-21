@@ -11,6 +11,10 @@ import time
 import threading
 from datetime import datetime, timezone
 
+# Allow Google OAuth to return additional scopes (such as openid or previously granted scopes) without error
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
 try:
     from google.oauth2.credentials import Credentials
     from google.oauth2 import service_account

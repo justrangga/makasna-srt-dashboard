@@ -7,6 +7,10 @@ failover policies, real-time SRT/IP telemetry, and process supervision.
 
 import os
 import sys
+
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
 import json
 import time
 import psutil
