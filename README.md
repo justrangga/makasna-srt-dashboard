@@ -1,4 +1,4 @@
-# Makasna SRT Dashboard
+# Makasna Live Video Transport Gateway
 
 [Bahasa Indonesia](#bahasa-indonesia) | [English](#english)
 
@@ -7,607 +7,364 @@
 <a id="bahasa-indonesia"></a>
 ## Bahasa Indonesia
 
-### Ringkasan dan fitur
+### 1. Ringkasan & Arsitektur Sistem
 
-Makasna SRT Dashboard adalah dasbor Flask ringan untuk memantau MediaMTX dan mengelola tujuan relay SRT/RTMP berbasis FFmpeg.
+**Makasna Live Video Transport Gateway** adalah platform broadcast transport gateway tingkat enterprise berbasis Python/Flask, MediaMTX, dan FFmpeg. Gateway ini dirancang khusus untuk ingestion, transmisi redundan (failover), transcoding real-time, monitoring latensi rendah, fan-out multi-tujuan, serta perekaman bersegmen otomatis ke Google Drive.
 
-- UI modern monokrom untuk statistik resource host dan stream aktif dari MediaMTX Control API
-- Sumber SRT, RTSP, RTMP, dan HTTP serta tujuan relay SRT, RTMP, dan RTMPS
-- Pemilihan Stream ID dan deteksi/pemilihan track audio dengan `ffprobe`
-- Satu preview live HLS terkelola secara global dengan penghentian otomatis
-- Metrik kesehatan jaringan SRT, chart histori telemetry, dan log perubahan status
-- Restart otomatis FFmpeg selama tujuan tetap aktif
-- Definisi relay persisten di `forwards.json`, log per relay di `logs/`, dan segmen preview sementara di `.runtime/preview/`
-- Mode **Direct Copy** dan transkode H.264/AAC dengan bitrate khusus
+```
+                  ┌────────────────────────────────────────────────────────┐
+                  │              INBOUND CONTRIBUTION                      │
+                  │   OBS / vMix / Hardware Encoders / Remote SRT / RTMP   │
+                  └──────────────────────────┬─────────────────────────────┘
+                                             │
+                                             ▼
+                  ┌────────────────────────────────────────────────────────┐
+                  │                 MEDIAMTX CORE ENGINE                   │
+                  │    • SRT Ingest (UDP 8890)    • RTMP Ingest (TCP 1935) │
+                  │    • RTSP Server (TCP 8554)   • HLS/fMP4 (Port 8888)   │
+                  │    • WebRTC (<300ms)          • REST API (Port 9997)   │
+                  └──────────────┬───────────────────────────┬─────────────┘
+                                 │                           │
+                   Inbound Poll  │             FFmpeg Bridge │ (Dynamic Routes)
+                                 ▼                           ▼
+        ┌──────────────────────────────────┐   ┌───────────────────────────────┐
+        │   INBOUND INGEST MONITOR         │   │   SUPERVISED ROUTE PIPELINE   │
+        │   • Real-time Stream ID Detector │   │   • Primary / Secondary Source│
+        │   • Bitrate, RTT, Loss, Drops    │   │   • Hot-Standby Failover      │
+        │   • Instant Preview & + Route    │   │   • Circuit Breaker (Backoff) │
+        └──────────────────────────────────┘   └───────────────┬───────────────┘
+                                                               │
+                       ┌───────────────────────────────────────┴───────────────────────────────────────┐
+                       │                                       │                                       │
+                       ▼                                       ▼                                       ▼
+        ┌──────────────────────────────┐        ┌──────────────────────────────┐        ┌──────────────────────────────┐
+        │   MULTI-DESTINATION FAN-OUT  │        │   SEGMENTED RECORDING        │        │   OPERATOR PREVIEW & AUDIT   │
+        │   • SRT Caller / Listener    │        │   • Segmen 15m / 30m / 1h    │        │   • fMP4 HLS Buffer (12s)    │
+        │   • RTMP / RTMPS / YouTube   │        │   • Kompresi Hemat s/d 92%   │        │   • WebRTC Sub-Second (<0.3s)│
+        │   • UDP MPEG-TS / RTSP       │        │   • Google Service Account   │        │   • Same-Origin HTTPS Proxy  │
+        │   • Auto MP2->AAC Transcode  │        │   • Auto Cloud Upload Worker │        │   • Fixed Scroll Event Log   │
+        └──────────────────────────────┘        └──────────────────────────────┘        └──────────────────────────────┘
+```
 
-### Arsitektur
+---
 
-Publisher mengirim stream ke MediaMTX. Dasbor meminta status path dan koneksi SRT dari Control API lokal MediaMTX di `127.0.0.1:9997`, lalu menjalankan satu proses FFmpeg untuk setiap tujuan aktif. Nama sumber lokal seperti `live` diubah menjadi `rtsp://127.0.0.1:8554/live`. Preview juga membaca RTSP lokal dan FFmpeg membuat playlist/segmen HLS berdurasi pendek di `.runtime/preview/`; ini terpisah dari HLS MediaMTX, yang tetap dinonaktifkan pada konfigurasi contoh. `forwards.json`, `logs/`, dan `.runtime/` adalah data runtime yang diabaikan Git.
+### 2. Fitur Utama
 
-Untuk produksi, unit yang disediakan menjalankan:
+#### A. Gateway Routing & Hot-Standby Failover
+* **Dual-Source Architecture:** Setiap rute mendukung *Primary Contribution Source* dan *Secondary Source (Failover)* independen.
+* **Kebijakan Failover:** `Maintain Primary`, `Invert (Stick to Secondary)`, atau `Manual Switch`.
+* **Protokol Ingest Lengkap:**
+  * **SRT Listener:** Menunggu koneksi push dari encoder lapangan pada port UDP spesifik.
+  * **SRT Caller (Pull):** Menarik stream langsung dari server/edge SRT eksternal.
+  * **SRT Rendezvous:** Melakukan NAT-traversal peer-to-peer dua arah.
+  * **Local Stream:** Mengadopsi stream yang sudah masuk ke MediaMTX (format `publish:STREAM_ID`).
+  * **Direct Stream URLs:** RTSP, RTMP, HTTP, atau UDP TS.
+* **Enkripsi & Latensi:** Mendukung SRT AES-128/256 Passphrase serta buffer latensi yang dapat disesuaikan (default 200 ms s/d 8000 ms).
+* **Live Probing (`ffprobe`):** Analisis instan resolusi, framerate, dan susunan multitrack audio sebelum rute dijalankan.
 
-- MediaMTX sebagai user `mediamtx`, memakai konfigurasi dari `/etc/mediamtx.env`.
-- Gunicorn sebagai user `makasna`, satu worker di `127.0.0.1:${PORT}`. Satu worker wajib karena status proses relay disimpan di memori.
+#### B. Multi-Destination Fan-Out (Egress)
+* Distribusi 1 sumber ingest ke berbagai tujuan secara bersamaan:
+  * **SRT Caller / Listener** (Point-to-Point broadcast link).
+  * **RTMP / RTMPS** (YouTube Live, Facebook Live, Twitch, CDN kustom).
+  * **UDP MPEG-TS Multicast/Unicast** (Decoder perangkat keras studio / IRD).
+  * **RTSP / HTTP**.
+* **Direct Stream Copy:** Pilihan default `-c copy` untuk efisiensi CPU 0% tanpa penurunan kualitas video bitstream.
+* **Auto-Fallback Audio Transcoding:** Deteksi otomatis feed broadcast bertipe audio MPEG-1 Layer II (MP2) atau AC3; mengonversi audio ke AAC (`-c:a aac 128k/160k`) secara otomatis untuk tujuan FLV/RTMP/YouTube guna mencegah crash muxer, tanpa menyentuh stream video (`-c:v copy`).
 
-### Kebutuhan
+#### C. Engine Transcoding & Pemrosesan Video
+* **Video Rescaling:** Mengubah resolusi video (1080p, 720p, 576p PAL, 480p NTSC, atau resolusi kustom).
+* **Frame Rate Conversion:** Penyesuaian framerate siaran (25 fps, 30 fps, 50 fps, 60 fps).
+* **Deinterlacing:** Filter adaptif `bwdif` untuk feed interlaced (1080i/576i) menjadi progressive.
+* **Bitrate Control:** Target Video Bitrate, Maximum Bitrate (`-maxrate`), dan VBV Buffer Size (`-bufsize`).
+* **Encoder Presets:** Profil kompresi H.264 (`ultrafast`, `superfast`, `veryfast`, `faster`, `medium`).
+* **Audio Track Mapping & Transcode:** Pemetaan track audio tertentu (`-map 0:a:X`), transcode AAC / Opus, sample rate 48 kHz / 44.1 kHz, dan bitrate 64k s/d 320k.
 
-- Linux untuk contoh systemd di bawah
-- Git
-- Python 3.9 atau lebih baru, termasuk dukungan `venv`
-- FFmpeg dan `ffprobe`
-- MediaMTX yang mendukung key pada `config/mediamtx.yml.example`
-- Hak root hanya untuk instalasi paket, binary, user, konfigurasi `/etc`, dan service
-- User service non-root untuk operasi normal
+#### D. Inbound SRT Ingest Monitor
+* Deteksi stream SRT masuk secara pasif melalui MediaMTX REST API (`/v3/srtconns/list`).
+* Tabel pemantau real-time: **Stream ID**, **Remote IP & Port Pengirim**, **Receive Bitrate (Mbps)**, **RTT Latency (ms)**, **Packet Loss (%)**, dan **Uptime**.
+* **1-Click Preview:** Meninjau feed yang masuk secara instan tanpa perlu membuat rute terlebih dahulu.
+* **1-Click `+ Route`:** Mengadopsi stream yang sedang masuk menjadi rute gateway resmi hanya dengan satu klik.
 
-Contoh instalasi paket pada Debian/Ubuntu:
+#### E. Perekaman Bersegmen Internal & Arsip Google Drive
+* Perekaman otomatis berbasis segmen waktu (`15 Menit`, `30 Menit`, `1 Jam`) menggunakan container MP4 terfragmentasi (`-f segment`).
+* **Mode Optimasi Kompresi (Hemat Storage s/d 92%):**
+  * Memangkas ukuran file rekaman siaran TV bitrate tinggi (~2.3 GB per 15 menit) menjadi **~225 MB** (preset 2000 kbps) atau **~135 MB** (preset 1200 kbps).
+  * Dilengkapi kalkulator estimasi ukuran file real-time di UI modal.
+  * Pilihan resolusi rekaman (720p, 1080p, 480p) dan framerate mandiri.
+  * Pilihan *Direct Stream Copy* tetap tersedia jika membutuhkan kualitas master asli.
+* **Google Cloud Integration:**
+  * Mendukung **Google Service Account JSON** (solusi ideal tanpa kedaluwarsa untuk server Linux *headless*).
+  * Mendukung OAuth 2.0 Web Authorization.
+  * Background upload worker mengunggah segmen rekaman yang telah selesai ke folder Google Drive (`Makasna Video Archive`) secara otomatis.
+  * Kebijakan retensi file: *Simpan di Server & Sinkron ke Cloud* atau *Hapus di Server Setelah Sukses Diunggah*.
+* **Tab Recordings:** Manajemen daftar rekaman lokal, pemutaran langsung di browser, tombol unduh MP4, dan pemicu upload manual.
 
-```sh
+#### F. Preview Player Broadcast & WebRTC
+* **Fragmented MP4 HLS (`fmp4`):** Menggantikan LL-HLS micro-parts yang rentan stuttering dengan segmen 2 detik yang mulus dan stabil.
+* **Buffer Margin 12 Detik & Auto-Nudge:** Player HLS.js dilengkapi buffer pengaman untuk mengatasi fluktuasi koneksi seluler tanpa buffering terus-menerus.
+* **Same-Origin HTTPS Proxy (`/hls/...`):** Stream preview dialirkan melalui proxy reverse gateway lokal, menghilangkan masalah pemblokiran *Mixed-Content SSL* dan port non-standar `:8888`.
+* **Viewer WebRTC Ultra-Low Latency (`<0.3s`):** Pilihan tombol buka pemutar WebRTC untuk pemantauan video real-time sub-detik tanpa latensi.
+
+#### G. Modal Connection URLs Interaktif
+* Dialog referensi parameter endpoint untuk mempermudah konfigurasi software eksternal:
+  * **Sender (Pengirim):** OBS Studio (Service: Custom SRT), vMix / Hardware Encoders, FFmpeg CLI.
+  * **Receiver (Penerima):** VLC Media Player, OBS Media Source, Browser HLS Player, RTSP Player.
+* Target Stream ID dinamis dan tombol copy satu klik (*1-click copy*).
+
+#### H. Gateway Event Log & Sistem Audit
+* Log aktivitas sistem dan perubahan status gateway.
+* **Fixed-Height Viewport Container:** Tampilan log dibatasi dengan scrollbar internal, mencegah halaman meregang (*infinite scroll*) ke bawah.
+* **Fitur Hapus Log (Clear Event Log):** Tombol pembersih riwayat log dan endpoint backend `DELETE /api/events`.
+
+#### I. Keandalan Sistem & Circuit Breaker
+* **Exponential Backoff:** Mencegah supervisor melakukan restart loop terus-menerus ketika stream remote offline (backoff 5s hingga 30s; berhenti otomatis setelah 5 kali kegagalan berturut-turut).
+* **In-Memory Caching:** Konfigurasi rute dan event log disimpan di memori proses dengan sinkronisasi disk asynchronous untuk menghilangkan lonjakan beban I/O server.
+
+#### J. Desain Antarmuka Dark Broadcast Control Room
+* Nuansa visual ruang kendali siaran gelap profesional (`#08080A`, border `#27272A`, aksen Cyan `#00E5FF` dan Royal Blue `#2563EB`).
+* Bebas dari emoji informal; seluruh ikon menggunakan vektor garis SVG murni.
+* Sepenuhnya responsif untuk smartphone (kartu modular adaptif, navigasi bawah / *bottom navigation bar*, dan modal fullscreen sheet).
+
+---
+
+### 3. Panduan Instalasi & Deploy Server
+
+#### Kebutuhan Sistem
+* OS: Debian 12 (Bookworm) atau Ubuntu 22.04/24.04 LTS.
+* Python 3.10 atau lebih baru (dengan modul `venv`).
+* FFmpeg & `ffprobe` (versi 5.x / 6.x atau lebih baru).
+* Binary MediaMTX (v1.11.3 atau lebih baru).
+
+#### Instalasi Dependensi Sistem
+```bash
 sudo apt update
-sudo apt install -y git python3 python3-venv python3-pip ffmpeg
+sudo apt install -y git python3 python3-venv python3-pip ffmpeg curl
 ```
 
-### Clone dan instal dependensi
-
-```sh
-git clone https://github.com/justrangga/makasna-srt-dashboard.git
-cd makasna-srt-dashboard
-./deploy.sh
-```
-
-`deploy.sh` hanya membuat `.venv`, memperbarui pip, dan memasang `requirements.txt`. Script ini **tidak** memasang MediaMTX, menyalin konfigurasi, membuat user, atau memasang/mengaktifkan/me-restart service systemd.
-
-Alternatif manual:
-
-```sh
+#### Clone Repository & Setup Virtual Environment
+```bash
+git clone https://github.com/justrangga/makasna-srt-dashboard.git /opt/makasna-dashboard
+cd /opt/makasna-dashboard
 python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-### Menyiapkan MediaMTX
+#### Menjalankan sebagai Service Systemd
 
-1. Unduh binary MediaMTX yang sesuai dari rilis resmi proyek MediaMTX dan verifikasi checksum rilisnya.
-2. Pasang binary sebagai `/usr/local/bin/mediamtx` dan pastikan executable:
+1. **Service MediaMTX (`/etc/systemd/system/mediamtx.service`):**
+```ini
+[Unit]
+Description=MediaMTX SRT and Live Streaming Server
+After=network.target
 
-   ```sh
-   sudo install -o root -g root -m 0755 PATH_TO_MEDIAMTX_BINARY /usr/local/bin/mediamtx
-   ```
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mediamtx /etc/mediamtx/mediamtx.yml
+Restart=always
+RestartSec=3
 
-3. Untuk pengembangan, salin konfigurasi contoh:
-
-   ```sh
-   cp config/mediamtx.yml.example config/mediamtx.yml
-   mediamtx config/mediamtx.yml
-   ```
-
-Konfigurasi contoh mengaktifkan SRT pada UDP `8890`, RTSP/TCP pada `8554`, RTMP/TCP pada `1935`, dan Control API hanya pada `127.0.0.1:9997`. HLS, WebRTC, metrics, pprof, playback, dan recording dinonaktifkan. Konfigurasi ini menerima publish/read anonim pada path apa pun; batasi autentikasi dan jaringan sebelum dipaparkan ke jaringan yang tidak dipercaya.
-
-### Konfigurasi environment
-
-Salin contoh lokal:
-
-```sh
-cp .env.example .env
+[Install]
+WantedBy=multi-user.target
 ```
 
-Buat `SECRET_KEY` secara aman dengan generator kriptografis Python; jangan memakai nilai contoh:
+2. **Service Gateway Dashboard (`/etc/systemd/system/makasna-dashboard.service`):**
+```ini
+[Unit]
+Description=Makasna Live Video Transport Gateway
+After=network.target mediamtx.service
 
-```sh
-python3 -c 'import secrets; print(secrets.token_hex(32))'
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/makasna-dashboard
+Environment="PATH=/opt/makasna-dashboard/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+Environment="PORT=8080"
+Environment="SECRET_KEY=ganti_dengan_secret_key_acak"
+Environment="DASHBOARD_USER=admin"
+Environment="DASHBOARD_PASS=@linux1234"
+ExecStart=/opt/makasna-dashboard/.venv/bin/python3 app.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-Masukkan hasilnya ke `.env` tanpa tanda kutip:
-
-```text
-PORT=8080
-SECRET_KEY=PASTE_GENERATED_VALUE_HERE
-```
-
-Aplikasi tidak memuat `.env` secara otomatis. Ekspor isinya sebelum startup pengembangan:
-
-```sh
-set -a
-. ./.env
-set +a
-```
-
-Jika `SECRET_KEY` tidak tersedia, aplikasi membuat nilai acak per proses sehingga session tidak bertahan setelah restart. Gunakan `DASHBOARD_USER` dan `DASHBOARD_PASS` untuk mengatur kredensial login (default: `admin` / `@linux1234`).
-
-### Menjalankan pengembangan
-
-Jalankan MediaMTX di terminal pertama seperti di atas. Di terminal kedua:
-
-```sh
-. .venv/bin/activate
-set -a
-. ./.env
-set +a
-python app.py
-```
-
-Server pengembangan Flask mendengarkan `0.0.0.0:${PORT}` (default `8080`). Gunakan hanya untuk pengembangan dan batasi akses dengan firewall.
-
-### Setup produksi dengan systemd
-
-Perintah berikut sesuai dengan path dan user pada template saat ini. Ganti `REPOSITORY_DIR` dengan direktori clone lokal yang sebenarnya.
-
-```sh
-sudo useradd --system --home /nonexistent --shell /usr/sbin/nologin mediamtx
-sudo useradd --system --home /srv/makasna-dashboard --shell /usr/sbin/nologin makasna
-sudo mkdir -p /etc/mediamtx /srv/makasna-dashboard
-sudo cp -a REPOSITORY_DIR/. /srv/makasna-dashboard/
-sudo chown -R makasna:makasna /srv/makasna-dashboard
-sudo -u makasna /srv/makasna-dashboard/deploy.sh
-sudo install -o root -g root -m 0644 /srv/makasna-dashboard/config/mediamtx.yml.example /etc/mediamtx/mediamtx.yml
-```
-
-Buat environment MediaMTX:
-
-```sh
-printf '%s\n' 'MEDIAMTX_CONFIG=/etc/mediamtx/mediamtx.yml' | sudo tee /etc/mediamtx.env >/dev/null
-sudo chmod 0600 /etc/mediamtx.env
-```
-
-Buat environment dasbor dengan secret baru tanpa mencetak secret ke terminal:
-
-```sh
-SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-printf 'PORT=8080\nSECRET_KEY=%s\n' "$SECRET_KEY" | sudo tee /etc/makasna-dashboard.env >/dev/null
-unset SECRET_KEY
-sudo chmod 0600 /etc/makasna-dashboard.env
-```
-
-Pasang template unit tanpa modifikasi jika path di atas digunakan:
-
-```sh
-sudo install -o root -g root -m 0644 /srv/makasna-dashboard/systemd/mediamtx.service /etc/systemd/system/mediamtx.service
-sudo install -o root -g root -m 0644 /srv/makasna-dashboard/systemd/makasna-dashboard.service /etc/systemd/system/makasna-dashboard.service
+Aktifkan service:
+```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now mediamtx.service
-sudo systemctl enable --now makasna-dashboard.service
-sudo systemctl status mediamtx.service makasna-dashboard.service
+sudo systemctl enable --now mediamtx
+sudo systemctl enable --now makasna-dashboard
 ```
 
-Dasbor produksi hanya mendengarkan localhost. Untuk akses remote, letakkan reverse proxy HTTPS dengan autentikasi di depan `127.0.0.1:8080`; jangan mengubah binding menjadi publik tanpa kontrol akses.
+---
 
-### Publish dan read SRT
+### 4. Daftar Port & Firewall Jaringan
 
-Ganti `SERVER_IP` dan `STREAM_NAME`; jangan menaruh stream key nyata di dokumentasi atau source control.
-
-Publish dari OBS, kamera, atau encoder:
-
-```text
-srt://SERVER_IP:8890?streamid=publish:STREAM_NAME
-```
-
-Read dari VLC, OBS, vMix, atau receiver lain:
-
-```text
-srt://SERVER_IP:8890?streamid=read:STREAM_NAME
-```
-
-Contoh FFmpeg dengan placeholder:
-
-```sh
-ffmpeg -re -i INPUT_FILE -c copy -f mpegts 'srt://SERVER_IP:8890?streamid=publish:STREAM_NAME'
-ffplay 'srt://SERVER_IP:8890?streamid=read:STREAM_NAME'
-```
-
-### Preview live dan kesehatan jaringan SRT
-
-1. Pilih path MediaMTX yang aktif atau masukkan **Stream ID** yang valid, lalu klik **Detect / load** untuk mendeteksi track audio.
-2. Pilih audio dan klik **Start**. Hanya ada **satu preview secara global** untuk seluruh proses dasbor; memulai preview baru menghentikan preview sebelumnya, dan preview berhenti otomatis setelah 15 menit.
-3. FFmpeg membaca stream RTSP lokal dan membuat HLS dengan segmen 2 detik serta playlist berjendela 5 segmen. Segmen lama dihapus, tetapi proses ini tetap memakai disk, CPU, dan I/O; browser memutar playlist melalui HLS.js atau dukungan HLS native.
-4. Panel kesehatan menghubungkan Stream ID secara tepat ke publisher SRT MediaMTX dan menampilkan receive rate, RTT, packet loss, retransmission, drop, kapasitas link, counter, uptime, chart histori singkat, serta log perubahan status. Counter bersifat kumulatif, sedangkan rate/RTT/loss rate adalah sampel saat ini.
-
-Preview bukan mekanisme akses multitenant: token playlist sementara bukan autentikasi. Dasbor tetap harus berada di localhost atau di balik reverse proxy HTTPS terautentikasi. Setelah crash, file `.runtime/preview/` lama dapat dibersihkan saat service berhenti. Jangan menjalankan lebih dari satu worker/proses aplikasi karena relay dan satu slot preview disimpan dalam memori proses.
-
-### Menambah relay dan memilih audio multitrack
-
-1. Pastikan source sedang aktif.
-2. Buka dasbor dan pilih **Add Redirect Target**.
-3. Isi label, lalu isi nama stream lokal seperti `live` atau URL lengkap `rtsp://`, `rtmp://`, `srt://`, atau `http://`.
-4. Klik **Detect Audio Tracks**. Dasbor menjalankan `ffprobe` dan menampilkan codec, channel, sample rate, bahasa, dan judul jika tersedia.
-5. Pilih track yang diperlukan. Pilihan adalah indeks audio berbasis nol: “Audio 1” memetakan `0:a:0?`, “Audio 2” memetakan `0:a:1?`, dan seterusnya. Video pertama dipetakan sebagai `0:v:0?`.
-6. Isi URL tujuan SRT/RTMP/RTMPS hanya melalui UI atau storage rahasia, pilih mode, lalu **Save & Start**.
-7. Gunakan **Stop/Start**, **Logs**, atau hapus relay dari tabel. Relay yang tetap aktif dicoba ulang tiga detik setelah FFmpeg berhenti; relay aktif juga dimulai kembali saat `python app.py` memanggil bootstrap. Unit Gunicorn saat ini tidak memanggil bootstrap aplikasi secara eksplisit, jadi periksa dan aktifkan relay dari UI setelah restart service.
-
-Jika deteksi gagal, uji source dari host yang sama:
-
-```sh
-ffprobe -v error -show_streams 'SOURCE_URL'
-```
-
-### Direct Copy dan Custom Bitrate
-
-- **Direct Copy** memakai `-c:v copy -c:a copy`: CPU rendah, codec dan bitrate asli dipertahankan, tetapi destination harus mendukung codec tersebut dan bitrate tidak dapat diubah.
-- **Custom Bitrate** meng-encode video dengan `libx264` dan audio dengan AAC. UI mengatur video bitrate, max bitrate, buffer, audio bitrate, dan preset encoder. Mode ini memakai lebih banyak CPU dan tidak mengubah resolusi atau frame rate.
-
-### Test dan validasi
-
-Dari root repository dengan virtual environment aktif:
-
-```sh
-. .venv/bin/activate
-python -m unittest discover -s tests -v
-python -m py_compile app.py tests/test_app.py
-sh -n deploy.sh
-```
-
-Test menggunakan data runtime sementara dan mock startup relay; test tidak menghubungi sistem produksi.
-
-### Prosedur update
-
-Backup data runtime dan konfigurasi lokal secara aman, lalu update sebagai user yang memiliki checkout:
-
-```sh
-cd /srv/makasna-dashboard
-cp forwards.json /SAFE_BACKUP_PATH/forwards.json
-cp /etc/makasna-dashboard.env /SAFE_BACKUP_PATH/makasna-dashboard.env
-cp /etc/mediamtx/mediamtx.yml /SAFE_BACKUP_PATH/mediamtx.yml
-git pull --ff-only
-sudo -u makasna ./deploy.sh
-```
-
-Tinjau perubahan pada `.env.example`, konfigurasi MediaMTX, dan template systemd. Salin perubahan template/config secara manual hanya setelah membandingkannya; `deploy.sh` tidak melakukannya. Kemudian:
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl restart mediamtx.service makasna-dashboard.service
-sudo systemctl status mediamtx.service makasna-dashboard.service
-```
-
-Pastikan ownership `forwards.json`, `logs/`, dan `.runtime/` tetap `makasna:makasna`. Uji publish/read, preview, metrik SRT, dan relay setelah update.
-
-### Firewall dan port jaringan
-
-Buka hanya protokol yang benar-benar digunakan:
-
-| Port | Protokol | Fungsi | Paparan yang disarankan |
+| Port | Protokol | Fungsi | Keterangan Akses |
 |---|---|---|---|
-| `8890` | UDP | SRT publish/read | Hanya IP publisher/reader yang diperlukan |
-| `8554` | TCP | RTSP | Privat/lokal kecuali memang dibutuhkan remote |
-| `1935` | TCP | RTMP | Hanya jika ingest/read RTMP diperlukan |
-| `9997` | TCP | MediaMTX Control API | Localhost saja; jangan dibuka di firewall |
-| `8080` | TCP | Flask dev; upstream Gunicorn | Localhost/reverse proxy saja pada produksi |
-| `443` | TCP | Reverse proxy HTTPS opsional | Klien dasbor yang diizinkan |
+| **`8890`** | UDP | SRT Ingest & Egress (MediaMTX) | Wajib dibuka untuk publisher & receiver |
+| **`1935`** | TCP | RTMP / FLV Internal Sink | Localhost / Encoder lapangan |
+| **`8554`** | TCP | RTSP Stream Ingest/Read | Opsional |
+| **`8888`** | TCP | HLS Server (fMP4 Engine) | Internal / Proxy ke dashboard |
+| **`8889`** | TCP | WebRTC HTTP Signal Viewer | Sub-second Live Viewer |
+| **`9997`** | TCP | MediaMTX REST Control API | **Localhost Only** (`127.0.0.1`) |
+| **`8080`** | TCP | Gateway Dashboard HTTP | Reverse proxy (Cloudflare Tunnel / Nginx) |
+| **`443`** | TCP | HTTPS Public Access | Cloudflare Tunnel / SSL Proxy |
 
-Contoh UFW untuk SRT dari satu jaringan tepercaya (sesuaikan CIDR):
+---
 
-```sh
-sudo ufw allow from TRUSTED_CIDR to any port 8890 proto udp
-```
+### 5. Format Endpoint URL
 
-Relay keluar juga memerlukan DNS dan akses egress ke host/port tujuan. SRT memakai UDP; aturan TCP saja tidak cukup.
-
-### Pemecahan masalah
-
-- **Dasbor tidak melihat stream:** periksa `systemctl status mediamtx`, lalu `curl http://127.0.0.1:9997/v3/paths/list`; pastikan `apiAddress` tetap `127.0.0.1:9997`.
-- **Preview tidak mulai/tersendat:** pastikan Stream ID dan audio benar, FFmpeg dapat membaca `rtsp://127.0.0.1:8554/STREAM_NAME`, user service dapat menulis `.runtime/`, dan codec copy kompatibel dengan HLS/browser. Preview baru menggantikan satu preview global yang sedang berjalan.
-- **Metrik SRT kosong:** metrik hanya tersedia untuk publisher SRT dengan path yang tepat sama; periksa endpoint lokal `/v3/srtconns/list` dan versi MediaMTX.
-- **SRT tidak tersambung:** pastikan UDP `8890` terbuka, `STREAM_NAME` sama, mode streamid adalah `publish:` atau `read:`, dan tidak ada publisher kedua karena `overridePublisher: no`.
-- **Relay berhenti/gagal:** buka log dari UI atau periksa `logs/relay_RELAY_ID.log`; verifikasi URL tujuan, konektivitas egress, codec destination, dan kapasitas CPU.
-- **Audio salah/hilang:** aktifkan source sebelum deteksi, jalankan `ffprobe`, lalu pilih indeks audio yang benar. Mapping bertanda `?`, jadi track yang tidak tersedia tidak membuat konstruksi command gagal.
-- **Service gagal start:** jalankan `journalctl -u mediamtx.service -u makasna-dashboard.service -n 100 --no-pager`; periksa user, permission, binary, working directory, dan file environment.
-- **Perubahan relay hilang/tidak dapat disimpan:** pastikan `/srv/makasna-dashboard`, `forwards.json`, dan `logs/` dapat ditulis user `makasna`.
-- **UI tanpa styling/chart:** aset frontend dimuat dari CDN, sehingga browser memerlukan akses keluar atau aset harus di-host sendiri.
-
-### Catatan keamanan
-
-- Jangan commit `.env`, `forwards.json`, log, sertifikat, private key, password, token, stream key, atau URL tujuan/source yang mengandung kredensial.
-- Perlakukan tujuan relay, command line FFmpeg, dan log sebagai data sensitif.
-- Dasbor tidak memiliki autentikasi dan menyediakan operasi relay; simpan di localhost atau lindungi dengan reverse proxy HTTPS terautentikasi.
-- Simpan Control API MediaMTX di localhost dan batasi publish/read anonim dengan autentikasi MediaMTX atau filtering jaringan.
-- Jalankan kedua service dengan user khusus non-root dan batasi direktori yang dapat ditulis.
-- Pin/validasi sumber binary MediaMTX dan update dependency secara terencana.
-- Rotasi segera kredensial yang pernah masuk source control, output terminal bersama, atau log.
-
-### Lisensi
-
-MIT. Lihat [LICENSE](LICENSE).
+* **Ingest SRT Pengirim (OBS / vMix):**
+  * `srt://IP_SERVER:8890?streamid=publish:NAMA_STREAM`
+* **Membaca SRT Penerima (VLC / OBS Media Source):**
+  * `srt://IP_SERVER:8890?streamid=read:NAMA_STREAM`
+* **Browser HLS Preview URL:**
+  * `https://domain-anda.com/hls/NAMA_STREAM/index.m3u8`
+* **WebRTC Live Viewer URL:**
+  * `http://IP_SERVER:8889/NAMA_STREAM/`
 
 ---
 
 <a id="english"></a>
 ## English
 
-### Overview and features
+### 1. Overview & System Architecture
 
-Makasna SRT Dashboard is a lightweight Flask dashboard for monitoring MediaMTX and managing FFmpeg-based SRT/RTMP relay destinations.
+**Makasna Live Video Transport Gateway** is an enterprise-grade broadcast video routing, failover, transcoding, and archiving platform powered by Python/Flask, MediaMTX, and FFmpeg. Engineered for low-latency live contribution, redundant ingress switching, multi-destination fan-out, and internal segmented recording with automated Google Drive synchronization.
 
-- Modern monochrome UI for host resource statistics and active streams from the MediaMTX Control API
-- SRT, RTSP, RTMP, and HTTP sources plus SRT, RTMP, and RTMPS relay destinations
-- Stream ID selection and audio-track detection/selection with `ffprobe`
-- One globally managed HLS live preview with automatic shutdown
-- SRT network health metrics, telemetry history charts, and status-change log
-- Automatic FFmpeg restart while a destination remains enabled
-- Persistent relay definitions in `forwards.json`, per-relay logs in `logs/`, and temporary preview segments in `.runtime/preview/`
-- **Direct Copy** and configurable H.264/AAC bitrate modes
+---
 
-### Architecture
+### 2. Core Capabilities
 
-Publishers send streams to MediaMTX. The dashboard requests path and SRT connection status from the local MediaMTX Control API at `127.0.0.1:9997` and runs one FFmpeg process for every enabled destination. A local source name such as `live` becomes `rtsp://127.0.0.1:8554/live`. Preview also reads local RTSP, and FFmpeg creates a short-lived HLS playlist and segments under `.runtime/preview/`; this is separate from MediaMTX HLS, which remains disabled in the example configuration. `forwards.json`, `logs/`, and `.runtime/` are Git-ignored runtime data.
+#### A. Gateway Routing & Hot-Standby Failover
+* **Dual-Source Redundancy:** Dedicated Primary and Secondary sources per gateway route.
+* **Failover Policies:** `Maintain Primary`, `Invert (Stick to Secondary)`, or `Manual Switch`.
+* **Ingest Protocol Matrix:**
+  * **SRT Listener:** Dedicated UDP port binding for remote contributions.
+  * **SRT Caller (Pull):** Pulls live streams from external broadcast servers.
+  * **SRT Rendezvous:** Bidirectional peer-to-peer traversal.
+  * **Local Stream:** Ingests any active stream published to MediaMTX (`publish:STREAM_ID`).
+  * **Direct Stream URLs:** RTSP, RTMP, HTTP, and UDP MPEG-TS.
+* **Security & Latency Tuning:** SRT AES-128/256 passphrase encryption and custom latency buffer (200 ms to 8000 ms).
+* **Live Ingest Prober (`ffprobe`):** Instant pre-flight analysis of incoming video codecs, dimensions, framerates, and audio multitrack indices.
 
-In production, the supplied units run:
+#### B. Multi-Destination Fan-Out (Egress)
+* Simultaneous stream re-transmission across diverse protocols:
+  * **SRT Caller / Listener** (Point-to-point contribution links).
+  * **RTMP / RTMPS** (YouTube Live, Facebook Live, Twitch, custom CDN ingress).
+  * **UDP MPEG-TS** (Studio hardware decoders / IRD appliances).
+  * **RTSP / HTTP**.
+* **Direct Stream Copy:** Zero-overhead `-c copy` pipeline preserves 100% bitstream integrity with minimal CPU utilization.
+* **Automated Broadcast Audio Fallback:** Automatically detects MPEG-1 Layer II (MP2) or AC3 audio tracks and converts them to AAC (`-c:a aac`) when targeting RTMP/FLV/YouTube destinations to prevent muxer container crashes while keeping video untouched (`-c:v copy`).
 
-- MediaMTX as user `mediamtx`, with its configuration selected by `/etc/mediamtx.env`.
-- Gunicorn as user `makasna`, with one worker on `127.0.0.1:${PORT}`. One worker is required because relay process state is held in memory.
+#### C. Broadcast Transcoding Pipeline
+* **Resolution Scaling:** 1080p, 720p, 576p PAL, 480p NTSC, and arbitrary custom geometries.
+* **Framerate Standardization:** Conversion across broadcast standards (25, 30, 50, 60 fps).
+* **Broadcast Deinterlacer:** Adaptive `bwdif` filter turns 1080i/576i interlaced signals into smooth progressive video.
+* **Bitrate & VBV Control:** Target video bitrates, maxrates, and VBV buffer sizing.
+* **H.264 Encoder Presets:** Selectable compression presets (`ultrafast` through `medium`).
+* **Audio Routing & Transcode:** Independent audio channel mapping (`-map 0:a:X`), AAC / Opus encoding, custom sample rates, and bitrates.
 
-### Requirements
+#### D. Inbound SRT Ingest Monitor
+* Real-time passive tracking of incoming SRT publishers via the MediaMTX API (`/v3/srtconns/list`).
+* Live telemetry grid: **Stream ID**, **Sender IP & Port**, **Receive Bitrate (Mbps)**, **RTT Latency (ms)**, **Packet Loss (%)**, and **Connection Uptime**.
+* **1-Click Preview:** Monitor incoming feeds before committing them to active routes.
+* **1-Click `+ Route`:** Immediately adopt incoming streams into managed routes with auto-filled parameters.
 
-- Linux for the systemd example below
-- Git
-- Python 3.9 or newer, including `venv` support
-- FFmpeg and `ffprobe`
-- A MediaMTX release supporting the keys in `config/mediamtx.yml.example`
-- Root privileges only for package, binary, user, `/etc` configuration, and service installation
-- Non-root service accounts for normal operation
+#### E. Internal Segmented Recording & Google Drive Cloud Archive
+* Automated time-sliced recording (`15 Minutes`, `30 Minutes`, `1 Hour`) via fragmented MP4 containerization.
+* **Storage Optimization Mode (Up to 92% Storage Savings):**
+  * Compresses high-bitrate broadcast feeds (~2.3 GB per 15 min) down to **~225 MB** (2000 kbps HD) or **~135 MB** (1200 kbps).
+  * Interactive UI calculator provides real-time storage estimations before saving.
+  * Direct Stream Copy option remains available for master archival.
+* **Google Cloud Integration:**
+  * **Google Service Account JSON** integration (ideal for non-interactive headless Linux environments).
+  * OAuth 2.0 Web Authorization support.
+  * Background worker queue uploads finished segments automatically to Google Drive (`Makasna Video Archive`).
+  * Retention management: *Keep Local & Cloud Sync* or *Delete Local After Upload*.
+* **Recordings Tab:** Integrated file management, direct browser playback, MP4 download links, and manual cloud sync triggers.
 
-Example package installation on Debian/Ubuntu:
+#### F. High-Performance Preview & WebRTC
+* **Fragmented MP4 HLS (`fmp4`):** Stable 2-second segments eliminate micro-gap stalls and playback freezing.
+* **12-Second Buffer Margin & Auto-Nudge:** Robust playback buffering prevents underruns over mobile connections.
+* **Same-Origin HTTPS Proxy (`/hls/...`):** Routes HLS traffic through the dashboard's HTTPS origin, preventing Mixed-Content blocks and cellular port filtering.
+* **Sub-Second WebRTC Viewer (`<0.3s`):** Dedicated low-latency playback option for real-time camera and live event monitoring.
 
-```sh
-sudo apt update
-sudo apt install -y git python3 python3-venv python3-pip ffmpeg
-```
+#### G. Interactive Connection URLs Modal
+* Contextual setup instructions and connection strings:
+  * **Senders:** OBS Studio, vMix / Hardware Encoders, FFmpeg CLI.
+  * **Receivers:** VLC Media Player, OBS Media Source, Web HLS Players, RTSP Clients.
+* Dynamic Stream ID substitution with 1-click clipboard copy.
 
-### Clone and install dependencies
+#### H. Gateway Event Log & System Audit
+* Real-time operational audit trail.
+* **Fixed-Height Viewport Container:** Confines log entries to an internal scrollable window, preventing infinite page growth.
+* **Clear Event Log Action:** Secure 1-click log purge via `DELETE /api/events`.
 
-```sh
-git clone https://github.com/justrangga/makasna-srt-dashboard.git
-cd makasna-srt-dashboard
-./deploy.sh
-```
+#### I. Reliability & Resilience
+* **Exponential Backoff Circuit Breaker:** Protects system resources by throttling restart attempts against offline remote SRT targets (5s to 30s backoff; stops after 5 consecutive failures).
+* **In-Memory Caching:** Eliminates disk I/O bottlenecks by caching route configurations and event entries in RAM with debounced persistence.
 
-`deploy.sh` only creates `.venv`, upgrades pip, and installs `requirements.txt`. It does **not** install MediaMTX, copy configuration, create users, or install/enable/restart systemd services.
+#### J. Dark Broadcast Control Room Interface
+* High-contrast theme (`#08080A`, border `#27272A`, accents in Cyan `#00E5FF` and Royal Blue `#2563EB`).
+* Clean, professional vector line SVG icons.
+* Fully responsive across smartphones and multi-display control room workstations.
 
-Manual alternative:
+---
 
-```sh
+### 3. Server Deployment
+
+#### Environment Requirements
+* Debian 12 (Bookworm) or Ubuntu 22.04/24.04 LTS.
+* Python 3.10+ (with `venv`).
+* FFmpeg & `ffprobe` (5.x or 6.x+).
+* MediaMTX binary (v1.11.3+).
+
+#### Quick Setup
+```bash
+git clone https://github.com/justrangga/makasna-srt-dashboard.git /opt/makasna-dashboard
+cd /opt/makasna-dashboard
 python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-### MediaMTX setup
+#### Systemd Services
+* **MediaMTX:** Managed by `/etc/systemd/system/mediamtx.service`.
+* **Dashboard Gateway:** Managed by `/etc/systemd/system/makasna-dashboard.service`.
 
-1. Download the appropriate MediaMTX binary from the official MediaMTX project releases and verify its release checksum.
-2. Install the binary as `/usr/local/bin/mediamtx` and make it executable:
-
-   ```sh
-   sudo install -o root -g root -m 0755 PATH_TO_MEDIAMTX_BINARY /usr/local/bin/mediamtx
-   ```
-
-3. For development, copy the example configuration:
-
-   ```sh
-   cp config/mediamtx.yml.example config/mediamtx.yml
-   mediamtx config/mediamtx.yml
-   ```
-
-The example configuration enables SRT on UDP `8890`, RTSP/TCP on `8554`, RTMP/TCP on `1935`, and the Control API only on `127.0.0.1:9997`. HLS, WebRTC, metrics, pprof, playback, and recording are disabled. It accepts anonymous publishing and reading on any path; restrict authentication and network access before exposing it to an untrusted network.
-
-### Environment configuration
-
-Copy the local example:
-
-```sh
-cp .env.example .env
-```
-
-Generate `SECRET_KEY` safely with Python's cryptographic generator; do not use the example value:
-
-```sh
-python3 -c 'import secrets; print(secrets.token_hex(32))'
-```
-
-Put the result in `.env` without quotes:
-
-```text
-PORT=8080
-SECRET_KEY=PASTE_GENERATED_VALUE_HERE
-```
-
-The application does not load `.env` automatically. Export it before development startup:
-
-```sh
-set -a
-. ./.env
-set +a
-```
-
-If `SECRET_KEY` is unavailable, the application creates a random value per process, so sessions do not survive a restart. Configure `DASHBOARD_USER` and `DASHBOARD_PASS` for dashboard login credentials (default: `admin` / `@linux1234`).
-
-### Development start
-
-Run MediaMTX in the first terminal as shown above. In a second terminal:
-
-```sh
-. .venv/bin/activate
-set -a
-. ./.env
-set +a
-python app.py
-```
-
-The Flask development server listens on `0.0.0.0:${PORT}` (default `8080`). Use it only for development and restrict access with a firewall.
-
-### Production systemd setup
-
-The following commands match the paths and users in the current templates. Replace `REPOSITORY_DIR` with the actual local clone directory.
-
-```sh
-sudo useradd --system --home /nonexistent --shell /usr/sbin/nologin mediamtx
-sudo useradd --system --home /srv/makasna-dashboard --shell /usr/sbin/nologin makasna
-sudo mkdir -p /etc/mediamtx /srv/makasna-dashboard
-sudo cp -a REPOSITORY_DIR/. /srv/makasna-dashboard/
-sudo chown -R makasna:makasna /srv/makasna-dashboard
-sudo -u makasna /srv/makasna-dashboard/deploy.sh
-sudo install -o root -g root -m 0644 /srv/makasna-dashboard/config/mediamtx.yml.example /etc/mediamtx/mediamtx.yml
-```
-
-Create the MediaMTX environment:
-
-```sh
-printf '%s\n' 'MEDIAMTX_CONFIG=/etc/mediamtx/mediamtx.yml' | sudo tee /etc/mediamtx.env >/dev/null
-sudo chmod 0600 /etc/mediamtx.env
-```
-
-Create the dashboard environment with a fresh secret without printing it to the terminal:
-
-```sh
-SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-printf 'PORT=8080\nSECRET_KEY=%s\n' "$SECRET_KEY" | sudo tee /etc/makasna-dashboard.env >/dev/null
-unset SECRET_KEY
-sudo chmod 0600 /etc/makasna-dashboard.env
-```
-
-Install the unit templates unchanged if you used the paths above:
-
-```sh
-sudo install -o root -g root -m 0644 /srv/makasna-dashboard/systemd/mediamtx.service /etc/systemd/system/mediamtx.service
-sudo install -o root -g root -m 0644 /srv/makasna-dashboard/systemd/makasna-dashboard.service /etc/systemd/system/makasna-dashboard.service
+```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now mediamtx.service
-sudo systemctl enable --now makasna-dashboard.service
-sudo systemctl status mediamtx.service makasna-dashboard.service
+sudo systemctl enable --now mediamtx
+sudo systemctl enable --now makasna-dashboard
 ```
 
-The production dashboard listens only on localhost. For remote access, put an authenticated HTTPS reverse proxy in front of `127.0.0.1:8080`; do not change the binding to public without access controls.
+---
 
-### SRT publish and read
+### 4. Port Reference
 
-Replace `SERVER_IP` and `STREAM_NAME`; never put a real stream key in documentation or source control.
-
-Publish from OBS, a camera, or an encoder:
-
-```text
-srt://SERVER_IP:8890?streamid=publish:STREAM_NAME
-```
-
-Read from VLC, OBS, vMix, or another receiver:
-
-```text
-srt://SERVER_IP:8890?streamid=read:STREAM_NAME
-```
-
-FFmpeg examples using placeholders:
-
-```sh
-ffmpeg -re -i INPUT_FILE -c copy -f mpegts 'srt://SERVER_IP:8890?streamid=publish:STREAM_NAME'
-ffplay 'srt://SERVER_IP:8890?streamid=read:STREAM_NAME'
-```
-
-### Live preview and SRT network health
-
-1. Select a ready MediaMTX path or enter a valid **Stream ID**, then select **Detect / load** to detect audio tracks.
-2. Select audio and press **Start**. There is only **one preview globally** for the entire dashboard process; starting another replaces the previous preview, and the preview stops automatically after 15 minutes.
-3. FFmpeg reads local RTSP and creates HLS with 2-second segments and a 5-segment sliding playlist. Old segments are deleted, but this still consumes disk, CPU, and I/O; the browser plays the playlist through HLS.js or native HLS support.
-4. The health panel correlates the Stream ID exactly with a MediaMTX SRT publisher and reports receive rate, RTT, packet loss, retransmissions, drops, link capacity, counters, uptime, short telemetry history charts, and status-change logs. Counters are cumulative, while rate/RTT/loss rate are current samples.
-
-Preview is not a multi-tenant access mechanism: its temporary playlist token is not authentication. Keep the dashboard on localhost or behind an authenticated HTTPS reverse proxy. After a crash, stale `.runtime/preview/` files can be cleaned while the service is stopped. Do not run multiple workers/application processes because relay state and the single preview slot are process-local.
-
-### Adding a relay and selecting multitrack audio
-
-1. Ensure the source is active.
-2. Open the dashboard and select **Add Redirect Target**.
-3. Enter a label, then a local stream name such as `live` or a complete `rtsp://`, `rtmp://`, `srt://`, or `http://` URL.
-4. Select **Detect Audio Tracks**. The dashboard runs `ffprobe` and displays codec, channels, sample rate, language, and title when available.
-5. Select the required track. Selection uses a zero-based audio index: “Audio 1” maps `0:a:0?`, “Audio 2” maps `0:a:1?`, and so on. The first video maps as `0:v:0?`.
-6. Enter the SRT/RTMP/RTMPS destination URL only through the UI or secret storage, choose a mode, then select **Save & Start**.
-7. Use **Stop/Start**, **Logs**, or delete the relay from the table. An enabled relay retries three seconds after FFmpeg exits; enabled relays are also restarted when `python app.py` invokes bootstrap. The current Gunicorn unit does not explicitly invoke application bootstrap, so inspect and enable relays from the UI after a service restart.
-
-If detection fails, test the source from the same host:
-
-```sh
-ffprobe -v error -show_streams 'SOURCE_URL'
-```
-
-### Direct Copy versus Custom Bitrate
-
-- **Direct Copy** uses `-c:v copy -c:a copy`: low CPU usage, original codecs and bitrate, but the destination must support those codecs and bitrate cannot be changed.
-- **Custom Bitrate** encodes video with `libx264` and audio with AAC. The UI controls video bitrate, maximum bitrate, buffer, audio bitrate, and encoder preset. It costs more CPU and does not change resolution or frame rate.
-
-### Tests and validation
-
-From the repository root with the virtual environment active:
-
-```sh
-. .venv/bin/activate
-python -m unittest discover -s tests -v
-python -m py_compile app.py tests/test_app.py
-sh -n deploy.sh
-```
-
-Tests use temporary runtime data and mock relay startup; they do not contact production systems.
-
-### Update procedure
-
-Securely back up runtime data and local configuration, then update as the checkout owner:
-
-```sh
-cd /srv/makasna-dashboard
-cp forwards.json /SAFE_BACKUP_PATH/forwards.json
-cp /etc/makasna-dashboard.env /SAFE_BACKUP_PATH/makasna-dashboard.env
-cp /etc/mediamtx/mediamtx.yml /SAFE_BACKUP_PATH/mediamtx.yml
-git pull --ff-only
-sudo -u makasna ./deploy.sh
-```
-
-Review changes to `.env.example`, the MediaMTX configuration, and systemd templates. Copy template/configuration changes manually only after comparing them; `deploy.sh` does not do this. Then run:
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl restart mediamtx.service makasna-dashboard.service
-sudo systemctl status mediamtx.service makasna-dashboard.service
-```
-
-Ensure `forwards.json`, `logs/`, and `.runtime/` remain owned by `makasna:makasna`. Test publishing, reading, preview, SRT metrics, and relays after the update.
-
-### Firewall and network ports
-
-Open only the protocols you actually use:
-
-| Port | Protocol | Purpose | Recommended exposure |
+| Port | Protocol | Purpose | Access Policy |
 |---|---|---|---|
-| `8890` | UDP | SRT publish/read | Only required publisher/reader IPs |
-| `8554` | TCP | RTSP | Private/local unless remote access is required |
-| `1935` | TCP | RTMP | Only if RTMP ingest/read is required |
-| `9997` | TCP | MediaMTX Control API | Localhost only; do not open in the firewall |
-| `8080` | TCP | Flask dev; Gunicorn upstream | Localhost/reverse proxy only in production |
-| `443` | TCP | Optional HTTPS reverse proxy | Authorized dashboard clients |
+| **`8890`** | UDP | SRT Ingest / Egress | Open to field publishers and receivers |
+| **`1935`** | TCP | RTMP / FLV Ingest | Localhost / Field encoders |
+| **`8554`** | TCP | RTSP Stream Ingest/Read | Private / optional |
+| **`8888`** | TCP | HLS Server (fMP4 Engine) | Internal / Proxied via Dashboard |
+| **`8889`** | TCP | WebRTC HTTP Signaler | Low-latency live viewer |
+| **`9997`** | TCP | MediaMTX REST API | **Localhost Only** (`127.0.0.1`) |
+| **`8080`** | TCP | Gateway Web Dashboard | Upstream to reverse proxy |
+| **`443`** | TCP | Public Secure Dashboard | Cloudflare Tunnel / Reverse Proxy |
 
-Example UFW rule for SRT from one trusted network (adjust the CIDR):
+---
 
-```sh
-sudo ufw allow from TRUSTED_CIDR to any port 8890 proto udp
-```
+### 5. Documentation & Booklet
+Technical booklet proposal (22-page dark mode PDF) is available for download at `/download/booklet` or in the repository root as `makasna-client-booklet.pdf`.
 
-Outbound relays also need DNS and egress access to each destination host/port. SRT uses UDP; a TCP-only rule is insufficient.
+---
 
-### Troubleshooting
-
-- **Dashboard does not show streams:** check `systemctl status mediamtx`, then `curl http://127.0.0.1:9997/v3/paths/list`; ensure `apiAddress` remains `127.0.0.1:9997`.
-- **Preview does not start/stalls:** ensure the Stream ID and audio are correct, FFmpeg can read `rtsp://127.0.0.1:8554/STREAM_NAME`, the service user can write `.runtime/`, and copied codecs are compatible with HLS/browser playback. A new preview replaces the currently running global preview.
-- **SRT metrics are empty:** metrics exist only for an SRT publisher whose path matches exactly; check the local `/v3/srtconns/list` endpoint and MediaMTX version.
-- **SRT does not connect:** ensure UDP `8890` is open, `STREAM_NAME` matches, the streamid mode is `publish:` or `read:`, and there is no second publisher because `overridePublisher: no`.
-- **Relay stops or fails:** open its log in the UI or inspect `logs/relay_RELAY_ID.log`; verify the destination URL, egress connectivity, destination codec support, and CPU capacity.
-- **Wrong or missing audio:** activate the source before detection, run `ffprobe`, and select the correct audio index. Mapping is optional (`?`), so a missing track does not make command construction fail.
-- **Service fails to start:** run `journalctl -u mediamtx.service -u makasna-dashboard.service -n 100 --no-pager`; inspect users, permissions, binaries, working directory, and environment files.
-- **Relay changes disappear or cannot be saved:** ensure `/srv/makasna-dashboard`, `forwards.json`, and `logs/` are writable by user `makasna`.
-- **UI has no styling/chart:** frontend assets load from CDNs, so the browser needs outbound access or the assets must be self-hosted.
-
-### Security notes
-
-- Never commit `.env`, `forwards.json`, logs, certificates, private keys, passwords, tokens, stream keys, or source/destination URLs containing credentials.
-- Treat relay destinations, FFmpeg command lines, and logs as sensitive data.
-- The dashboard has no authentication and can operate relays; keep it on localhost or protect it with an authenticated HTTPS reverse proxy.
-- Keep the MediaMTX Control API on localhost and restrict anonymous publishing/reading with MediaMTX authentication or network filtering.
-- Run both services under dedicated non-root users and limit writable directories.
-- Pin/validate the MediaMTX binary source and update dependencies deliberately.
-- Immediately rotate credentials that ever entered source control, shared terminal output, or logs.
-
-### License
-
-MIT. See [LICENSE](LICENSE).
+### 6. License
+Released under the [MIT License](LICENSE).
