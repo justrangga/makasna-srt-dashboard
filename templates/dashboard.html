@@ -1553,13 +1553,14 @@ video {
     <div class="modal-body" style="gap:16px;">
       <!-- Stream Name Input Controller -->
       <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:10px; padding:14px 16px;">
-        <div class="form-row" style="align-items:center;">
-          <div class="form-group" style="margin:0;">
-            <label style="color:var(--cyan);">Target Stream ID / Name</label>
-            <input type="text" id="ep-stream-name" class="form-control" value="MAKASNA" placeholder="e.g. MAKASNA or live" oninput="refreshEndpointUrls(this.value)">
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <label style="color:var(--cyan); margin:0; font-size:12px; font-weight:700;">Target Stream ID / Name</label>
+            <span style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono';">Server IP: <b style="color:#fff;">139.190.97.109</b> · Port: <b style="color:#fff;">8890</b></span>
           </div>
-          <div style="font-size:12px; color:var(--muted);">
-            Ketik nama stream di sini. Semua URL untuk <b>Pengirim (OBS)</b> dan <b>Penerima (VLC)</b> di bawah akan otomatis berubah seketika.
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="text" id="ep-stream-name" class="form-control" style="max-width:320px; font-family:'JetBrains Mono'; font-weight:700;" value="MAKASNA" placeholder="e.g. MAKASNA" oninput="refreshEndpointUrls(this.value)">
+            <span style="font-size:11.5px; color:var(--muted);">Semua URL di bawah otomatis diperbarui dengan IP server dan nama stream ini.</span>
           </div>
         </div>
       </div>
@@ -1580,10 +1581,12 @@ video {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">OBS Studio (Stream Output)</b>
-            <button class="btn-icon" style="color:var(--cyan);" onclick="copyInputVal('url-obs-sender')">Copy URL</button>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-obs-sender')">Copy URL</button>
           </div>
-          <input type="text" id="url-obs-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan);" value="">
-          <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="url-obs-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan); width:100%;" value="" onclick="this.select()">
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:5px;">
             Petunjuk: Di OBS buka <b>Settings &gt; Stream</b>. Pilih Service: <b>Custom...</b>, isi Server dengan URL di atas, dan kosongkan Stream Key.
           </div>
         </div>
@@ -1592,14 +1595,16 @@ video {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">vMix &amp; Hardware Encoder Parameter</b>
-            <button class="btn-icon" style="color:var(--cyan);" onclick="copyInputVal('url-vmix-sender')">Copy String</button>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vmix-sender')">Copy String</button>
           </div>
-          <input type="text" id="url-vmix-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px;" value="">
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
-            <div style="background:rgba(0,0,0,0.3); padding:6px; border-radius:4px;">Mode: <b>Caller</b></div>
-            <div style="background:rgba(0,0,0,0.3); padding:6px; border-radius:4px;">IP: <b id="ep-ip-text">139.190.97.109</b></div>
-            <div style="background:rgba(0,0,0,0.3); padding:6px; border-radius:4px;">Port: <b id="ep-port-text">8890</b></div>
-            <div style="background:rgba(0,0,0,0.3); padding:6px; border-radius:4px;">StreamID: <b id="ep-sid-send-text">publish:MAKASNA</b></div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="url-vmix-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; width:100%;" value="" onclick="this.select()">
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Mode: <b style="color:#fff;">Caller</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">IP: <b id="ep-ip-text" style="color:var(--cyan);">139.190.97.109</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Port: <b id="ep-port-text" style="color:#fff;">8890</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">StreamID: <b id="ep-sid-send-text" style="color:var(--green);">publish:MAKASNA</b></div>
           </div>
         </div>
 
@@ -1607,9 +1612,9 @@ video {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">FFmpeg Command Line Push</b>
-            <button class="btn-icon" style="color:var(--cyan);" onclick="copyInputVal('url-ffmpeg-sender')">Copy Command</button>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-ffmpeg-sender')">Copy Command</button>
           </div>
-          <input type="text" id="url-ffmpeg-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:11.5px;" value="">
+          <textarea id="url-ffmpeg-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:11.5px; width:100%; min-height:48px; resize:none; line-height:1.4;" onclick="this.select()"></textarea>
         </div>
       </div>
 
@@ -1619,10 +1624,12 @@ video {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">VLC Media Player (SRT Ultra-Low Latency)</b>
-            <button class="btn-icon" style="color:var(--cyan);" onclick="copyInputVal('url-vlc-receiver')">Copy URL</button>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vlc-receiver')">Copy URL</button>
           </div>
-          <input type="text" id="url-vlc-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan);" value="">
-          <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="url-vlc-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan); width:100%;" value="" onclick="this.select()">
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:5px;">
             Petunjuk: Buka VLC &gt; <b>Media</b> &gt; <b>Open Network Stream</b> (Ctrl+N) &gt; Paste URL di atas &gt; Play.
           </div>
         </div>
@@ -1631,10 +1638,12 @@ video {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">OBS Studio (Media Source Ingest)</b>
-            <button class="btn-icon" style="color:var(--cyan);" onclick="copyInputVal('url-obs-receiver')">Copy URL</button>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-obs-receiver')">Copy URL</button>
           </div>
-          <input type="text" id="url-obs-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px;" value="">
-          <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="url-obs-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; width:100%;" value="" onclick="this.select()">
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:5px;">
             Petunjuk: Di OBS tambah Source &gt; <b>Media Source</b> &gt; Hilangkan centang 'Local File' &gt; Masukkan URL ini di kolom <b>Input</b>.
           </div>
         </div>
@@ -1643,18 +1652,22 @@ video {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">HLS Stream URL (Web Browser / Safari / Mobile)</b>
-            <button class="btn-icon" style="color:var(--cyan);" onclick="copyInputVal('url-hls-receiver')">Copy URL</button>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-hls-receiver')">Copy URL</button>
           </div>
-          <input type="text" id="url-hls-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px;" value="">
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="url-hls-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; width:100%;" value="" onclick="this.select()">
+          </div>
         </div>
 
         <!-- Card 4: RTSP Stream -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">RTSP Stream URL (vMix / NVR / Switcher)</b>
-            <button class="btn-icon" style="color:var(--cyan);" onclick="copyInputVal('url-rtsp-receiver')">Copy URL</button>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-rtsp-receiver')">Copy URL</button>
           </div>
-          <input type="text" id="url-rtsp-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px;" value="">
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="url-rtsp-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; width:100%;" value="" onclick="this.select()">
+          </div>
         </div>
       </div>
     </div>
@@ -1702,7 +1715,8 @@ pollSystemStats();
 
 // Inbound SRT Ingest Poller
 let latestSrtPort = 8890;
-let serverHostName = window.location.hostname;
+const SERVER_PUBLIC_IP = '139.190.97.109';
+let serverHostName = SERVER_PUBLIC_IP;
 
 async function pollInboundSrt() {
   try {
@@ -1710,7 +1724,8 @@ async function pollInboundSrt() {
     if (!d.ok) return;
 
     latestSrtPort = d.srt_port || 8890;
-    if (d.server_host) serverHostName = d.server_host;
+    // Always enforce numeric Public IP for external clients (OBS, vMix, VLC)
+    serverHostName = SERVER_PUBLIC_IP;
 
     const pubBadge = document.getElementById('inbound-publishers-badge');
     const rxBadge = document.getElementById('inbound-bitrate-badge');
@@ -1720,7 +1735,7 @@ async function pollInboundSrt() {
     if (pubBadge) pubBadge.textContent = `${d.total_publishers} CLIENTS CONNECTED`;
     if (rxBadge) rxBadge.textContent = `↓ ${d.total_rx_rate_mbps} Mbps TOTAL`;
     if (portBadge) portBadge.textContent = `PORT ${latestSrtPort}`;
-    if (exampleCode) exampleCode.textContent = `srt://${serverHostName}:${latestSrtPort}?streamid=publish:STREAM_NAME`;
+    if (exampleCode) exampleCode.textContent = `srt://${SERVER_PUBLIC_IP}:${latestSrtPort}?streamid=publish:STREAM_NAME`;
 
     const emptyNotice = document.getElementById('inbound-empty-notice');
     const tableContainer = document.getElementById('inbound-table-container');
@@ -1786,8 +1801,8 @@ async function pollInboundSrt() {
   } catch(e) {}
 }
 
-function copyServerIngestUrl() {
-  openConnectionUrlsModal();
+function copyServerIngestUrl(streamId) {
+  openConnectionUrlsModal(streamId);
 }
 
 function openConnectionUrlsModal(optStreamId) {
@@ -1829,7 +1844,8 @@ function switchEndpointTab(tab) {
 
 function refreshEndpointUrls(rawName) {
   const name = (rawName || 'MAKASNA').trim() || 'MAKASNA';
-  const srtHost = (serverHostName && !serverHostName.startsWith('localhost') && !serverHostName.startsWith('127.0.0.1')) ? serverHostName : '139.190.97.109';
+  // Always use raw public IP so client encoders/players connect reliably without domain DNS resolution
+  const srtHost = SERVER_PUBLIC_IP;
   const port = latestSrtPort || 8890;
 
   // 1. Sender URLs
