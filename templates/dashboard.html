@@ -1152,10 +1152,18 @@ video {
       <!-- Live Video & Failover Section -->
       <div class="telemetry-preview-row">
         <div>
-          <video id="telem-video" controls playsinline></video>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-            <span id="preview-state" style="font-size:12px; color:var(--muted)">Live Web Preview Feed</span>
-            <button class="btn-icon" onclick="reloadPreview()">Reload</button>
+          <div style="position:relative; background:#000; border-radius:6px; overflow:hidden; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; border:1px solid var(--border);">
+            <video id="telem-video" controls autoplay playsinline muted style="width:100%; height:100%; object-fit:contain; background:#000;"></video>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span id="preview-state" style="font-size:12px; color:var(--muted)">Connecting stream...</span>
+              <span id="preview-engine-badge" class="tag tag-input" style="font-size:10px; background:rgba(0,229,255,0.15); color:var(--cyan); border:1px solid rgba(0,229,255,0.3);">fMP4 BUFFERED</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button class="btn-icon" style="font-size:11px; padding:4px 8px;" onclick="reloadPreview()">Resync / Reload</button>
+              <button id="btn-webrtc-open" class="btn-icon" style="font-size:11px; padding:4px 8px; color:var(--cyan);" onclick="openWebRTCViewer()">WebRTC (&lt;0.3s)</button>
+            </div>
           </div>
         </div>
 
@@ -1887,24 +1895,12 @@ function formatSeconds(secs) {
 function previewIncomingStream(streamId) {
   const video = document.getElementById('telem-video');
   document.getElementById('telem-route-name').textContent = `Inbound Stream: ${streamId}`;
-  document.getElementById('telem-route-id').textContent = `Publisher Path: publish:${streamId} | Port: ${latestSrtPort}`;
+  document.getElementById('telem-route-id').textContent = `Publisher Path: ${streamId} · Port: ${latestSrtPort}`;
   document.getElementById('modal-telemetry').classList.remove('hidden');
 
-  const streamUrl = `http://${window.location.hostname}:8888/${streamId}/index.m3u8`;
-
-  if (hlsInstance) {
-    hlsInstance.destroy();
-    hlsInstance = null;
-  }
-  if (Hls.isSupported()) {
-    hlsInstance = new Hls({ liveSyncDurationCount: 2, maxBufferLength: 6 });
-    hlsInstance.loadSource(streamUrl);
-    hlsInstance.attachMedia(video);
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(()=>{}));
-  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = streamUrl;
-    video.play().catch(()=>{});
-  }
+  currentPreviewStreamName = streamId;
+  const streamUrl = `/hls/${streamId}/index.m3u8`;
+  initHlsPlayer(video, streamUrl);
 }
 
 function adoptStreamToRoute(streamId) {
@@ -2127,8 +2123,12 @@ function closeTelemetryModal() {
   telemTimer = null;
   activeTelemetryRouteId = null;
   if (hlsInstance) {
-    hlsInstance.destroy();
+    try { hlsInstance.destroy(); } catch(e) {}
     hlsInstance = null;
+  }
+  const video = document.getElementById('telem-video');
+  if (video) {
+    try { video.pause(); video.src = ''; } catch(e) {}
   }
 }
 
@@ -2183,29 +2183,115 @@ async function switchSource(target) {
   } catch(e) { alert(e.message); }
 }
 
-async function loadRoutePreview(routeId) {
-  const video = document.getElementById('telem-video');
-  const d = await api(`/api/routes/${routeId}/preview`);
-  const streamUrl = d.hls_url;
+let currentPreviewStreamUrl = '';
+let currentPreviewStreamName = '';
+
+function initHlsPlayer(video, streamUrl) {
+  if (!video) return;
+  currentPreviewStreamUrl = streamUrl;
+
+  const previewState = document.getElementById('preview-state');
+  if (previewState) {
+    previewState.innerHTML = '<span style="color:var(--cyan); font-weight:600;">Connecting stream...</span>';
+  }
 
   if (hlsInstance) {
-    hlsInstance.destroy();
+    try { hlsInstance.destroy(); } catch(e) {}
     hlsInstance = null;
   }
 
+  // Ensure video is properly muted for auto-play compatibility
+  video.muted = true;
+
   if (Hls.isSupported()) {
-    hlsInstance = new Hls({ liveSyncDurationCount: 2, maxBufferLength: 8 });
+    hlsInstance = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,          // Stable buffer mode for continuous smooth playback
+      backBufferLength: 10,           // Retain 10s of back buffer
+      maxBufferLength: 12,            // 12s buffer prevents buffer underrun
+      maxMaxBufferLength: 20,
+      liveSyncDurationCount: 3,       // Stay 3 segments behind live edge (safe buffer margin)
+      liveMaxLatencyDurationCount: 6, // Catch up smoothly if latency exceeds 6 segments
+      maxBufferHole: 0.5,             // Gracefully jump across tiny gaps
+      highBufferWatchdogPeriod: 2,
+      nudgeOffset: 0.2,
+      nudgeMaxRetry: 10,
+      fragLoadingTimeOut: 20000,
+      fragLoadingMaxRetry: 6,
+      manifestLoadingTimeOut: 20000,
+      manifestLoadingMaxRetry: 6
+    });
+
     hlsInstance.loadSource(streamUrl);
     hlsInstance.attachMedia(video);
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(()=>{}));
+
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (previewState) {
+        previewState.innerHTML = '<span style="color:var(--green); font-weight:600;">● LIVE (Smooth Buffer)</span>';
+      }
+      video.play().catch(() => {});
+    });
+
+    hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+      if (data.fatal) {
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            console.warn('[HLS] Network error, auto retrying...', data.details);
+            if (previewState) previewState.innerHTML = '<span style="color:var(--amber);">Reconnecting...</span>';
+            setTimeout(() => { if (hlsInstance) hlsInstance.startLoad(); }, 1500);
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            console.warn('[HLS] Media decode error, recovering...', data.details);
+            hlsInstance.recoverMediaError();
+            break;
+          default:
+            console.error('[HLS] Unrecoverable error:', data);
+            if (previewState) previewState.innerHTML = '<span style="color:var(--red);">Feed Offline / Waiting Ingest</span>';
+            if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+            break;
+        }
+      } else if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+        if (video.currentTime > 0 && !video.paused) {
+          video.currentTime += 0.15;
+        }
+      }
+    });
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = streamUrl;
-    video.play().catch(()=>{});
+    video.play().catch(() => {});
+    if (previewState) {
+      previewState.innerHTML = '<span style="color:var(--green); font-weight:600;">● LIVE (Native)</span>';
+    }
+  }
+}
+
+async function loadRoutePreview(routeId) {
+  const video = document.getElementById('telem-video');
+  currentPreviewStreamName = `route_${routeId}`;
+  try {
+    const d = await api(`/api/routes/${routeId}/preview`);
+    const streamUrl = d.hls_url || `/hls/route_${routeId}/index.m3u8`;
+    initHlsPlayer(video, streamUrl);
+  } catch(e) {
+    const streamUrl = `/hls/route_${routeId}/index.m3u8`;
+    initHlsPlayer(video, streamUrl);
   }
 }
 
 function reloadPreview() {
-  if (activeTelemetryRouteId) loadRoutePreview(activeTelemetryRouteId);
+  const video = document.getElementById('telem-video');
+  if (currentPreviewStreamUrl) {
+    initHlsPlayer(video, currentPreviewStreamUrl);
+  } else if (activeTelemetryRouteId) {
+    loadRoutePreview(activeTelemetryRouteId);
+  }
+}
+
+function openWebRTCViewer() {
+  const streamName = currentPreviewStreamName || (activeTelemetryRouteId ? `route_${activeTelemetryRouteId}` : 'MAKASNA');
+  const host = window.location.hostname;
+  const webrtcUrl = `http://${host}:8889/${streamName}/`;
+  window.open(webrtcUrl, '_blank', 'width=840,height=520,resizable=yes');
 }
 
 // Add / Edit Route Form

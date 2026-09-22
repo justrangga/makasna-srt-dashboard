@@ -24,7 +24,7 @@ import uuid
 from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import urlsplit, parse_qs
-from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for, Response
 
 import gdrive_service
 
@@ -1139,13 +1139,27 @@ def api_route_telemetry(route_id):
         })
 
 
+@app.route("/hls/<path:subpath>", methods=["GET"])
+def proxy_hls(subpath):
+    target_url = f"http://127.0.0.1:8888/{subpath}"
+    try:
+        r = requests.get(target_url, stream=True, timeout=8)
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = [(name, value) for (name, value) in r.headers.items() if name.lower() not in excluded_headers]
+        headers.append(('Access-Control-Allow-Origin', '*'))
+        return Response(r.raw.read(), r.status_code, headers)
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+
+
 @app.route("/api/routes/<route_id>/preview", methods=["GET"])
 @login_required
 def api_route_preview(route_id):
     host = request.host.split(":")[0]
     return jsonify({
         "ok": True,
-        "hls_url": f"http://{host}:8888/route_{route_id}/index.m3u8",
+        "hls_url": f"/hls/route_{route_id}/index.m3u8",
+        "hls_direct_url": f"http://{host}:8888/route_{route_id}/index.m3u8",
         "webrtc_url": f"http://{host}:8889/route_{route_id}"
     })
 
