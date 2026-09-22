@@ -445,12 +445,50 @@ def build_ffmpeg_cmd(route, source_config):
         rec_dir = os.path.join(RECORDINGS_DIR, route_id)
         os.makedirs(rec_dir, exist_ok=True)
         seg_time = int(route.get("record_duration") or 900)
-        cmd.extend([
+        rec_mode = route.get("record_mode", "compress")
+        rec_vbitrate = int(route.get("record_vbitrate") or 2000)
+        rec_scale = route.get("record_scale", "720p")
+        rec_fps = str(route.get("record_fps", "original")).strip()
+        rec_preset = route.get("record_preset", "veryfast")
+        rec_abitrate = int(route.get("record_abitrate") or 128)
+
+        rec_cmd = [
             "-map", "0:v:0?",
-            "-map", "0:a:0?",
-            "-c:v", "copy",
+            "-map", "0:a:0?"
+        ]
+
+        if rec_mode == "copy":
+            rec_cmd.extend(["-c:v", "copy"])
+        else:
+            rec_filters = []
+            if rec_scale == "1080p":
+                rec_filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
+            elif rec_scale == "720p":
+                rec_filters.append("scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+            elif rec_scale == "480p":
+                rec_filters.append("scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2")
+
+            if rec_fps in ("25", "30", "50", "60"):
+                rec_filters.append(f"fps={rec_fps}")
+
+            if rec_filters:
+                rec_cmd.extend(["-vf", ",".join(rec_filters)])
+
+            max_b = int(rec_vbitrate * 1.2)
+            buf_b = int(rec_vbitrate * 2)
+            rec_cmd.extend([
+                "-c:v", "libx264",
+                "-preset", rec_preset,
+                "-b:v", f"{rec_vbitrate}k",
+                "-maxrate", f"{max_b}k",
+                "-bufsize", f"{buf_b}k",
+                "-pix_fmt", "yuv420p"
+            ])
+
+        # Audio is encoded to AAC 48kHz for universal MP4 compatibility
+        rec_cmd.extend([
             "-c:a", "aac",
-            "-b:a", "160k",
+            "-b:a", f"{rec_abitrate}k",
             "-ar", "48000",
             "-f", "segment",
             "-segment_time", str(seg_time),
@@ -459,6 +497,8 @@ def build_ffmpeg_cmd(route, source_config):
             "-strftime", "1",
             os.path.join(rec_dir, f"rec_{route_id}_%Y%m%d_%H%M%S.mp4")
         ])
+
+        cmd.extend(rec_cmd)
 
     return cmd
 
@@ -865,6 +905,12 @@ def api_create_route():
         "destinations": destinations,
         "record_enabled": bool(data.get("record_enabled", False)),
         "record_duration": int(data.get("record_duration", 900)),
+        "record_mode": data.get("record_mode", "compress"),
+        "record_vbitrate": int(data.get("record_vbitrate", 2000)),
+        "record_scale": data.get("record_scale", "720p"),
+        "record_fps": data.get("record_fps", "original"),
+        "record_abitrate": int(data.get("record_abitrate", 128)),
+        "record_preset": data.get("record_preset", "veryfast"),
         "upload_to_gdrive": bool(data.get("upload_to_gdrive", True)),
         "delete_after_upload": bool(data.get("delete_after_upload", False)),
         "created_at": now_iso(),
@@ -927,6 +973,18 @@ def api_update_route(route_id):
         r["record_enabled"] = bool(data["record_enabled"])
     if "record_duration" in data:
         r["record_duration"] = int(data["record_duration"])
+    if "record_mode" in data:
+        r["record_mode"] = data["record_mode"]
+    if "record_vbitrate" in data:
+        r["record_vbitrate"] = int(data["record_vbitrate"])
+    if "record_scale" in data:
+        r["record_scale"] = data["record_scale"]
+    if "record_fps" in data:
+        r["record_fps"] = data["record_fps"]
+    if "record_abitrate" in data:
+        r["record_abitrate"] = int(data["record_abitrate"])
+    if "record_preset" in data:
+        r["record_preset"] = data["record_preset"]
     if "upload_to_gdrive" in data:
         r["upload_to_gdrive"] = bool(data["upload_to_gdrive"])
     if "delete_after_upload" in data:

@@ -1397,12 +1397,69 @@ video {
             <div class="form-row">
               <div class="form-group" style="margin:0;">
                 <label>Segment Duration Rule</label>
-                <select id="rf-rec-duration" class="form-control">
+                <select id="rf-rec-duration" class="form-control" onchange="calcEstimatedRecSize()">
                   <option value="900" selected>15 Menit (900 detik)</option>
                   <option value="1800">30 Menit (1800 detik)</option>
                   <option value="3600">1 Jam (3600 detik)</option>
                 </select>
               </div>
+              <div class="form-group" style="margin:0;">
+                <label>Mode Rekaman &amp; Optimasi Storage</label>
+                <select id="rf-rec-mode" class="form-control" onchange="toggleRecModePanel(this.value); calcEstimatedRecSize()">
+                  <option value="compress" selected>Optimized Compression (Pangkas Ukuran 85-92% - Rekomendasi)</option>
+                  <option value="copy">Direct Stream Copy (Kualitas Penuh / ~2 GB per 15 Menit)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Custom Bitrate & Scale Panel (For Storage Reduction) -->
+            <div id="rf-rec-compress-panel" style="background:rgba(0,0,0,0.35); border:1px solid rgba(0,229,255,0.2); border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--cyan); letter-spacing:0.06em;">
+                  Pengaturan Bitrate &amp; Resolusi Hemat Storage
+                </span>
+                <span id="rf-rec-estimate-text" style="font-size:11.5px; font-family:'JetBrains Mono'; color:var(--green); font-weight:600;">
+                  Estimasi: ~225 MB per 15 Menit (Hemat 89%)
+                </span>
+              </div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+                <div class="form-group" style="margin:0;">
+                  <label>Preset Bitrate Rekaman</label>
+                  <select id="rf-rec-preset-select" class="form-control" onchange="applyRecBitratePreset(this.value); calcEstimatedRecSize()">
+                    <option value="1200">1200 kbps (Super Hemat ~135 MB/15m)</option>
+                    <option value="2000" selected>2000 kbps (Standar HD ~225 MB/15m)</option>
+                    <option value="3500">3500 kbps (Kualitas Tinggi ~390 MB/15m)</option>
+                    <option value="5000">5000 kbps (Studio Master ~560 MB/15m)</option>
+                    <option value="custom">Custom Bitrate...</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label>Bitrate Manual (kbps)</label>
+                  <input type="number" id="rf-rec-vbitrate" class="form-control" value="2000" min="400" max="25000" oninput="calcEstimatedRecSize()">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label>Resolusi Rekaman</label>
+                  <select id="rf-rec-scale" class="form-control">
+                    <option value="720p" selected>720p (HD - Sangat Hemat)</option>
+                    <option value="1080p">1080p (Full HD)</option>
+                    <option value="480p">480p (SD - Ringan)</option>
+                    <option value="original">Original (Sesuai Sumber)</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label>Framerate</label>
+                  <select id="rf-rec-fps" class="form-control">
+                    <option value="original" selected>Original</option>
+                    <option value="25">25 fps (Standar Broadcast)</option>
+                    <option value="30">30 fps</option>
+                    <option value="50">50 fps</option>
+                    <option value="60">60 fps</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
               <div class="form-group" style="margin:0;">
                 <label>Storage Retention Policy</label>
                 <select id="rf-rec-retention" class="form-control">
@@ -1410,12 +1467,12 @@ video {
                   <option value="delete_after_upload">Delete Local File After Google Drive Upload</option>
                 </select>
               </div>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <input type="checkbox" id="rf-rec-upload-gdrive" checked>
-              <label for="rf-rec-upload-gdrive" style="font-size:12px; color:var(--text); cursor:pointer;">
-                Otomatis kirim setiap segment selesai ke Google Drive yang tersambung
-              </label>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:16px;">
+                <input type="checkbox" id="rf-rec-upload-gdrive" checked>
+                <label for="rf-rec-upload-gdrive" style="font-size:12px; color:var(--text); cursor:pointer;">
+                  Otomatis kirim setiap segment selesai ke Google Drive yang tersambung
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -2167,8 +2224,15 @@ function openAddRouteModal() {
   document.getElementById('rf-rec-enabled').checked = false;
   toggleRecordingFields(false);
   document.getElementById('rf-rec-duration').value = '900';
+  document.getElementById('rf-rec-mode').value = 'compress';
+  toggleRecModePanel('compress');
+  document.getElementById('rf-rec-preset-select').value = '2000';
+  document.getElementById('rf-rec-vbitrate').value = '2000';
+  document.getElementById('rf-rec-scale').value = '720p';
+  document.getElementById('rf-rec-fps').value = 'original';
   document.getElementById('rf-rec-retention').value = 'keep';
   document.getElementById('rf-rec-upload-gdrive').checked = true;
+  calcEstimatedRecSize();
   document.getElementById('probe-status').textContent = '';
   document.getElementById('probe-result-box').style.display = 'none';
   document.getElementById('probe-sec-status').textContent = '';
@@ -2216,8 +2280,24 @@ function editRoute(id) {
   document.getElementById('rf-rec-enabled').checked = Boolean(r.record_enabled);
   toggleRecordingFields(Boolean(r.record_enabled));
   document.getElementById('rf-rec-duration').value = String(r.record_duration || 900);
+  const recMode = r.record_mode || 'compress';
+  document.getElementById('rf-rec-mode').value = recMode;
+  toggleRecModePanel(recMode);
+  const vbitrate = r.record_vbitrate || 2000;
+  document.getElementById('rf-rec-vbitrate').value = String(vbitrate);
+  const presetEl = document.getElementById('rf-rec-preset-select');
+  if (presetEl) {
+    if (['1200', '2000', '3500', '5000'].includes(String(vbitrate))) {
+      presetEl.value = String(vbitrate);
+    } else {
+      presetEl.value = 'custom';
+    }
+  }
+  document.getElementById('rf-rec-scale').value = r.record_scale || '720p';
+  document.getElementById('rf-rec-fps').value = r.record_fps || 'original';
   document.getElementById('rf-rec-retention').value = r.delete_after_upload ? 'delete_after_upload' : 'keep';
   document.getElementById('rf-rec-upload-gdrive').checked = r.upload_to_gdrive !== false;
+  calcEstimatedRecSize();
 
   // Destinations
   const container = document.getElementById('destinations-container');
@@ -2247,6 +2327,47 @@ function toggleRecordingFields(enabled) {
     el.style.opacity = enabled ? '1' : '0.4';
     el.style.pointerEvents = enabled ? 'auto' : 'none';
   }
+}
+
+function toggleRecModePanel(mode) {
+  const p = document.getElementById('rf-rec-compress-panel');
+  if (p) p.style.display = mode === 'compress' ? 'flex' : 'none';
+}
+
+function applyRecBitratePreset(val) {
+  if (val !== 'custom') {
+    const input = document.getElementById('rf-rec-vbitrate');
+    if (input) input.value = val;
+  }
+}
+
+function calcEstimatedRecSize() {
+  const modeEl = document.getElementById('rf-rec-mode');
+  if (!modeEl) return;
+  const mode = modeEl.value;
+  const durationSec = parseInt(document.getElementById('rf-rec-duration').value) || 900;
+  const estText = document.getElementById('rf-rec-estimate-text');
+  if (!estText) return;
+
+  const minLabel = durationSec === 900 ? '15 Menit' : durationSec === 1800 ? '30 Menit' : '1 Jam';
+
+  if (mode === 'copy') {
+    estText.style.color = 'var(--amber)';
+    estText.textContent = `Estimasi: ~2.0 GB - 2.5 GB per ${minLabel} (Sesuai Bitrate Sumber Asli)`;
+    return;
+  }
+
+  const vbitrate = parseInt(document.getElementById('rf-rec-vbitrate').value) || 2000;
+  const totalBitrateKbps = vbitrate + 128; // video + audio
+  const totalBytes = (totalBitrateKbps * 1000 / 8) * durationSec;
+  const sizeMb = Math.round(totalBytes / (1024 * 1024));
+
+  // Benchmark vs 20 Mbps source
+  const rawBytes = (20000 * 1000 / 8) * durationSec;
+  const savingsPct = Math.max(10, Math.min(96, Math.round((1 - (totalBytes / rawBytes)) * 100)));
+
+  estText.style.color = 'var(--green)';
+  estText.textContent = `Estimasi: ~${sizeMb} MB per ${minLabel} (Hemat ${savingsPct}%)`;
 }
 
 function handleSourceTypeChange(type) {
@@ -2581,6 +2702,10 @@ async function handleRouteFormSubmit(e) {
     destinations: destinations,
     record_enabled: document.getElementById('rf-rec-enabled').checked,
     record_duration: parseInt(document.getElementById('rf-rec-duration').value) || 900,
+    record_mode: document.getElementById('rf-rec-mode').value,
+    record_vbitrate: parseInt(document.getElementById('rf-rec-vbitrate').value) || 2000,
+    record_scale: document.getElementById('rf-rec-scale').value,
+    record_fps: document.getElementById('rf-rec-fps').value,
     upload_to_gdrive: document.getElementById('rf-rec-upload-gdrive').checked,
     delete_after_upload: document.getElementById('rf-rec-retention').value === 'delete_after_upload'
   };
