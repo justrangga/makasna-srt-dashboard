@@ -794,6 +794,555 @@ video {
     margin-left: 0;
   }
 }
+
+/* ========================================================================= */
+/* BLACKMAGIC HYPERDECK STUDIO MASTER RECORDER STYLES */
+/* ========================================================================= */
+.hyperdeck-console {
+  background: radial-gradient(circle at 50% 0%, #151820 0%, #0c0d12 100%);
+  border: 1px solid #232733;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 40px rgba(0,0,0,0.7);
+  margin-bottom: 24px;
+  overflow: hidden;
+  position: relative;
+}
+
+.hyperdeck-header {
+  background: linear-gradient(180deg, #1b1e26 0%, #13151b 100%);
+  border-bottom: 1px solid #242936;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.hyperdeck-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hyperdeck-screws {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #333a4a;
+  border: 1px solid #1a1d24;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.8);
+}
+.hyperdeck-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+.hd-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: #f4f4f5;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+.hd-subtitle {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--cyan);
+  text-transform: uppercase;
+}
+
+.hyperdeck-feed-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #090a0d;
+  border: 1px solid #282d3b;
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+.hd-feed-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+.hd-select {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  min-width: 180px;
+}
+.hd-select option {
+  background: #14171f;
+  color: #fff;
+}
+
+.hyperdeck-tally-container {
+  display: flex;
+  align-items: center;
+}
+.hd-tally {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+.hd-tally-stby {
+  background: rgba(255,255,255,0.06);
+  color: #a1a1aa;
+  border-color: rgba(255,255,255,0.12);
+}
+.hd-tally-stby .hd-tally-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #71717a;
+}
+.hd-tally-rec {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fee2e2;
+  border-color: #ef4444;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+  animation: pulse-rec-border 1.5s infinite;
+}
+.hd-tally-rec .hd-tally-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+  animation: pulse-dot 1s infinite;
+}
+
+.hyperdeck-body {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+@media (max-width: 900px) {
+  .hyperdeck-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hyperdeck-screen-frame {
+  background: #000;
+  border: 2px solid #1a1e27;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.9), 0 4px 14px rgba(0,0,0,0.5);
+  position: relative;
+}
+.hyperdeck-screen {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 380px;
+  position: relative;
+  background: #000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hyperdeck-screen video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  display: block;
+}
+
+.hd-no-signal {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  z-index: 2;
+}
+.hd-colorbars {
+  flex: 1;
+  display: flex;
+}
+.hd-cb { flex: 1; }
+.hd-cb.c1 { background: #c0c0c0; }
+.hd-cb.c2 { background: #c0c000; }
+.hd-cb.c3 { background: #00c0c0; }
+.hd-cb.c4 { background: #00c000; }
+.hd-cb.c5 { background: #c000c0; }
+.hd-cb.c6 { background: #c00000; }
+.hd-cb.c7 { background: #0000c0; }
+.hd-no-signal-text {
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 8px 12px;
+  text-align: center;
+  border-top: 1px solid #333;
+}
+
+.hd-osd-top {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+}
+.hd-osd-badge {
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #f4f4f5;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+.hd-osd-stby { color: #a1a1aa; }
+.hd-osd-rec {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  border-color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+  animation: pulse-dot 1.2s infinite;
+}
+
+.hd-osd-bottom {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  z-index: 10;
+  pointer-events: none;
+}
+.hd-osd-src {
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--cyan);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 4px;
+}
+.hd-timecode-box {
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-align: right;
+}
+.hd-tc-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  font-family: 'JetBrains Mono', monospace;
+}
+.hd-timecode {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 8px rgba(0,229,255,0.4);
+}
+
+.hd-vu-meter-panel {
+  position: absolute;
+  right: 12px;
+  top: 40px;
+  bottom: 50px;
+  width: 22px;
+  background: rgba(0,0,0,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 3px;
+  z-index: 10;
+  pointer-events: none;
+}
+.hd-vu-ch {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hd-vu-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.hd-vu-bar {
+  flex: 1;
+  width: 5px;
+  background: #111;
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+.hd-vu-fill {
+  width: 100%;
+  height: 60%;
+  background: linear-gradient(0deg, #10b981 0%, #10b981 65%, #f59e0b 65%, #f59e0b 85%, #ef4444 85%, #ef4444 100%);
+  transition: height 0.15s ease-out;
+}
+
+.hyperdeck-controls-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.hd-media-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.hd-slot {
+  background: #0c0e13;
+  border: 1px solid #1f2430;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hd-slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hd-slot-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e4e4e7;
+}
+.hd-slot-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+.hd-slot-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.hd-badge-cyan {
+  background: rgba(0, 229, 255, 0.15);
+  color: var(--cyan);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+.hd-slot-progress-bar {
+  height: 5px;
+  background: #181c25;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.hd-slot-progress-fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: 3px;
+}
+.hd-bar-cyan { background: var(--cyan); }
+.hd-slot-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.hd-quick-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: #090a0d;
+  border: 1px solid #1a1e27;
+  border-radius: 8px;
+  padding: 10px;
+}
+.hd-setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hd-setting-item label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+.hd-mini-select {
+  background: #14171f;
+  border: 1px solid #2a3140;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 5px 8px;
+  outline: none;
+}
+
+.hd-transport-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 12px;
+}
+.hd-btn {
+  background: #12141a;
+  border: 1px solid #282f3f;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  user-select: none;
+  min-height: 52px;
+}
+.hd-btn-cap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hd-btn-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+}
+.hd-btn-stop {
+  background: linear-gradient(180deg, #242834 0%, #171922 100%);
+  color: #e4e4e7;
+  border: 1px solid #3d4559;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.hd-btn-stop:hover {
+  background: linear-gradient(180deg, #2c3242 0%, #1e212d 100%);
+  border-color: #4f5b75;
+}
+.hd-btn-stop:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+}
+.hd-btn-icon-stop {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.hd-btn-rec {
+  background: linear-gradient(180deg, #2a1114 0%, #18090b 100%);
+  color: #f87171;
+  border: 1px solid #5c1d24;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.hd-btn-rec:hover {
+  background: linear-gradient(180deg, #38151a 0%, #200b0e 100%);
+  border-color: #ef4444;
+  color: #fff;
+}
+.hd-btn-rec:active {
+  transform: translateY(1px);
+}
+.hd-btn-icon-rec {
+  font-size: 18px;
+  line-height: 1;
+  color: #ef4444;
+}
+.hd-btn-rec.active {
+  background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+  color: #fff;
+  border-color: #f87171;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.8), inset 0 1px 0 rgba(255,255,255,0.3);
+  animation: pulse-rec-glow 1.5s infinite;
+}
+.hd-btn-rec.active .hd-btn-icon-rec {
+  color: #fff;
+  animation: pulse-dot 1s infinite;
+}
+
+.hd-status-strip {
+  background: #08090c;
+  border: 1px solid #1a1e27;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.btn-rec {
+  color: var(--red) !important;
+  font-weight: 700 !important;
+}
+.btn-rec:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+}
+.btn-rec-active {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: var(--red) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  animation: pulse-rec-border 1.5s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes pulse-rec-border {
+  0%, 100% { border-color: rgba(239, 68, 68, 1); }
+  50% { border-color: rgba(239, 68, 68, 0.3); }
+}
+@keyframes pulse-rec-glow {
+  0%, 100% { box-shadow: 0 0 25px rgba(239, 68, 68, 0.8); }
+  50% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+}
 </style>
 </head>
 <body>
@@ -1001,6 +1550,171 @@ video {
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="btn-icon" onclick="fetchRecordings()">Refresh List</button>
+        </div>
+      </div>
+
+      <!-- ========================================================================= -->
+      <!-- BLACKMAGIC HYPERDECK STUDIO BROADCAST MASTER RECORDER CONSOLE -->
+      <!-- ========================================================================= -->
+      <div class="hyperdeck-console">
+        <!-- HyperDeck Top Chassis Bezel -->
+        <div class="hyperdeck-header">
+          <div class="hyperdeck-brand">
+            <div class="hyperdeck-screws"></div>
+            <div class="hyperdeck-brand-text">
+              <span class="hd-title">HYPERDECK STUDIO</span>
+              <span class="hd-subtitle">BROADCAST ISO RECORDER</span>
+            </div>
+          </div>
+
+          <!-- Active Feed / Camera Selector -->
+          <div class="hyperdeck-feed-selector">
+            <span class="hd-feed-label">FEED SOURCE:</span>
+            <select id="hd-route-select" class="hd-select" onchange="onHyperdeckFeedChange()">
+              <option value="">-- PILIH KAMERA / RUTE FEED --</option>
+            </select>
+          </div>
+
+          <!-- Master Tally Status Lamp -->
+          <div class="hyperdeck-tally-container">
+            <div id="hd-master-tally" class="hd-tally hd-tally-stby">
+              <span class="hd-tally-dot"></span>
+              <span id="hd-tally-text">STANDBY</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- HyperDeck Main Deck Body -->
+        <div class="hyperdeck-body">
+          <!-- LEFT: Built-in Color LCD Confidence Monitor -->
+          <div class="hyperdeck-screen-frame">
+            <div class="hyperdeck-screen">
+              <video id="hd-video" autoplay muted playsinline></video>
+
+              <!-- No Signal Fallback / Test Pattern -->
+              <div id="hd-no-signal" class="hd-no-signal">
+                <div class="hd-colorbars">
+                  <div class="hd-cb c1"></div><div class="hd-cb c2"></div><div class="hd-cb c3"></div>
+                  <div class="hd-cb c4"></div><div class="hd-cb c5"></div><div class="hd-cb c6"></div><div class="hd-cb c7"></div>
+                </div>
+                <div class="hd-no-signal-text">NO INPUT SELECTED / FEED STANDBY</div>
+              </div>
+
+              <!-- On-Screen Display (OSD) Overlays -->
+              <div class="hd-osd-top">
+                <div id="hd-osd-tally" class="hd-osd-badge hd-osd-stby">● STBY</div>
+                <div id="hd-osd-format" class="hd-osd-badge">H.264 • 1080p • 5.0 Mbps • AAC</div>
+              </div>
+
+              <!-- Audio Peak VU Meters (Left & Right Channel) -->
+              <div class="hd-vu-meter-panel">
+                <div class="hd-vu-ch">
+                  <span class="hd-vu-lbl">L</span>
+                  <div class="hd-vu-bar"><div id="hd-vu-l" class="hd-vu-fill"></div></div>
+                </div>
+                <div class="hd-vu-ch">
+                  <span class="hd-vu-lbl">R</span>
+                  <div class="hd-vu-bar"><div id="hd-vu-r" class="hd-vu-fill"></div></div>
+                </div>
+              </div>
+
+              <div class="hd-osd-bottom">
+                <div id="hd-osd-src-name" class="hd-osd-src">INPUT: NONE</div>
+                <div class="hd-timecode-box">
+                  <div class="hd-tc-label">TIMECODE / ELAPSED</div>
+                  <div id="hd-timecode-display" class="hd-timecode">00:00:00:00</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Transport Control Panel & Dual Media Slots -->
+          <div class="hyperdeck-controls-panel">
+            <!-- Dual Media Slots (Slot 1 SSD & Slot 2 Cloud) -->
+            <div class="hd-media-slots">
+              <!-- SLOT 1 -->
+              <div class="hd-slot">
+                <div class="hd-slot-header">
+                  <div class="hd-slot-title">
+                    <span class="hd-slot-led" id="hd-slot1-led"></span>
+                    <span>SLOT 1 : LOCAL NVMe/SSD</span>
+                  </div>
+                  <span class="hd-slot-badge" id="hd-slot1-status">ACTIVE</span>
+                </div>
+                <div class="hd-slot-progress-bar">
+                  <div id="hd-slot1-bar" class="hd-slot-progress-fill" style="width: 14%;"></div>
+                </div>
+                <div class="hd-slot-info">
+                  <span id="hd-slot1-free">49.2 GB Free</span>
+                  <span id="hd-slot1-time">~36.8 Jam Tersedia</span>
+                </div>
+              </div>
+
+              <!-- SLOT 2 -->
+              <div class="hd-slot">
+                <div class="hd-slot-header">
+                  <div class="hd-slot-title">
+                    <span class="hd-slot-led" id="hd-slot2-led"></span>
+                    <span>SLOT 2 : GOOGLE DRIVE CLOUD</span>
+                  </div>
+                  <span class="hd-slot-badge" id="hd-slot2-status">STANDBY</span>
+                </div>
+                <div class="hd-slot-progress-bar">
+                  <div id="hd-slot2-bar" class="hd-slot-progress-fill hd-bar-cyan" style="width: 100%;"></div>
+                </div>
+                <div class="hd-slot-info">
+                  <span id="hd-slot2-acc">Google Drive Archive</span>
+                  <span id="hd-slot2-mode">Auto-Sync</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Recorder Settings (Preset, Duration, Mode) -->
+            <div class="hd-quick-settings">
+              <div class="hd-setting-item">
+                <label>SEGMENT DURATION</label>
+                <select id="hd-cfg-duration" class="hd-mini-select">
+                  <option value="900" selected>15 Menit</option>
+                  <option value="1800">30 Menit</option>
+                  <option value="3600">1 Jam (60m)</option>
+                </select>
+              </div>
+              <div class="hd-setting-item">
+                <label>CODEC / BITRATE</label>
+                <select id="hd-cfg-bitrate" class="hd-mini-select">
+                  <option value="2000" selected>H.264 2.0 Mbps (~225MB)</option>
+                  <option value="3500">H.264 3.5 Mbps (~390MB)</option>
+                  <option value="5000">H.264 5.0 Mbps (~560MB)</option>
+                  <option value="1200">H.264 1.2 Mbps (~135MB)</option>
+                  <option value="copy">Direct Stream Copy</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Big Tactile Hardware Buttons: RECORD & STOP -->
+            <div class="hd-transport-buttons">
+              <!-- STOP BUTTON -->
+              <button id="hd-btn-stop" class="hd-btn hd-btn-stop" onclick="hyperdeckStop()" title="Stop Recording">
+                <div class="hd-btn-cap">
+                  <div class="hd-btn-icon-stop">■</div>
+                  <span class="hd-btn-label">STOP</span>
+                </div>
+              </button>
+
+              <!-- RECORD BUTTON -->
+              <button id="hd-btn-rec" class="hd-btn hd-btn-rec" onclick="hyperdeckRecord()" title="Start Recording">
+                <div class="hd-btn-cap">
+                  <div class="hd-btn-icon-rec">●</div>
+                  <span class="hd-btn-label">RECORD</span>
+                </div>
+              </button>
+            </div>
+
+            <!-- Live Recording Status Bar -->
+            <div class="hd-status-strip">
+              <span id="hd-status-msg" style="color:#e4e4e7; font-weight:600;">Pilih feed kamera lalu tekan tombol RECORD untuk memulai ISO recording.</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1937,6 +2651,7 @@ async function fetchRoutes() {
     if (d.ok) {
       currentRoutes = d.routes;
       renderRoutes();
+      syncHyperdeckRouteOptions();
     }
   } catch(e) {}
 }
@@ -1997,12 +2712,15 @@ function renderRoutes() {
       qview = `<span style="font-family:'JetBrains Mono'; font-size:12px;">↓ ${r.stats.receive_rate_mbps || 0} Mbps · ${r.stats.rtt_ms || 0}ms</span>`;
     }
 
+    const recTag = r.is_recording ? `<span class="tag" style="background:rgba(239,68,68,0.2); color:#ef4444; border-color:#ef4444; font-weight:700; font-family:'JetBrains Mono'; margin-left:6px;"><span class="pulse-rec">●</span> REC</span>` : '';
+
     return `
       <tr>
         <td>
           <div class="status-indicator">
             <span class="dot ${dotClass}"></span>
             <span style="font-weight:600;">${escapeHtml(r.name)}</span>
+            ${recTag}
           </div>
           <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">ID: ${r.id} · ${statusText}</div>
         </td>
@@ -2015,6 +2733,12 @@ function renderRoutes() {
             ${r.running 
               ? `<button class="btn-icon btn-stop" onclick="stopRoute('${r.id}')">Stop</button>`
               : `<button class="btn-icon btn-start" onclick="startRoute('${r.id}')">Start</button>`
+            }
+            ${r.running
+              ? (r.is_recording 
+                  ? `<button class="btn-icon btn-rec-active" onclick="quickStopRec('${r.id}')" title="Stop Recording"><span class="pulse-rec">●</span> STOP REC</button>`
+                  : `<button class="btn-icon btn-rec" onclick="quickStartRec('${r.id}')" title="Record this camera">● REC</button>`)
+              : ''
             }
             <button class="btn-icon" onclick="inspectRoute('${r.id}')">Inspect</button>
             <button class="btn-icon" onclick="cloneRoute('${r.id}')">Clone</button>
@@ -2033,6 +2757,7 @@ function renderRoutes() {
     const activeSrc = (r.current_active_source || 'primary').toUpperCase();
     const p = r.primary_source;
     const inputTag = `${p.type.toUpperCase()}:${p.port || p.stream_id}`;
+    const recTag = r.is_recording ? `<span class="tag" style="background:rgba(239,68,68,0.2); color:#ef4444; border-color:#ef4444; font-weight:700; font-family:'JetBrains Mono'; margin-left:6px;"><span class="pulse-rec">●</span> REC</span>` : '';
     
     let rateText = '--';
     let rttText = '--';
@@ -2047,6 +2772,7 @@ function renderRoutes() {
           <div class="route-card-title">
             <span class="dot ${dotClass}"></span>
             <span>${escapeHtml(r.name)}</span>
+            ${recTag}
           </div>
           <span class="tag tag-active-src">${statusText}</span>
         </div>
@@ -2075,14 +2801,34 @@ function renderRoutes() {
             ? `<button class="btn-icon btn-stop" onclick="stopRoute('${r.id}')">Stop</button>`
             : `<button class="btn-icon btn-start" onclick="startRoute('${r.id}')">Start</button>`
           }
+          ${r.running
+            ? (r.is_recording 
+                ? `<button class="btn-icon btn-rec-active" onclick="quickStopRec('${r.id}')"><span class="pulse-rec">●</span> STOP REC</button>`
+                : `<button class="btn-icon btn-rec" onclick="quickStartRec('${r.id}')">● REC</button>`)
+            : ''
+          }
           <button class="btn-icon" onclick="inspectRoute('${r.id}')">Inspect</button>
           <button class="btn-icon" onclick="editRoute('${r.id}')">Edit</button>
           <button class="btn-icon" onclick="cloneRoute('${r.id}')">Clone</button>
-          <button class="btn-icon btn-danger" onclick="deleteRoute('${r.id}')">Delete Route</button>
+          <button class="btn-icon" onclick="deleteRoute('${r.id}')">Delete Route</button>
         </div>
       </div>
     `;
   }).join('');
+}
+
+async function quickStartRec(id) {
+  try {
+    await api(`/api/routes/${id}/record/start`, { method: 'POST', body: JSON.stringify({}) });
+    fetchRoutes();
+  } catch(e) { alert(e.message); }
+}
+
+async function quickStopRec(id) {
+  try {
+    await api(`/api/routes/${id}/record/stop`, { method: 'POST' });
+    fetchRoutes();
+  } catch(e) { alert(e.message); }
 }
 
 // Route actions
@@ -2885,10 +3631,34 @@ async function fetchGdriveStatus() {
       desc.innerHTML = `<span style="color:var(--green); font-weight:600;">Tersambung: ${escapeHtml(d.email || 'Google Account')}</span> · Folder: ${escapeHtml(d.target_folder)}`;
       if (btnConnect) btnConnect.style.display = 'none';
       if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
+
+      const slot2Acc = document.getElementById('hd-slot2-acc');
+      const slot2Status = document.getElementById('hd-slot2-status');
+      const slot2Led = document.getElementById('hd-slot2-led');
+      const slot2Mode = document.getElementById('hd-slot2-mode');
+      if (slot2Acc) slot2Acc.textContent = d.email || 'Google Drive Sync';
+      if (slot2Status) {
+        slot2Status.textContent = 'SYNCED';
+        slot2Status.className = 'hd-slot-badge hd-badge-cyan';
+      }
+      if (slot2Led) slot2Led.className = 'hd-slot-led active';
+      if (slot2Mode) slot2Mode.textContent = d.auto_upload !== false ? 'Auto-Archive ON' : 'Manual Sync';
     } else {
       desc.innerHTML = `<span style="color:var(--muted);">Belum tersambung ke Google Drive</span>`;
       if (btnConnect) btnConnect.style.display = 'inline-flex';
       if (btnDisconnect) btnDisconnect.style.display = 'none';
+
+      const slot2Acc = document.getElementById('hd-slot2-acc');
+      const slot2Status = document.getElementById('hd-slot2-status');
+      const slot2Led = document.getElementById('hd-slot2-led');
+      const slot2Mode = document.getElementById('hd-slot2-mode');
+      if (slot2Acc) slot2Acc.textContent = 'Google Drive Disconnected';
+      if (slot2Status) {
+        slot2Status.textContent = 'OFFLINE';
+        slot2Status.className = 'hd-slot-badge';
+      }
+      if (slot2Led) slot2Led.className = 'hd-slot-led';
+      if (slot2Mode) slot2Mode.textContent = 'Standby';
     }
     const folderInput = document.getElementById('cfg-gdrive-folder');
     if (folderInput) folderInput.value = d.target_folder || 'Makasna Video Archive';
@@ -2997,10 +3767,22 @@ async function fetchRecordings() {
   try {
     const d = await api('/api/recordings');
     recordingsList = d.recordings || [];
+    lastActiveRecorders = d.active_recorders || {};
+    syncHyperdeckRouteOptions();
 
     if (d.disk) {
       const diskEl = document.getElementById('disk-stat-text');
       if (diskEl) diskEl.textContent = `${d.disk.free_gb} GB Free of ${d.disk.total_gb} GB (${d.disk.percent}% used)`;
+
+      const freeEl = document.getElementById('hd-slot1-free');
+      const barEl = document.getElementById('hd-slot1-bar');
+      const timeEl = document.getElementById('hd-slot1-time');
+      if (freeEl) freeEl.textContent = `${d.disk.free_gb} GB Free (${d.disk.percent}% Used)`;
+      if (barEl) barEl.style.width = `${Math.min(100, d.disk.percent)}%`;
+      if (timeEl) {
+        const hoursRemaining = Math.max(0, Math.round((d.disk.free_gb / 1.1) * 10) / 10);
+        timeEl.textContent = `~${hoursRemaining} Jam Tersisa`;
+      }
     }
     const countEl = document.getElementById('recordings-count-text');
     if (countEl) countEl.textContent = `${recordingsList.length} segments recorded`;
@@ -3227,6 +4009,285 @@ function escapeHtml(str) {
   div.textContent = str || '';
   return div.innerHTML;
 }
+
+// =========================================================================
+// BLACKMAGIC HYPERDECK STUDIO MASTER RECORDER LOGIC
+// =========================================================================
+let currentHyperdeckRouteId = '';
+let hdHlsPlayer = null;
+let hdElapsedSec = 0;
+let hdTimerInterval = null;
+let lastActiveRecorders = {};
+
+function formatTimecode(seconds) {
+  if (isNaN(seconds) || seconds < 0) seconds = 0;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const frames = Math.floor((Date.now() % 1000) / 40);
+  return String(h).padStart(2, '0') + ':' +
+         String(m).padStart(2, '0') + ':' +
+         String(s).padStart(2, '0') + ':' +
+         String(frames).padStart(2, '0');
+}
+
+function syncHyperdeckRouteOptions() {
+  const sel = document.getElementById('hd-route-select');
+  if (!sel) return;
+  const previousVal = sel.value || currentHyperdeckRouteId;
+  const routes = currentRoutes || [];
+
+  sel.innerHTML = '<option value="">-- PILIH KAMERA / RUTE FEED --</option>' +
+    routes.map(r => {
+      const statusIcon = r.running ? '● [RUNNING]' : '○ [STOPPED]';
+      const recIcon = r.is_recording ? ' [● REC]' : '';
+      return `<option value="${r.id}">${statusIcon}${recIcon} ${escapeHtml(r.name)} (${r.id})</option>`;
+    }).join('');
+
+  if (previousVal && routes.some(r => r.id === previousVal)) {
+    sel.value = previousVal;
+  } else if (!sel.value && routes.length > 0) {
+    const runningRoute = routes.find(r => r.running);
+    if (runningRoute) {
+      sel.value = runningRoute.id;
+    } else {
+      sel.value = routes[0].id;
+    }
+  }
+
+  if (sel.value !== currentHyperdeckRouteId) {
+    onHyperdeckFeedChange();
+  } else if (currentHyperdeckRouteId) {
+    const activeRoute = routes.find(r => r.id === currentHyperdeckRouteId);
+    if (activeRoute) {
+      const isRec = Boolean(activeRoute.is_recording || (lastActiveRecorders && lastActiveRecorders[currentHyperdeckRouteId]));
+      const elapsed = activeRoute.recording_elapsed_sec || (lastActiveRecorders && lastActiveRecorders[currentHyperdeckRouteId]?.elapsed_sec) || 0;
+      updateHyperdeckRecordingState(isRec, elapsed);
+    }
+  }
+}
+
+function onHyperdeckFeedChange() {
+  const sel = document.getElementById('hd-route-select');
+  if (!sel) return;
+  const rid = sel.value;
+  currentHyperdeckRouteId = rid;
+
+  const noSignalEl = document.getElementById('hd-no-signal');
+  const videoEl = document.getElementById('hd-video');
+  const osdSrcEl = document.getElementById('hd-osd-src-name');
+  const osdFormatEl = document.getElementById('hd-osd-format');
+
+  if (!rid) {
+    if (noSignalEl) noSignalEl.style.display = 'flex';
+    if (videoEl) {
+      try { videoEl.pause(); } catch(e) {}
+      videoEl.src = '';
+    }
+    if (osdSrcEl) osdSrcEl.textContent = 'INPUT: NONE';
+    updateHyperdeckRecordingState(false, 0);
+    return;
+  }
+
+  const route = currentRoutes.find(r => r.id === rid);
+  if (!route) return;
+
+  if (osdSrcEl) {
+    const srcType = (route.primary_source?.type || 'SRT').toUpperCase();
+    osdSrcEl.textContent = `INPUT: ${route.name.toUpperCase()} [${srcType}]`;
+  }
+
+  if (osdFormatEl) {
+    const mode = (route.record_mode === 'copy') ? 'DIRECT COPY' : 'H.264';
+    const bitrate = route.record_vbitrate || 2000;
+    osdFormatEl.textContent = `${mode} • 1080p • ${bitrate} kbps • AAC 48k`;
+  }
+
+  // Load preview stream if running
+  if (route.running) {
+    if (noSignalEl) noSignalEl.style.display = 'none';
+    const streamUrl = `/hls/route_${rid}/index.m3u8`;
+
+    if (Hls.isSupported()) {
+      if (hdHlsPlayer) {
+        hdHlsPlayer.destroy();
+        hdHlsPlayer = null;
+      }
+      hdHlsPlayer = new Hls({
+        lowLatencyMode: false,
+        backBufferLength: 30,
+        maxBufferLength: 12,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 5,
+        enableWorker: true
+      });
+      hdHlsPlayer.loadSource(streamUrl);
+      hdHlsPlayer.attachMedia(videoEl);
+      hdHlsPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
+        videoEl.play().catch(() => {});
+      });
+      hdHlsPlayer.on(Hls.Events.ERROR, function(event, data) {
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            setTimeout(() => { if (hdHlsPlayer) hdHlsPlayer.startLoad(); }, 2000);
+          } else {
+            if (noSignalEl) noSignalEl.style.display = 'flex';
+          }
+        }
+      });
+    } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+      videoEl.src = streamUrl;
+      videoEl.play().catch(() => {});
+    }
+  } else {
+    if (noSignalEl) noSignalEl.style.display = 'flex';
+    if (videoEl) {
+      try { videoEl.pause(); } catch(e) {}
+    }
+  }
+
+  const isRec = Boolean(route.is_recording || (lastActiveRecorders && lastActiveRecorders[rid]));
+  const elapsed = (route.recording_elapsed_sec) || (lastActiveRecorders && lastActiveRecorders[rid]?.elapsed_sec) || 0;
+  updateHyperdeckRecordingState(isRec, elapsed);
+}
+
+function updateHyperdeckRecordingState(isRec, elapsedSec) {
+  const masterTally = document.getElementById('hd-master-tally');
+  const tallyText = document.getElementById('hd-tally-text');
+  const osdTally = document.getElementById('hd-osd-tally');
+  const btnRec = document.getElementById('hd-btn-rec');
+  const statusMsg = document.getElementById('hd-status-msg');
+
+  if (isRec) {
+    if (masterTally) {
+      masterTally.className = 'hd-tally hd-tally-rec';
+      if (tallyText) tallyText.textContent = 'REC ACTIVE';
+    }
+    if (osdTally) {
+      osdTally.className = 'hd-osd-badge hd-osd-rec';
+      osdTally.textContent = '● REC';
+    }
+    if (btnRec) btnRec.classList.add('active');
+    if (statusMsg) {
+      statusMsg.innerHTML = `<span style="color:var(--red); font-weight:700;">● MEREKAM AKTIF</span> &mdash; Menulis segmen ISO ke local SSD & siap diarsipkan ke Cloud.`;
+    }
+
+    hdElapsedSec = elapsedSec || 0;
+    if (!hdTimerInterval) {
+      hdTimerInterval = setInterval(() => {
+        hdElapsedSec++;
+        const tcEl = document.getElementById('hd-timecode-display');
+        if (tcEl) tcEl.textContent = formatTimecode(hdElapsedSec);
+      }, 1000);
+    }
+  } else {
+    if (masterTally) {
+      masterTally.className = 'hd-tally hd-tally-stby';
+      if (tallyText) tallyText.textContent = 'STANDBY';
+    }
+    if (osdTally) {
+      osdTally.className = 'hd-osd-badge hd-osd-stby';
+      osdTally.textContent = '● STBY';
+    }
+    if (btnRec) btnRec.classList.remove('active');
+    if (statusMsg) {
+      statusMsg.innerHTML = `Pilih feed kamera lalu tekan tombol <b>RECORD</b> untuk memulai perekaman ISO.`;
+    }
+
+    if (hdTimerInterval) {
+      clearInterval(hdTimerInterval);
+      hdTimerInterval = null;
+    }
+    hdElapsedSec = 0;
+    const tcEl = document.getElementById('hd-timecode-display');
+    if (tcEl) tcEl.textContent = '00:00:00:00';
+  }
+}
+
+async function hyperdeckRecord() {
+  if (!currentHyperdeckRouteId) {
+    alert('Silakan pilih rute feed kamera pada dropdown FEED SOURCE terlebih dahulu.');
+    return;
+  }
+  const route = currentRoutes.find(r => r.id === currentHyperdeckRouteId);
+  if (!route || !route.running) {
+    alert('Rute feed yang dipilih sedang STOPPED (Mati). Silakan nyalakan rute terlebih dahulu untuk merekam.');
+    return;
+  }
+
+  const durationEl = document.getElementById('hd-cfg-duration');
+  const bitrateEl = document.getElementById('hd-cfg-bitrate');
+  const duration = parseInt(durationEl?.value || '900', 10);
+  const bitVal = bitrateEl?.value || '2000';
+
+  let mode = 'compress';
+  let vbitrate = 2000;
+  if (bitVal === 'copy') {
+    mode = 'copy';
+  } else {
+    vbitrate = parseInt(bitVal, 10);
+  }
+
+  const btnRec = document.getElementById('hd-btn-rec');
+  if (btnRec) btnRec.style.opacity = '0.5';
+
+  try {
+    await api(`/api/routes/${currentHyperdeckRouteId}/record/start`, {
+      method: 'POST',
+      body: JSON.stringify({
+        record_duration: duration,
+        record_mode: mode,
+        record_vbitrate: vbitrate
+      })
+    });
+    updateHyperdeckRecordingState(true, 0);
+    fetchRoutes();
+    fetchRecordings();
+  } catch(e) {
+    alert('Gagal memulai perekaman: ' + e.message);
+  } finally {
+    if (btnRec) btnRec.style.opacity = '1';
+  }
+}
+
+async function hyperdeckStop() {
+  if (!currentHyperdeckRouteId) {
+    alert('Silakan pilih rute feed kamera terlebih dahulu.');
+    return;
+  }
+  const btnStop = document.getElementById('hd-btn-stop');
+  if (btnStop) btnStop.style.opacity = '0.5';
+
+  try {
+    await api(`/api/routes/${currentHyperdeckRouteId}/record/stop`, {
+      method: 'POST'
+    });
+    updateHyperdeckRecordingState(false, 0);
+    fetchRoutes();
+    fetchRecordings();
+  } catch(e) {
+    alert('Gagal menghentikan perekaman: ' + e.message);
+  } finally {
+    if (btnStop) btnStop.style.opacity = '1';
+  }
+}
+
+// Audio VU meter simulation
+setInterval(() => {
+  const vuL = document.getElementById('hd-vu-l');
+  const vuR = document.getElementById('hd-vu-r');
+  if (!vuL || !vuR) return;
+  const noSignal = document.getElementById('hd-no-signal');
+  if (noSignal && noSignal.style.display !== 'none') {
+    vuL.style.height = '0%';
+    vuR.style.height = '0%';
+    return;
+  }
+  const l = Math.floor(40 + Math.random() * 45);
+  const r = Math.floor(40 + Math.random() * 45);
+  vuL.style.height = l + '%';
+  vuR.style.height = r + '%';
+}, 180);
 </script>
 </body>
 </html>

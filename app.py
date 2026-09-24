@@ -17,6 +17,7 @@ import psutil
 import requests
 import subprocess
 import threading
+import signal
 import re
 import shutil
 import atexit
@@ -56,6 +57,8 @@ MEDIAMTX_CONF = os.environ.get("MEDIAMTX_CONF", "/etc/mediamtx/mediamtx.yml")
 # }
 active_routes = {}
 active_routes_lock = threading.Lock()
+active_recorders = {}
+active_recorders_lock = threading.Lock()
 events_lock = threading.Lock()
 
 # Failover policies
@@ -440,67 +443,181 @@ def build_ffmpeg_cmd(route, source_config):
         else:
             cmd.extend([durl])
 
-    # 3. Optional Internal Segmented Recording
-    if route.get("record_enabled"):
-        rec_dir = os.path.join(RECORDINGS_DIR, route_id)
-        os.makedirs(rec_dir, exist_ok=True)
-        seg_time = int(route.get("record_duration") or 900)
-        rec_mode = route.get("record_mode", "compress")
-        rec_vbitrate = int(route.get("record_vbitrate") or 2000)
-        rec_scale = route.get("record_scale", "720p")
-        rec_fps = str(route.get("record_fps", "original")).strip()
-        rec_preset = route.get("record_preset", "veryfast")
-        rec_abitrate = int(route.get("record_abitrate") or 128)
+    return cmd
 
-        rec_cmd = [
-            "-map", "0:v:0?",
-            "-map", "0:a:0?"
-        ]
 
-        if rec_mode == "copy":
-            rec_cmd.extend(["-c:v", "copy"])
-        else:
-            rec_filters = []
-            if rec_scale == "1080p":
-                rec_filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
-            elif rec_scale == "720p":
-                rec_filters.append("scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2")
-            elif rec_scale == "480p":
-                rec_filters.append("scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2")
+def start_route_recording(route_id, options=None):
+    with active_routes_lock:
+        if route_id not in active_routes:
+            return False, "Rute belum berjalan. Silakan nyalakan rute terlebih dahulu sebelum merekam."
 
-            if rec_fps in ("25", "30", "50", "60"):
-                rec_filters.append(f"fps={rec_fps}")
+    with active_recorders_lock:
+        info = active_recorders.get(route_id)
+        if info and info.get("proc") and info["proc"].poll() is None:
+            return True, "Recording is already active."
 
-            if rec_filters:
-                rec_cmd.extend(["-vf", ",".join(rec_filters)])
+    routes = load_routes()
+    route = next((r for r in routes if r["id"] == route_id), None)
+    if not route:
+        return False, "Route not found."
 
-            max_b = int(rec_vbitrate * 1.2)
-            buf_b = int(rec_vbitrate * 2)
-            rec_cmd.extend([
-                "-c:v", "libx264",
-                "-preset", rec_preset,
-                "-b:v", f"{rec_vbitrate}k",
-                "-maxrate", f"{max_b}k",
-                "-bufsize", f"{buf_b}k",
-                "-pix_fmt", "yuv420p"
-            ])
+    opts = options or {}
+    seg_time = int(opts.get("record_duration") or route.get("record_duration") or 900)
+    rec_mode = opts.get("record_mode") or route.get("record_mode") or "compress"
+    rec_vbitrate = int(opts.get("record_vbitrate") or route.get("record_vbitrate") or 2000)
+    rec_scale = opts.get("record_scale") or route.get("record_scale") or "720p"
+    rec_fps = str(opts.get("record_fps") or route.get("record_fps") or "original").strip()
+    rec_preset = opts.get("record_preset") or route.get("record_preset") or "veryfast"
+    rec_abitrate = int(opts.get("record_abitrate") or route.get("record_abitrate") or 128)
 
-        # Audio is encoded to AAC 48kHz for universal MP4 compatibility
-        rec_cmd.extend([
-            "-c:a", "aac",
-            "-b:a", f"{rec_abitrate}k",
-            "-ar", "48000",
-            "-f", "segment",
-            "-segment_time", str(seg_time),
-            "-segment_format", "mp4",
-            "-reset_timestamps", "1",
-            "-strftime", "1",
-            os.path.join(rec_dir, f"rec_{route_id}_%Y%m%d_%H%M%S.mp4")
+    rec_dir = os.path.join(RECORDINGS_DIR, route_id)
+    os.makedirs(rec_dir, exist_ok=True)
+
+    # Ingest from local MediaMTX RTMP sink (carries pristine direct copy video from the primary/failover source)
+    input_url = f"rtmp://127.0.0.1:1935/route_{route_id}"
+
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y",
+        "-rw_timeout", "5000000",
+        "-i", input_url,
+        "-map", "0:v:0?",
+        "-map", "0:a:0?"
+    ]
+
+    if rec_mode == "copy":
+        cmd.extend(["-c:v", "copy"])
+    else:
+        rec_filters = []
+        if rec_scale == "1080p":
+            rec_filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
+        elif rec_scale == "720p":
+            rec_filters.append("scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+        elif rec_scale == "480p":
+            rec_filters.append("scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2")
+
+        if rec_fps in ("25", "30", "50", "60"):
+            rec_filters.append(f"fps={rec_fps}")
+
+        if rec_filters:
+            cmd.extend(["-vf", ",".join(rec_filters)])
+
+        max_b = int(rec_vbitrate * 1.2)
+        buf_b = int(rec_vbitrate * 2)
+        cmd.extend([
+            "-c:v", "libx264",
+            "-preset", rec_preset,
+            "-b:v", f"{rec_vbitrate}k",
+            "-maxrate", f"{max_b}k",
+            "-bufsize", f"{buf_b}k",
+            "-pix_fmt", "yuv420p"
         ])
 
-        cmd.extend(rec_cmd)
+    cmd.extend([
+        "-c:a", "aac",
+        "-b:a", f"{rec_abitrate}k",
+        "-ar", "48000",
+        "-f", "segment",
+        "-segment_time", str(seg_time),
+        "-segment_format", "mp4",
+        "-reset_timestamps", "1",
+        "-strftime", "1",
+        os.path.join(rec_dir, f"rec_{route_id}_%Y%m%d_%H%M%S.mp4")
+    ])
 
-    return cmd
+    log_file_path = os.path.join(LOGS_DIR, f"record_{route_id}.log")
+    log_fp = open(log_file_path, "a")
+    log_fp.write(f"\n--- Starting HyperDeck ISO Recording for '{route['name']}' at {now_iso()} ---\n")
+    log_fp.write("CMD: " + " ".join(cmd) + "\n\n")
+    log_fp.flush()
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=log_fp,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True
+        )
+    except Exception as e:
+        log_fp.close()
+        log_event(route_id, route["name"], "record_error", f"Failed to spawn HyperDeck recording: {e}", "error")
+        return False, str(e)
+
+    with active_recorders_lock:
+        active_recorders[route_id] = {
+            "proc": proc,
+            "started_at": time.time(),
+            "route_id": route_id,
+            "route_name": route["name"],
+            "log_file": log_file_path,
+            "log_fp": log_fp,
+            "seg_time": seg_time,
+            "mode": rec_mode,
+            "bitrate": rec_vbitrate,
+            "scale": rec_scale,
+            "fps": rec_fps
+        }
+
+    # Persist record_enabled state in routes.json
+    route["record_enabled"] = True
+    save_routes(routes)
+
+    log_event(route_id, route["name"], "record_start", f"HyperDeck ISO recording started for '{route['name']}' (PID {proc.pid})", "info")
+    return True, None
+
+
+def stop_route_recording(route_id):
+    with active_recorders_lock:
+        info = active_recorders.get(route_id)
+        if not info:
+            routes = load_routes()
+            route = next((r for r in routes if r["id"] == route_id), None)
+            if route and route.get("record_enabled"):
+                route["record_enabled"] = False
+                save_routes(routes)
+            return True, "Recording was not active."
+
+        proc = info.get("proc")
+        if proc and proc.poll() is None:
+            try:
+                proc.send_signal(signal.SIGINT)
+                proc.wait(timeout=4)
+            except Exception:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+        log_fp = info.get("log_fp")
+        if log_fp:
+            try:
+                log_fp.close()
+            except Exception:
+                pass
+
+        del active_recorders[route_id]
+
+    routes = load_routes()
+    route = next((r for r in routes if r["id"] == route_id), None)
+    if route:
+        route["record_enabled"] = False
+        save_routes(routes)
+        rname = route["name"]
+    else:
+        rname = route_id
+
+    # Immediately scan recordings so newly closed segment is indexed and ready for Google Drive sync
+    try:
+        gdrive_service.scan_local_recordings()
+    except Exception:
+        pass
+
+    log_event(route_id, rname, "record_stop", f"HyperDeck ISO recording stopped for '{rname}'", "info")
+    return True, None
 
 
 
@@ -552,10 +669,20 @@ def start_route_process(route, source_type="primary"):
         }
 
     log_event(route_id, route["name"], "started", f"Route started with {source_type} source (PID {proc.pid})")
+
+    if route.get("record_enabled"):
+        def auto_start_rec(rid):
+            time.sleep(1.5)
+            with active_routes_lock:
+                if rid in active_routes:
+                    start_route_recording(rid)
+        threading.Thread(target=auto_start_rec, args=(route_id,), daemon=True).start()
+
     return True, None
 
 
 def stop_route_process(route_id):
+    stop_route_recording(route_id)
     with active_routes_lock:
         info = active_routes.get(route_id)
         if not info:
@@ -872,6 +999,17 @@ def api_list_routes():
                 r["status"] = "STOPPED"
                 r["current_active_source"] = r.get("active_source", "primary")
                 r["stats"] = None
+
+            with active_recorders_lock:
+                rec_info = active_recorders.get(rid)
+                if rec_info and rec_info.get("proc") and rec_info["proc"].poll() is None:
+                    r["is_recording"] = True
+                    r["recording_elapsed_sec"] = int(time.time() - rec_info.get("started_at", time.time()))
+                    r["recording_started_at"] = rec_info.get("started_at", 0)
+                else:
+                    r["is_recording"] = False
+                    r["recording_elapsed_sec"] = 0
+                    r["recording_started_at"] = 0
     return jsonify({"ok": True, "routes": routes})
 
 
@@ -1114,6 +1252,50 @@ def api_clone_route(route_id):
 
     log_event(new_rid, cloned["name"], "cloned", f"Cloned from '{r['name']}'")
     return jsonify({"ok": True, "route": cloned})
+
+
+@app.route("/api/routes/<route_id>/record/start", methods=["POST"])
+@login_required
+def api_route_record_start(route_id):
+    opts = request.json or {}
+    ok, err = start_route_recording(route_id, options=opts)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "message": "HyperDeck recording started"})
+
+
+@app.route("/api/routes/<route_id>/record/stop", methods=["POST"])
+@login_required
+def api_route_record_stop(route_id):
+    ok, err = stop_route_recording(route_id)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "message": "HyperDeck recording stopped"})
+
+
+@app.route("/api/routes/<route_id>/record/status", methods=["GET"])
+@login_required
+def api_route_record_status(route_id):
+    with active_recorders_lock:
+        info = active_recorders.get(route_id)
+        if info and info.get("proc") and info["proc"].poll() is None:
+            elapsed = int(time.time() - info.get("started_at", time.time()))
+            return jsonify({
+                "ok": True,
+                "is_recording": True,
+                "started_at": info.get("started_at"),
+                "elapsed_sec": elapsed,
+                "mode": info.get("mode"),
+                "bitrate": info.get("bitrate"),
+                "scale": info.get("scale"),
+                "fps": info.get("fps"),
+                "seg_time": info.get("seg_time")
+            })
+    return jsonify({
+        "ok": True,
+        "is_recording": False,
+        "elapsed_sec": 0
+    })
 
 
 @app.route("/api/routes/<route_id>/switch-source", methods=["POST"])
@@ -1568,9 +1750,25 @@ def api_list_recordings():
     meta = gdrive_service.scan_local_recordings()
     disk = psutil.disk_usage(RECORDINGS_DIR)
     recordings_list = sorted(list(meta.values()), key=lambda x: x.get("created_at", ""), reverse=True)
+
+    active_rec_dict = {}
+    with active_recorders_lock:
+        for rid, info in active_recorders.items():
+            if info.get("proc") and info["proc"].poll() is None:
+                active_rec_dict[rid] = {
+                    "route_id": rid,
+                    "route_name": info.get("route_name"),
+                    "started_at": info.get("started_at"),
+                    "elapsed_sec": int(time.time() - info.get("started_at", time.time())),
+                    "mode": info.get("mode"),
+                    "bitrate": info.get("bitrate"),
+                    "seg_time": info.get("seg_time")
+                }
+
     return jsonify({
         "ok": True,
         "recordings": recordings_list,
+        "active_recorders": active_rec_dict,
         "disk": {
             "total_gb": round(disk.total / (1024**3), 1),
             "used_gb": round(disk.used / (1024**3), 1),
