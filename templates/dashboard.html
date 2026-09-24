@@ -986,22 +986,30 @@ video {
 .hd-cb.c6 { background: #c00000; }
 .hd-cb.c7 { background: #0000c0; }
 .hd-no-signal-text {
-  background: rgba(0,0,0,0.85);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.88);
   color: #fff;
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   font-size: 11px;
   letter-spacing: 0.1em;
-  padding: 8px 12px;
+  padding: 6px 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
   text-align: center;
-  border-top: 1px solid #333;
+  white-space: nowrap;
+  z-index: 3;
 }
 
 .hd-osd-top {
   position: absolute;
   top: 10px;
   left: 12px;
-  right: 12px;
+  right: 64px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1033,7 +1041,7 @@ video {
   position: absolute;
   bottom: 10px;
   left: 12px;
-  right: 12px;
+  right: 64px;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -1077,21 +1085,22 @@ video {
 
 .hd-vu-meter-panel {
   position: absolute;
-  right: 12px;
-  top: 38px;
-  bottom: 46px;
+  right: 10px;
+  top: 10px;
+  bottom: 10px;
   width: 44px;
-  background: rgba(10, 12, 16, 0.88);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(10, 12, 16, 0.90);
+  border: 1px solid rgba(255,255,255,0.14);
   border-radius: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 5px 3px 4px;
-  z-index: 10;
-  backdrop-filter: blur(4px);
+  gap: 5px;
+  padding: 6px 3px 5px;
+  z-index: 20;
+  backdrop-filter: blur(6px);
   user-select: none;
+  pointer-events: auto;
 }
 .hd-vu-clip-row {
   display: flex;
@@ -1187,6 +1196,7 @@ video {
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  pointer-events: auto;
 }
 .hd-audio-btn:hover {
   background: #252d3d;
