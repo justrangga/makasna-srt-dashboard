@@ -1217,7 +1217,7 @@ video {
   color: var(--muted);
   letter-spacing: 0.05em;
 }
-.hd-mini-select {
+.hd-mini-select, .hd-mini-input {
   background: #14171f;
   border: 1px solid #2a3140;
   border-radius: 5px;
@@ -1226,6 +1226,10 @@ video {
   font-family: 'JetBrains Mono', monospace;
   padding: 5px 8px;
   outline: none;
+  box-sizing: border-box;
+}
+.hd-mini-input:focus {
+  border-color: var(--cyan);
 }
 
 .hd-transport-buttons {
@@ -1669,7 +1673,7 @@ video {
               </div>
             </div>
 
-            <!-- Quick Recorder Settings (Preset, Duration, Mode) -->
+            <!-- Quick Recorder Settings (Preset, Duration, Format, Bitrate, Resolution) -->
             <div class="hd-quick-settings">
               <div class="hd-setting-item">
                 <label>SEGMENT DURATION</label>
@@ -1679,15 +1683,52 @@ video {
                   <option value="3600">1 Jam (60m)</option>
                 </select>
               </div>
+
+              <div class="hd-setting-item">
+                <label>FORMAT CONTAINER</label>
+                <select id="hd-cfg-format" class="hd-mini-select" onchange="onHyperdeckFormatChange()">
+                  <option value="mp4" selected>MP4 (MPEG-4 Part 14)</option>
+                  <option value="mov">MOV (Apple QuickTime)</option>
+                </select>
+              </div>
+
               <div class="hd-setting-item">
                 <label>CODEC / BITRATE</label>
-                <select id="hd-cfg-bitrate" class="hd-mini-select">
+                <select id="hd-cfg-bitrate" class="hd-mini-select" onchange="onHyperdeckBitrateChange()">
                   <option value="2000" selected>H.264 2.0 Mbps (~225MB)</option>
                   <option value="3500">H.264 3.5 Mbps (~390MB)</option>
                   <option value="5000">H.264 5.0 Mbps (~560MB)</option>
+                  <option value="8000">H.264 8.0 Mbps Broadcast</option>
                   <option value="1200">H.264 1.2 Mbps (~135MB)</option>
                   <option value="copy">Direct Stream Copy</option>
+                  <option value="custom">Custom Bitrate...</option>
                 </select>
+                <div id="hd-custom-bitrate-box" style="display:none; margin-top:4px;">
+                  <div style="display:flex; align-items:center; gap:5px;">
+                    <input type="number" id="hd-custom-bitrate-val" placeholder="6000" min="500" max="60000" step="100" class="hd-mini-input" style="width:75px;" value="6000" oninput="updateHyperdeckOsdFormat()">
+                    <span style="font-family:'JetBrains Mono'; font-size:10.5px; color:var(--cyan); font-weight:700;">kbps</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hd-setting-item">
+                <label>RESOLUSI VIDEO</label>
+                <select id="hd-cfg-resolution" class="hd-mini-select" onchange="onHyperdeckResChange()">
+                  <option value="original" selected>Source Native (Original)</option>
+                  <option value="1080p">1080p (1920&times;1080)</option>
+                  <option value="720p">720p (1280&times;720)</option>
+                  <option value="480p">480p (854&times;480)</option>
+                  <option value="4k">4K UHD (3840&times;2160)</option>
+                  <option value="custom">Custom Resolution...</option>
+                </select>
+                <div id="hd-custom-res-box" style="display:none; margin-top:4px;">
+                  <div style="display:flex; align-items:center; gap:3px;">
+                    <input type="number" id="hd-custom-w" placeholder="1920" class="hd-mini-input" style="width:58px;" value="1920" oninput="updateHyperdeckOsdFormat()">
+                    <span style="color:var(--muted); font-size:11px;">&times;</span>
+                    <input type="number" id="hd-custom-h" placeholder="1080" class="hd-mini-input" style="width:58px;" value="1080" oninput="updateHyperdeckOsdFormat()">
+                    <span style="font-size:10px; color:var(--muted);">px</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2401,13 +2442,35 @@ let hlsInstance = null;
 let lastRenderedJson = '';
 
 async function api(url, opts = {}) {
-  const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...opts });
+  const headers = Object.assign({}, opts.headers || {});
+  if (opts.body && typeof opts.body === 'string' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const fetchOpts = Object.assign({}, opts, {
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers: headers
+  });
+
+  const res = await fetch(url, fetchOpts);
   if (res.status === 401) {
     window.location.href = '/login';
     return;
   }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+
+  const ctype = res.headers.get('content-type') || '';
+  let data;
+  if (ctype.includes('application/json')) {
+    data = await res.json();
+  } else {
+    const txt = await res.text();
+    if (!res.ok) {
+      throw new Error(`Server returned status ${res.status}: ${txt.slice(0, 120)}`);
+    }
+    return { ok: true, text: txt };
+  }
+
+  if (!res.ok) throw new Error(data.error || data.message || 'Request failed');
   return data;
 }
 
@@ -2431,6 +2494,7 @@ pollSystemStats();
 let latestSrtPort = 8890;
 const SERVER_PUBLIC_IP = '139.190.97.109';
 let serverHostName = SERVER_PUBLIC_IP;
+let latestInboundPublishers = [];
 
 async function pollInboundSrt() {
   try {
@@ -2440,6 +2504,8 @@ async function pollInboundSrt() {
     latestSrtPort = d.srt_port || 8890;
     // Always enforce numeric Public IP for external clients (OBS, vMix, VLC)
     serverHostName = SERVER_PUBLIC_IP;
+    latestInboundPublishers = d.publishers || [];
+    syncHyperdeckRouteOptions();
 
     const pubBadge = document.getElementById('inbound-publishers-badge');
     const rxBadge = document.getElementById('inbound-bitrate-badge');
@@ -3781,7 +3847,7 @@ async function fetchRecordings() {
       if (barEl) barEl.style.width = `${Math.min(100, d.disk.percent)}%`;
       if (timeEl) {
         const hoursRemaining = Math.max(0, Math.round((d.disk.free_gb / 1.1) * 10) / 10);
-        timeEl.textContent = `~${hoursRemaining} Jam Tersisa`;
+        timeEl.textContent = `~${hoursRemaining} Jam Tersedia`;
       }
     }
     const countEl = document.getElementById('recordings-count-text');
@@ -4036,49 +4102,124 @@ function syncHyperdeckRouteOptions() {
   if (!sel) return;
   const previousVal = sel.value || currentHyperdeckRouteId;
   const routes = currentRoutes || [];
+  const inbounds = latestInboundPublishers || [];
 
-  sel.innerHTML = '<option value="">-- PILIH KAMERA / RUTE FEED --</option>' +
-    routes.map(r => {
+  let html = '<option value="">-- PILIH FEED (INBOUND SRT MASUK / KITA CALL) --</option>';
+
+  // Group 1: Live Inbound SRT Ingest (Port 8890)
+  if (inbounds.length > 0) {
+    html += '<optgroup label="── LIVE INBOUND SRT (PORT 8890 MASUK) ──">';
+    inbounds.forEach(pub => {
+      const isRec = Boolean(lastActiveRecorders && (lastActiveRecorders[`inbound_${pub.stream_id}`] || lastActiveRecorders[`inbound:${pub.stream_id}`]));
+      const recBadge = isRec ? ' [● REC]' : '';
+      html += `<option value="inbound:${escapeHtml(pub.stream_id)}">● [INBOUND MASUK] publish:${escapeHtml(pub.stream_id)} (${pub.remote_ip} • ${pub.rx_rate_mbps} Mbps)${recBadge}</option>`;
+    });
+    html += '</optgroup>';
+  }
+
+  // Group 2: SRT Caller (Server Pull / Kita Call)
+  const callerRoutes = routes.filter(r => r.primary_source?.type === 'caller');
+  if (callerRoutes.length > 0) {
+    html += '<optgroup label="── SRT CALLER (SERVER PULL / KITA CALL) ──">';
+    callerRoutes.forEach(r => {
       const statusIcon = r.running ? '● [RUNNING]' : '○ [STOPPED]';
-      const recIcon = r.is_recording ? ' [● REC]' : '';
-      return `<option value="${r.id}">${statusIcon}${recIcon} ${escapeHtml(r.name)} (${r.id})</option>`;
-    }).join('');
+      const isRec = Boolean(r.is_recording || (lastActiveRecorders && lastActiveRecorders[r.id]));
+      const recBadge = isRec ? ' [● REC]' : '';
+      const p = r.primary_source;
+      const targetStr = p.caller_host ? `${p.caller_host}:${p.caller_port || p.port}` : (p.stream_id || '');
+      html += `<option value="route:${r.id}">${statusIcon} [KITA CALL] ${escapeHtml(r.name)} (${targetStr})${recBadge}</option>`;
+    });
+    html += '</optgroup>';
+  }
 
-  if (previousVal && routes.some(r => r.id === previousVal)) {
+  // Group 3: Configured Routes (Listener / Rendezvous / Direct)
+  const otherRoutes = routes.filter(r => r.primary_source?.type !== 'caller');
+  if (otherRoutes.length > 0) {
+    html += '<optgroup label="── SRT LISTENER / RENDEZVOUS / DIRECT ──">';
+    otherRoutes.forEach(r => {
+      const statusIcon = r.running ? '● [RUNNING]' : '○ [STOPPED]';
+      const isRec = Boolean(r.is_recording || (lastActiveRecorders && lastActiveRecorders[r.id]));
+      const recBadge = isRec ? ' [● REC]' : '';
+      const typeStr = (r.primary_source?.type || 'SRT').toUpperCase();
+      html += `<option value="route:${r.id}">${statusIcon} [${typeStr}] ${escapeHtml(r.name)}${recBadge}</option>`;
+    });
+    html += '</optgroup>';
+  }
+
+  sel.innerHTML = html;
+
+  const allOptionValues = Array.from(sel.querySelectorAll('option')).map(o => o.value).filter(Boolean);
+  if (previousVal && allOptionValues.includes(previousVal)) {
     sel.value = previousVal;
-  } else if (!sel.value && routes.length > 0) {
-    const runningRoute = routes.find(r => r.running);
-    if (runningRoute) {
-      sel.value = runningRoute.id;
-    } else {
-      sel.value = routes[0].id;
-    }
+  } else if (!sel.value && allOptionValues.length > 0) {
+    sel.value = allOptionValues[0];
   }
 
   if (sel.value !== currentHyperdeckRouteId) {
     onHyperdeckFeedChange();
   } else if (currentHyperdeckRouteId) {
-    const activeRoute = routes.find(r => r.id === currentHyperdeckRouteId);
-    if (activeRoute) {
-      const isRec = Boolean(activeRoute.is_recording || (lastActiveRecorders && lastActiveRecorders[currentHyperdeckRouteId]));
-      const elapsed = activeRoute.recording_elapsed_sec || (lastActiveRecorders && lastActiveRecorders[currentHyperdeckRouteId]?.elapsed_sec) || 0;
-      updateHyperdeckRecordingState(isRec, elapsed);
-    }
+    checkCurrentHyperdeckRecording();
   }
+}
+
+function updateHyperdeckOsdFormat() {
+  const osdFormatEl = document.getElementById('hd-osd-format');
+  if (!osdFormatEl) return;
+
+  const fmt = (document.getElementById('hd-cfg-format')?.value || 'mp4').toUpperCase();
+  const bitVal = document.getElementById('hd-cfg-bitrate')?.value || '2000';
+  let bitStr = '';
+  if (bitVal === 'copy') {
+    bitStr = 'DIRECT COPY';
+  } else if (bitVal === 'custom') {
+    const cval = document.getElementById('hd-custom-bitrate-val')?.value || '6000';
+    bitStr = `${cval} kbps`;
+  } else {
+    bitStr = `${bitVal} kbps`;
+  }
+
+  const resVal = document.getElementById('hd-cfg-resolution')?.value || 'original';
+  let resStr = 'SOURCE NATIVE';
+  if (resVal === 'custom') {
+    const w = document.getElementById('hd-custom-w')?.value || '1920';
+    const h = document.getElementById('hd-custom-h')?.value || '1080';
+    resStr = `${w}x${h}`;
+  } else if (resVal !== 'original') {
+    resStr = resVal.toUpperCase();
+  }
+
+  osdFormatEl.textContent = `${fmt} • ${resStr} • ${bitStr} • AAC 48k`;
+}
+
+function onHyperdeckBitrateChange() {
+  const val = document.getElementById('hd-cfg-bitrate')?.value;
+  const box = document.getElementById('hd-custom-bitrate-box');
+  if (box) box.style.display = (val === 'custom') ? 'block' : 'none';
+  updateHyperdeckOsdFormat();
+}
+
+function onHyperdeckResChange() {
+  const val = document.getElementById('hd-cfg-resolution')?.value;
+  const box = document.getElementById('hd-custom-res-box');
+  if (box) box.style.display = (val === 'custom') ? 'block' : 'none';
+  updateHyperdeckOsdFormat();
+}
+
+function onHyperdeckFormatChange() {
+  updateHyperdeckOsdFormat();
 }
 
 function onHyperdeckFeedChange() {
   const sel = document.getElementById('hd-route-select');
   if (!sel) return;
-  const rid = sel.value;
-  currentHyperdeckRouteId = rid;
+  const targetId = sel.value;
+  currentHyperdeckRouteId = targetId;
 
   const noSignalEl = document.getElementById('hd-no-signal');
   const videoEl = document.getElementById('hd-video');
   const osdSrcEl = document.getElementById('hd-osd-src-name');
-  const osdFormatEl = document.getElementById('hd-osd-format');
 
-  if (!rid) {
+  if (!targetId) {
     if (noSignalEl) noSignalEl.style.display = 'flex';
     if (videoEl) {
       try { videoEl.pause(); } catch(e) {}
@@ -4089,24 +4230,30 @@ function onHyperdeckFeedChange() {
     return;
   }
 
-  const route = currentRoutes.find(r => r.id === rid);
-  if (!route) return;
+  let streamUrl = '';
+  let isLive = false;
 
-  if (osdSrcEl) {
-    const srcType = (route.primary_source?.type || 'SRT').toUpperCase();
-    osdSrcEl.textContent = `INPUT: ${route.name.toUpperCase()} [${srcType}]`;
+  if (targetId.startsWith('inbound:')) {
+    const streamName = targetId.split('inbound:')[1];
+    streamUrl = `/hls/${streamName}/index.m3u8`;
+    if (osdSrcEl) osdSrcEl.textContent = `INPUT: INBOUND PUBLISH:${streamName.toUpperCase()}`;
+    const pub = latestInboundPublishers.find(p => p.stream_id === streamName);
+    isLive = Boolean(pub);
+  } else {
+    const rid = targetId.replace('route:', '');
+    const route = currentRoutes.find(r => r.id === rid);
+    if (route) {
+      const mode = (route.primary_source?.type === 'caller') ? 'KITA CALL' : (route.primary_source?.type || 'SRT').toUpperCase();
+      if (osdSrcEl) osdSrcEl.textContent = `INPUT: ${route.name.toUpperCase()} [${mode}]`;
+      streamUrl = `/hls/route_${rid}/index.m3u8`;
+      isLive = Boolean(route.running);
+    }
   }
 
-  if (osdFormatEl) {
-    const mode = (route.record_mode === 'copy') ? 'DIRECT COPY' : 'H.264';
-    const bitrate = route.record_vbitrate || 2000;
-    osdFormatEl.textContent = `${mode} • 1080p • ${bitrate} kbps • AAC 48k`;
-  }
+  updateHyperdeckOsdFormat();
 
-  // Load preview stream if running
-  if (route.running) {
+  if (isLive && streamUrl) {
     if (noSignalEl) noSignalEl.style.display = 'none';
-    const streamUrl = `/hls/route_${rid}/index.m3u8`;
 
     if (Hls.isSupported()) {
       if (hdHlsPlayer) {
@@ -4146,8 +4293,26 @@ function onHyperdeckFeedChange() {
     }
   }
 
-  const isRec = Boolean(route.is_recording || (lastActiveRecorders && lastActiveRecorders[rid]));
-  const elapsed = (route.recording_elapsed_sec) || (lastActiveRecorders && lastActiveRecorders[rid]?.elapsed_sec) || 0;
+  checkCurrentHyperdeckRecording();
+}
+
+function checkCurrentHyperdeckRecording() {
+  if (!currentHyperdeckRouteId) {
+    updateHyperdeckRecordingState(false, 0);
+    return;
+  }
+  let recKey = currentHyperdeckRouteId;
+  if (currentHyperdeckRouteId.startsWith('inbound:')) {
+    recKey = `inbound_${currentHyperdeckRouteId.split('inbound:')[1]}`;
+  } else {
+    recKey = currentHyperdeckRouteId.replace('route:', '');
+  }
+
+  const recInfo = (lastActiveRecorders && (lastActiveRecorders[recKey] || lastActiveRecorders[currentHyperdeckRouteId]));
+  const route = currentRoutes.find(r => r.id === recKey);
+  const isRec = Boolean(recInfo || (route && route.is_recording));
+  const elapsed = (recInfo && recInfo.elapsed_sec) || (route && route.recording_elapsed_sec) || 0;
+
   updateHyperdeckRecordingState(isRec, elapsed);
 }
 
@@ -4206,38 +4371,62 @@ function updateHyperdeckRecordingState(isRec, elapsedSec) {
 
 async function hyperdeckRecord() {
   if (!currentHyperdeckRouteId) {
-    alert('Silakan pilih rute feed kamera pada dropdown FEED SOURCE terlebih dahulu.');
+    alert('Silakan pilih sumber feed kamera (Inbound SRT atau Route Caller) pada dropdown FEED SOURCE terlebih dahulu.');
     return;
   }
-  const route = currentRoutes.find(r => r.id === currentHyperdeckRouteId);
-  if (!route || !route.running) {
-    alert('Rute feed yang dipilih sedang STOPPED (Mati). Silakan nyalakan rute terlebih dahulu untuk merekam.');
-    return;
+
+  const is_inbound = currentHyperdeckRouteId.startsWith('inbound:');
+  if (!is_inbound) {
+    const rid = currentHyperdeckRouteId.replace('route:', '');
+    const route = currentRoutes.find(r => r.id === rid);
+    if (!route || !route.running) {
+      alert('Rute feed yang dipilih sedang STOPPED (Mati). Silakan nyalakan rute terlebih dahulu untuk merekam.');
+      return;
+    }
   }
 
   const durationEl = document.getElementById('hd-cfg-duration');
+  const formatEl = document.getElementById('hd-cfg-format');
   const bitrateEl = document.getElementById('hd-cfg-bitrate');
-  const duration = parseInt(durationEl?.value || '900', 10);
-  const bitVal = bitrateEl?.value || '2000';
+  const resEl = document.getElementById('hd-cfg-resolution');
 
+  const duration = parseInt(durationEl?.value || '900', 10);
+  const format = formatEl?.value || 'mp4';
+  const bitVal = bitrateEl?.value || '2000';
   let mode = 'compress';
   let vbitrate = 2000;
   if (bitVal === 'copy') {
     mode = 'copy';
+  } else if (bitVal === 'custom') {
+    vbitrate = parseInt(document.getElementById('hd-custom-bitrate-val')?.value || '6000', 10);
   } else {
     vbitrate = parseInt(bitVal, 10);
+  }
+
+  const resVal = resEl?.value || 'original';
+  let custom_w = null;
+  let custom_h = null;
+  if (resVal === 'custom') {
+    custom_w = parseInt(document.getElementById('hd-custom-w')?.value || '1920', 10);
+    custom_h = parseInt(document.getElementById('hd-custom-h')?.value || '1080', 10);
   }
 
   const btnRec = document.getElementById('hd-btn-rec');
   if (btnRec) btnRec.style.opacity = '0.5';
 
   try {
-    await api(`/api/routes/${currentHyperdeckRouteId}/record/start`, {
+    await api('/api/record/start', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        target_id: currentHyperdeckRouteId,
         record_duration: duration,
+        record_format: format,
         record_mode: mode,
-        record_vbitrate: vbitrate
+        record_vbitrate: vbitrate,
+        record_scale: resVal,
+        custom_w: custom_w,
+        custom_h: custom_h
       })
     });
     updateHyperdeckRecordingState(true, 0);
@@ -4251,16 +4440,21 @@ async function hyperdeckRecord() {
 }
 
 async function hyperdeckStop() {
-  if (!currentHyperdeckRouteId) {
-    alert('Silakan pilih rute feed kamera terlebih dahulu.');
-    return;
+  let targetId = currentHyperdeckRouteId;
+  if (!targetId && lastActiveRecorders && Object.keys(lastActiveRecorders).length > 0) {
+    targetId = Object.keys(lastActiveRecorders)[0];
   }
+
   const btnStop = document.getElementById('hd-btn-stop');
   if (btnStop) btnStop.style.opacity = '0.5';
 
   try {
-    await api(`/api/routes/${currentHyperdeckRouteId}/record/stop`, {
-      method: 'POST'
+    await api('/api/record/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_id: targetId || ''
+      })
     });
     updateHyperdeckRecordingState(false, 0);
     fetchRoutes();

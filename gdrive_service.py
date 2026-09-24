@@ -327,9 +327,10 @@ def upload_file_to_drive(file_path, route_name="General", progress_callback=None
 
     # 16MB chunks (multiple of 256KB) for broadcast files: faster throughput, 8x fewer round-trips
     chunk_size = 16 * 1024 * 1024
+    mimetype = 'video/quicktime' if file_path.lower().endswith('.mov') else 'video/mp4'
     media = MediaFileUpload(
         file_path,
-        mimetype='video/mp4',
+        mimetype=mimetype,
         resumable=True,
         chunksize=chunk_size
     )
@@ -414,7 +415,8 @@ def scan_local_recordings():
 
     for root, dirs, files in os.walk(RECORDINGS_DIR):
         for fname in files:
-            if not fname.endswith(".mp4"):
+            lower_fname = fname.lower()
+            if not (lower_fname.endswith(".mp4") or lower_fname.endswith(".mov")):
                 continue
             fpath = os.path.join(root, fname)
             try:
