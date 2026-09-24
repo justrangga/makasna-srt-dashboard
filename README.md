@@ -85,19 +85,32 @@
 * **1-Click Preview:** Meninjau feed yang masuk secara instan tanpa perlu membuat rute terlebih dahulu.
 * **1-Click `+ Route`:** Mengadopsi stream yang sedang masuk menjadi rute gateway resmi hanya dengan satu klik.
 
-#### E. Perekaman Bersegmen Internal & Arsip Google Drive
-* Perekaman otomatis berbasis segmen waktu (`15 Menit`, `30 Menit`, `1 Jam`) menggunakan container MP4 terfragmentasi (`-f segment`).
-* **Mode Optimasi Kompresi (Hemat Storage s/d 92%):**
-  * Memangkas ukuran file rekaman siaran TV bitrate tinggi (~2.3 GB per 15 menit) menjadi **~225 MB** (preset 2000 kbps) atau **~135 MB** (preset 1200 kbps).
-  * Dilengkapi kalkulator estimasi ukuran file real-time di UI modal.
-  * Pilihan resolusi rekaman (720p, 1080p, 480p) dan framerate mandiri.
-  * Pilihan *Direct Stream Copy* tetap tersedia jika membutuhkan kualitas master asli.
-* **Google Cloud Integration:**
-  * Mendukung **Google Service Account JSON** (solusi ideal tanpa kedaluwarsa untuk server Linux *headless*).
-  * Mendukung OAuth 2.0 Web Authorization.
-  * Background upload worker mengunggah segmen rekaman yang telah selesai ke folder Google Drive (`Makasna Video Archive`) secara otomatis.
-  * Kebijakan retensi file: *Simpan di Server & Sinkron ke Cloud* atau *Hapus di Server Setelah Sukses Diunggah*.
-* **Tab Recordings:** Manajemen daftar rekaman lokal, pemutaran langsung di browser, tombol unduh MP4, dan pemicu upload manual.
+#### E. Blackmagic HyperDeck Studio Console & Perekaman Bersegmen Mandiri
+* **Konsol Rack-Mount HyperDeck Studio Terintegrasi:**
+  * Konsol broadcast ISO recorder bergaya hardware rack-mount profesional di tab *Recordings & Cloud Archive*.
+  * **LCD Confidence Monitor (16:9):** Pemutaran video fMP4 HLS langsung dari feed yang dipilih, otomatis menampilkan *SMPTE Color Bars Test Pattern* saat idle/standby.
+  * **Broadcast OSD & Digital Timecode:** Overlay live status mode (`● REC` / `● STBY`), format stream, label input feed, serta running digital timecode broadcast monospace `00:00:00:00`.
+  * **Stereo Peak VU Meters:** Dua meteran kanal audio LED vertikal (CH1 / CH2) dinamis dengan zona Green (`-40dB`), Amber (`-12dB`), dan Red (`0dB Peak`).
+  * **Dual Media Bays:** 
+    * **Slot 1 (Local NVMe/SSD):** Kapasitas disk lokal, usage bar real-time, dan kalkulator sisa jam rekam (`~XX.X Jam Tersedia`).
+    * **Slot 2 (Google Drive Cloud):** Status sinkronisasi akun Google Drive dan target folder cloud archive.
+  * **Tombol Fisik Tactile [ ● RECORD ] & [ ■ STOP ]:** Tombol hardware glowing red pulse saat merekam dan tombol stop brushed steel untuk penghentian aman tanpa merusak file.
+* **Pilihan Feed Source Dinamis:**
+  * **Live Inbound SRT Ingest (Port 8890 Masuk):** Merekam langsung stream yang dikirim encoder lapangan (`publish:STREAM_ID`) tanpa perlu membuat konfigurasi rute terlebih dahulu.
+  * **SRT Caller (Server Pull / Kita Call):** Merekam stream yang ditarik server dari encoder/edge remote.
+  * **SRT Listener / Rendezvous / Direct:** Merekam feed dari rute listening atau direct stream URL.
+* **Format Container & Kontrol Kompresi Fleksibel:**
+  * **Pilihan Container:** **MP4** (universal web/archive) atau **MOV** (Apple QuickTime dengan flag `+faststart` untuk editing NLE broadcast di Premiere Pro, Final Cut Pro, DaVinci Resolve).
+  * **Pilihan Bitrate:** Presets (1.2 Mbps, 2.0 Mbps, 3.5 Mbps, 5.0 Mbps, 8.0 Mbps, Direct Stream Copy) serta **Custom Bitrate** (bebas input angka kbps sesuai kebutuhan).
+  * **Pilihan Resolusi:** Source Native, 1080p, 720p, 480p, 4K UHD, serta **Custom Resolution (Width x Height)** dengan aspect ratio auto-padding.
+  * **Durasi Segmen Cepat:** 15 Menit, 30 Menit, atau 1 Jam (60m).
+* **Arsitektur Perekaman Independen (Zero Disruption):**
+  * Perekaman berjalan pada subprocess terpisah dari proses rute utama. Operator dapat menyalakan atau mematikan rekaman berkali-kali tanpa memutus siaran langsung ke YouTube atau pemirsa SRT.
+  * Penghentian bersih via `signal.SIGINT` memastikan penulisan header `moov atom` MP4/MOV tertutup sempurna.
+* **Sinkronisasi Cloud Google Drive Andal (16MB Resumable Chunks):**
+  * Pengunggahan file rekaman gigabyte bersegmen 16 MB dengan auto-retry exponential backoff (hingga 8 kali) dan socket timeout 120 detik.
+  * Deteksi file lock aktif via Linux `/proc/[0-9]*/fd/*` guna memastikan file yang masih ditulis FFmpeg tidak diambil oleh background worker.
+  * Antrean background async non-blocking dengan indikator progres live (`UPLOADING %`), auto-retry file failed, serta pemutaran rekaman langsung di browser.
 
 #### F. Preview Player Broadcast & WebRTC
 * **Fragmented MP4 HLS (`fmp4`):** Menggantikan LL-HLS micro-parts yang rentan stuttering dengan segmen 2 detik yang mulus dan stabil.
@@ -183,7 +196,7 @@ Environment="PATH=/opt/makasna-dashboard/.venv/bin:/usr/local/sbin:/usr/local/bi
 Environment="PORT=8080"
 Environment="SECRET_KEY=ganti_dengan_secret_key_acak"
 Environment="DASHBOARD_USER=admin"
-Environment="DASHBOARD_PASS=@linux1234"
+Environment="DASHBOARD_PASS=ganti_dengan_password_anda"
 ExecStart=/opt/makasna-dashboard/.venv/bin/python3 app.py
 Restart=always
 RestartSec=3
@@ -275,18 +288,32 @@ sudo systemctl enable --now makasna-dashboard
 * **1-Click Preview:** Monitor incoming feeds before committing them to active routes.
 * **1-Click `+ Route`:** Immediately adopt incoming streams into managed routes with auto-filled parameters.
 
-#### E. Internal Segmented Recording & Google Drive Cloud Archive
-* Automated time-sliced recording (`15 Minutes`, `30 Minutes`, `1 Hour`) via fragmented MP4 containerization.
-* **Storage Optimization Mode (Up to 92% Storage Savings):**
-  * Compresses high-bitrate broadcast feeds (~2.3 GB per 15 min) down to **~225 MB** (2000 kbps HD) or **~135 MB** (1200 kbps).
-  * Interactive UI calculator provides real-time storage estimations before saving.
-  * Direct Stream Copy option remains available for master archival.
-* **Google Cloud Integration:**
-  * **Google Service Account JSON** integration (ideal for non-interactive headless Linux environments).
-  * OAuth 2.0 Web Authorization support.
-  * Background worker queue uploads finished segments automatically to Google Drive (`Makasna Video Archive`).
-  * Retention management: *Keep Local & Cloud Sync* or *Delete Local After Upload*.
-* **Recordings Tab:** Integrated file management, direct browser playback, MP4 download links, and manual cloud sync triggers.
+#### E. Blackmagic HyperDeck Studio Console & On-Demand Segmented Recording
+* **Rack-Mount HyperDeck Studio Master Recorder Interface:**
+  * Broadcast-grade hardware console styling directly embedded inside the *Recordings & Cloud Archive* workspace.
+  * **Built-in 16:9 LCD Confidence Monitor:** Low-latency fMP4 HLS live video playback from any selected feed, automatically falling back to SMPTE Color Bars during standby.
+  * **Broadcast OSD & Timecode Engine:** Real-time on-screen status (`● REC` / `● STBY`), video codec/bitrate badge, input source label, and high-precision monospace digital timecode counter `00:00:00:00`.
+  * **Stereo Peak VU Meters:** Dynamic dual-channel audio monitoring bars (CH1 & CH2) featuring Green (`-40dB`), Amber (`-12dB`), and Red (`0dB Peak`) zones.
+  * **Dual Media Bays:** 
+    * **Slot 1 (Local NVMe/SSD):** Live disk capacity, usage bar, and remaining record time estimation (`~XX.X Hours Available`).
+    * **Slot 2 (Google Drive Cloud Archive):** Real-time OAuth/Service Account status and target cloud folder indicators.
+  * **Tactile Hardware Controls [ ● RECORD ] & [ ■ STOP ]:** Glowing pulsing red record button and brushed-steel stop button for safe, instant capture control.
+* **Flexible Multi-Source Ingest Selection:**
+  * **Live Inbound SRT Ingest (Port 8890 Push):** Instant 1-click recording of incoming client publishers (`publish:STREAM_ID`) without requiring a pre-configured gateway route.
+  * **SRT Caller Routes (Server Pull / Call):** Capture streams pulled from remote encoders, gateways, or edge servers.
+  * **SRT Listener / Rendezvous / Direct Routes:** Seamless recording from listening port streams or RTSP feeds.
+* **Versatile Container Formats & Compression Controls:**
+  * **Container Options:** **MP4** (universal web standard) or **MOV** (Apple QuickTime with `+faststart` for broadcast NLE suites like DaVinci Resolve, Final Cut Pro, and Adobe Premiere Pro).
+  * **Bitrate Controls:** High-efficiency presets (1.2 Mbps, 2.0 Mbps, 3.5 Mbps, 5.0 Mbps, 8.0 Mbps, Direct Stream Copy) plus **Custom Bitrate in kbps**.
+  * **Resolution Scaling:** Source Native, 1080p, 720p, 480p, 4K UHD, plus **Custom Resolution (Width x Height)** with aspect-ratio preserving padding.
+  * **Segment Duration:** 15 Minutes, 30 Minutes, or 1 Hour (60m).
+* **Decoupled Zero-Disruption Architecture:**
+  * Perekaman berjalan pada subprocess FFmpeg sekunder independen. Operators can start and stop recordings at will without interrupting or glitching primary transmission streams or egress fan-outs.
+  * Clean `signal.SIGINT` termination guarantees proper closure of the MP4/MOV `moov atom` header to prevent file corruption.
+* **Resilient Google Drive Cloud Sync (16MB Resumable Chunks):**
+  * Resumable chunked upload protocol (16 MB chunks) with 8x exponential backoff retry logic and 120s socket timeout.
+  * Linux `/proc/[0-9]*/fd/*` file lock inspection prevents uploading segments currently actively written by FFmpeg.
+  * Asynchronous background queue with live progress indicators (`UPLOADING %`), auto-retry for interrupted uploads, and in-browser playback.
 
 #### F. High-Performance Preview & WebRTC
 * **Fragmented MP4 HLS (`fmp4`):** Stable 2-second segments eliminate micro-gap stalls and playback freezing.
