@@ -1022,7 +1022,23 @@ def download_booklet():
     pdf_path = os.path.join(BASE_DIR, "makasna-client-booklet.pdf")
     if os.path.exists(pdf_path):
         return send_from_directory(BASE_DIR, "makasna-client-booklet.pdf", as_attachment=True)
-    return "Booklet not found", 404
+    return ("Booklet not found", 404)
+
+
+@app.route("/favicon.ico")
+def favicon():
+    static_dir = os.path.join(BASE_DIR, "static")
+    if os.path.exists(os.path.join(static_dir, "favicon.svg")):
+        return send_from_directory(static_dir, "favicon.svg", mimetype="image/svg+xml")
+    elif os.path.exists(os.path.join(static_dir, "favicon.png")):
+        return send_from_directory(static_dir, "favicon.png", mimetype="image/png")
+    return ("", 204)
+
+
+@app.route("/static/<path:filename>")
+def serve_static(filename):
+    static_dir = os.path.join(BASE_DIR, "static")
+    return send_from_directory(static_dir, filename)
 
 
 # =========================================================================

@@ -1,3 +1,21 @@
+<p align="center">
+  <img src="static/logo-banner.svg" alt="MAKASNA Live Video Transport Gateway" width="100%" />
+</p>
+
+<p align="center">
+  <b>Enterprise SRT Live Video Transport Gateway, Failover Switching, On-Demand HyperDeck ISO Recorder &amp; Fan-out Playout Engine</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/SRT-Reliable%20Transport-00E5FF?style=flat-square" alt="SRT" />
+  <img src="https://img.shields.io/badge/MediaMTX-v1.11+-3B82F6?style=flat-square" alt="MediaMTX" />
+  <img src="https://img.shields.io/badge/FFmpeg-Transcode%20%26%20ISO%20Rec-F59E0B?style=flat-square" alt="FFmpeg" />
+  <img src="https://img.shields.io/badge/HyperDeck-Studio%20Console-EF4444?style=flat-square" alt="HyperDeck" />
+  <img src="https://img.shields.io/badge/Google%20Drive-Chunked%20Upload-10B981?style=flat-square" alt="Google Drive" />
+</p>
+
+---
+
 # Makasna Live Video Transport Gateway
 
 [Bahasa Indonesia](#bahasa-indonesia) | [English](#english)
