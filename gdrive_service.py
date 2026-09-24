@@ -8,8 +8,15 @@ import os
 import sys
 import json
 import time
+import socket
+import glob
+import http.client
+import ssl
 import threading
 from datetime import datetime, timezone
+
+# Ensure socket timeout is at least 120 seconds for large file uploads
+socket.setdefaulttimeout(120.0)
 
 # Allow Google OAuth to return additional scopes (such as openid or previously granted scopes) without error
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
@@ -22,6 +29,7 @@ try:
     from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
+    from googleapiclient.errors import HttpError
     GOOGLE_LIBS_AVAILABLE = True
 except ImportError:
     GOOGLE_LIBS_AVAILABLE = False
@@ -272,7 +280,22 @@ def get_or_create_folder(service, folder_name, parent_id=None):
     return folder.get('id')
 
 
-def upload_file_to_drive(file_path, route_name="General"):
+def is_file_open_for_writing(filepath):
+    """Check if any process on Linux has this file open."""
+    try:
+        resolved = os.path.realpath(filepath)
+        for p in glob.glob('/proc/[0-9]*/fd/*'):
+            try:
+                if os.path.realpath(p) == resolved:
+                    return True
+            except (OSError, FileNotFoundError):
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def upload_file_to_drive(file_path, route_name="General", progress_callback=None):
     creds = get_credentials()
     if not creds:
         raise RuntimeError("Google Drive is not connected.")
@@ -302,11 +325,13 @@ def upload_file_to_drive(file_path, route_name="General"):
         'description': f'Recorded by Makasna Gateway from route {route_name}'
     }
 
+    # 16MB chunks (multiple of 256KB) for broadcast files: faster throughput, 8x fewer round-trips
+    chunk_size = 16 * 1024 * 1024
     media = MediaFileUpload(
         file_path,
         mimetype='video/mp4',
         resumable=True,
-        chunksize=2 * 1024 * 1024 # 2MB chunk
+        chunksize=chunk_size
     )
 
     request_upload = service.files().create(
@@ -316,8 +341,35 @@ def upload_file_to_drive(file_path, route_name="General"):
     )
 
     response = None
+    chunk_retries = 0
+    max_chunk_retries = 8
+    last_progress = 0
+
     while response is None:
-        status, response = request_upload.next_chunk()
+        try:
+            status, response = request_upload.next_chunk()
+            if status:
+                chunk_retries = 0  # Reset retries on successful chunk upload
+                prog = int(status.progress() * 100)
+                if prog != last_progress:
+                    last_progress = prog
+                    if progress_callback:
+                        try:
+                            progress_callback(prog)
+                        except Exception:
+                            pass
+        except Exception as e:
+            # Fatal client errors that should not be retried
+            if isinstance(e, HttpError) and e.resp.status in [400, 401, 404]:
+                raise e
+
+            chunk_retries += 1
+            if chunk_retries > max_chunk_retries:
+                raise RuntimeError(f"Gagal upload chunk ke Google Drive setelah {max_chunk_retries}x percobaan: {e}") from e
+
+            # Exponential backoff: 2s, 4s, 8s, 16s... capped at 30s
+            backoff_sleep = min(2 ** chunk_retries, 30)
+            time.sleep(backoff_sleep)
 
     return {
         "file_id": response.get("id"),
@@ -375,6 +427,8 @@ def scan_local_recordings():
             friendly_name = routes_map.get(route_id) or route_id.replace("route_", "").upper()
 
             key = f"{route_id}/{fname}"
+            is_open = is_file_open_for_writing(fpath)
+
             if key not in meta:
                 created_dt = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
                 meta[key] = {
@@ -390,7 +444,9 @@ def scan_local_recordings():
                     "last_size": stat.st_size,
                     "last_checked": time.time(),
                     "gdrive_status": "local_only",
-                    "gdrive_link": ""
+                    "gdrive_link": "",
+                    "retry_count": 0,
+                    "upload_progress": 0
                 }
                 updated = True
             else:
@@ -408,10 +464,11 @@ def scan_local_recordings():
                     rec["completed"] = False
                     updated = True
                 elif not rec.get("completed"):
-                    # If size hasn't changed for 15 seconds, mark completed
-                    if time.time() - rec.get("last_checked", time.time()) > 15:
+                    # Check that the file is not currently open for writing by FFmpeg or any process
+                    # and that size has stabilized for at least 15 seconds
+                    if not is_open and (time.time() - rec.get("last_checked", time.time()) > 15):
                         rec["completed"] = True
-                        if rec.get("gdrive_status") == "local_only":
+                        if rec.get("gdrive_status") in ["local_only", None]:
                             rec["gdrive_status"] = "pending"
                         updated = True
 

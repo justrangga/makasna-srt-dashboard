@@ -722,50 +722,84 @@ def gdrive_uploader_worker():
                 routes_map = {r["id"]: r for r in routes}
 
                 for key, rec in list(meta.items()):
-                    if rec.get("completed") and rec.get("gdrive_status") == "pending":
-                        route_id = rec.get("route_id")
-                        route = routes_map.get(route_id)
-                        if route and not route.get("upload_to_gdrive", True):
-                            continue
+                    if not rec.get("completed"):
+                        continue
 
-                        route_name = route.get("name", rec.get("route_name", "General")) if route else rec.get("route_name", "General")
-                        file_path = rec.get("filepath")
-                        if not file_path or not os.path.exists(file_path):
-                            continue
+                    status = rec.get("gdrive_status")
+                    should_upload = False
 
-                        rec["gdrive_status"] = "uploading"
+                    if status == "pending":
+                        should_upload = True
+                    elif status == "failed":
+                        retries = rec.get("retry_count", 0)
+                        last_attempt = rec.get("last_attempt_time", 0)
+                        # Exponential backoff retry: 30s, 60s, 120s, 240s, 480s up to 5 times
+                        backoff = min(30 * (2 ** retries), 600)
+                        if retries < 5 and (time.time() - last_attempt) > backoff:
+                            should_upload = True
+
+                    if not should_upload:
+                        continue
+
+                    route_id = rec.get("route_id")
+                    route = routes_map.get(route_id)
+                    if route and not route.get("upload_to_gdrive", True):
+                        continue
+
+                    route_name = route.get("name", rec.get("route_name", "General")) if route else rec.get("route_name", "General")
+                    file_path = rec.get("filepath")
+                    if not file_path or not os.path.exists(file_path):
+                        continue
+
+                    rec["gdrive_status"] = "uploading"
+                    rec["upload_progress"] = 0
+                    rec["last_attempt_time"] = time.time()
+                    rec["retry_count"] = rec.get("retry_count", 0) + 1
+                    gdrive_service.save_recordings_meta(meta)
+
+                    def make_progress_cb(target_rec, meta_ref):
+                        def on_prog(pct):
+                            target_rec["upload_progress"] = pct
+                            gdrive_service.save_recordings_meta(meta_ref)
+                        return on_prog
+
+                    try:
+                        upload_res = gdrive_service.upload_file_to_drive(
+                            file_path,
+                            route_name=route_name,
+                            progress_callback=make_progress_cb(rec, meta)
+                        )
+                        rec["gdrive_status"] = "uploaded"
+                        rec["gdrive_file_id"] = upload_res.get("file_id")
+                        rec["gdrive_link"] = upload_res.get("view_link")
+                        rec["uploaded_at"] = now_iso()
+                        rec["gdrive_error"] = ""
+                        rec["upload_progress"] = 100
                         gdrive_service.save_recordings_meta(meta)
 
-                        try:
-                            upload_res = gdrive_service.upload_file_to_drive(file_path, route_name=route_name)
-                            rec["gdrive_status"] = "uploaded"
-                            rec["gdrive_file_id"] = upload_res.get("file_id")
-                            rec["gdrive_link"] = upload_res.get("view_link")
-                            rec["uploaded_at"] = now_iso()
-                            gdrive_service.save_recordings_meta(meta)
+                        log_event(route_id, route_name, "gdrive_upload", f"Uploaded {rec['filename']} ({rec.get('size_mb')} MB) to Google Drive", "info")
 
-                            log_event(route_id, route_name, "gdrive_upload", f"Uploaded {rec['filename']} ({rec.get('size_mb')} MB) to Google Drive", "info")
+                        delete_local = False
+                        if route and route.get("delete_after_upload"):
+                            delete_local = True
+                        elif cfg.get("delete_after_upload"):
+                            delete_local = True
 
-                            delete_local = False
-                            if route and route.get("delete_after_upload"):
-                                delete_local = True
-                            elif cfg.get("delete_after_upload"):
-                                delete_local = True
+                        if delete_local:
+                            try:
+                                os.remove(file_path)
+                                rec["local_deleted"] = True
+                                gdrive_service.save_recordings_meta(meta)
+                                log_event(route_id, route_name, "storage_cleanup", f"Cleaned up local file {rec['filename']} after upload", "info")
+                            except Exception:
+                                pass
 
-                            if delete_local:
-                                try:
-                                    os.remove(file_path)
-                                    rec["local_deleted"] = True
-                                    gdrive_service.save_recordings_meta(meta)
-                                    log_event(route_id, route_name, "storage_cleanup", f"Cleaned up local file {rec['filename']} after upload", "info")
-                                except Exception:
-                                    pass
-
-                        except Exception as upload_err:
-                            rec["gdrive_status"] = "failed"
-                            rec["gdrive_error"] = str(upload_err)
-                            gdrive_service.save_recordings_meta(meta)
-                            log_event(route_id, route_name, "gdrive_error", f"Google Drive upload failed for {rec['filename']}: {upload_err}", "error")
+                    except Exception as upload_err:
+                        rec["gdrive_status"] = "failed"
+                        rec["gdrive_error"] = str(upload_err)
+                        rec["upload_progress"] = 0
+                        gdrive_service.save_recordings_meta(meta)
+                        log_event(route_id, route_name, "gdrive_error", f"Google Drive upload failed for {rec['filename']} (attempt {rec['retry_count']}/5): {upload_err}", "error")
 
         except Exception:
             pass
@@ -1565,21 +1599,22 @@ def api_upload_recording_now(rel_path):
 
     meta = gdrive_service.load_recordings_meta()
     key = rel_path
-    rec = meta.get(key, {})
-    route_name = rec.get("route_name", "General")
+    if key not in meta:
+        meta = gdrive_service.scan_local_recordings()
 
-    try:
-        res = gdrive_service.upload_file_to_drive(fpath, route_name=route_name)
-        if key in meta:
-            meta[key]["gdrive_status"] = "uploaded"
-            meta[key]["gdrive_file_id"] = res["file_id"]
-            meta[key]["gdrive_link"] = res["view_link"]
-            meta[key]["uploaded_at"] = now_iso()
-            gdrive_service.save_recordings_meta(meta)
-        log_event(rec.get("route_id", "system"), route_name, "gdrive_upload", f"Manual upload completed: {res['name']}", "info")
-        return jsonify({"ok": True, "file": res})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+    if key in meta:
+        rec = meta[key]
+        rec["completed"] = True
+        rec["gdrive_status"] = "pending"
+        rec["retry_count"] = 0
+        rec["last_attempt_time"] = 0
+        rec["gdrive_error"] = ""
+        rec["upload_progress"] = 0
+        gdrive_service.save_recordings_meta(meta)
+        log_event(rec.get("route_id", "system"), rec.get("route_name", "General"), "gdrive_queue", f"Manually queued {os.path.basename(fpath)} for Google Drive upload", "info")
+        return jsonify({"ok": True, "message": "File berhasil diantrekan untuk upload ke Google Drive di latar belakang."})
+    else:
+        return jsonify({"ok": False, "error": "Recording metadata not found"}), 404
 
 
 @app.route("/api/recordings/<path:rel_path>", methods=["DELETE"])

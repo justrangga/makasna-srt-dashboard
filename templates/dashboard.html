@@ -3017,11 +3017,14 @@ async function fetchRecordings() {
       if (rec.gdrive_status === 'uploaded') {
         gdriveTag = `<a href="${rec.gdrive_link || '#'}" target="_blank" style="color:var(--cyan); font-weight:600;"><span class="tag tag-input" style="border-color:var(--cyan);">DRIVE VIEW</span></a>`;
       } else if (rec.gdrive_status === 'uploading') {
-        gdriveTag = '<span class="tag tag-output">UPLOADING...</span>';
+        const pct = (rec.upload_progress !== undefined && rec.upload_progress > 0) ? ` ${rec.upload_progress}%` : '';
+        gdriveTag = `<span class="tag tag-output">UPLOADING${pct}...</span>`;
       } else if (rec.gdrive_status === 'pending') {
         gdriveTag = '<span class="tag tag-active-src">PENDING SYNC</span>';
       } else if (rec.gdrive_status === 'failed') {
-        gdriveTag = '<span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">SYNC FAILED</span>';
+        const errMsg = rec.gdrive_error ? `: ${escapeHtml(rec.gdrive_error)}` : '';
+        const retries = (rec.retry_count && rec.retry_count > 0) ? ` (${rec.retry_count}/5)` : '';
+        gdriveTag = `<span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);" title="${errMsg}">SYNC FAILED${retries}</span>`;
       }
 
       const recTime = new Date(rec.created_at).toLocaleString();
@@ -3060,7 +3063,13 @@ async function fetchRecordings() {
         if (rec.gdrive_status === 'uploaded') {
           gdriveTag = `<a href="${rec.gdrive_link || '#'}" target="_blank" style="color:var(--cyan); font-weight:600;"><span class="tag tag-input" style="border-color:var(--cyan);">DRIVE VIEW</span></a>`;
         } else if (rec.gdrive_status === 'uploading') {
-          gdriveTag = '<span class="tag tag-output">UPLOADING...</span>';
+          const pct = (rec.upload_progress !== undefined && rec.upload_progress > 0) ? ` ${rec.upload_progress}%` : '';
+          gdriveTag = `<span class="tag tag-output">UPLOADING${pct}...</span>`;
+        } else if (rec.gdrive_status === 'pending') {
+          gdriveTag = '<span class="tag tag-active-src">PENDING SYNC</span>';
+        } else if (rec.gdrive_status === 'failed') {
+          const retries = (rec.retry_count && rec.retry_count > 0) ? ` (${rec.retry_count}/5)` : '';
+          gdriveTag = `<span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">SYNC FAILED${retries}</span>`;
         }
 
         const recTime = new Date(rec.created_at).toLocaleTimeString();
@@ -3114,8 +3123,8 @@ async function fetchRecordings() {
 
 async function uploadRecordingNow(id) {
   try {
-    alert('Memulai upload ke Google Drive di latar belakang...');
-    await api(`/api/recordings/upload-now/${encodeURIComponent(id)}`, { method: 'POST' });
+    const res = await api(`/api/recordings/upload-now/${encodeURIComponent(id)}`, { method: 'POST' });
+    alert(res.message || 'File rekaman berhasil diantrekan untuk upload ke Google Drive di latar belakang.');
     fetchRecordings();
   } catch(e) { alert('Upload error: ' + e.message); }
 }
