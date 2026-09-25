@@ -1657,6 +1657,7 @@ def api_srt_inbound():
     publishers = []
     readers = []
     total_rx_rate = 0.0
+    total_tx_rate = 0.0
 
     now = time.time()
     for c in srt_conns:
@@ -1666,11 +1667,25 @@ def api_srt_inbound():
         remote_addr = c.get("remoteAddr", "")
         state = c.get("state", "publish")
         rtt = round(float(c.get("msRTT", 0)), 2)
-        rx_rate = round(float(c.get("mbpsReceiveRate", 0)), 2)
-        loss_pct = round(float(c.get("packetsReceivedLossRate", 0)), 2)
-        drops = int(c.get("packetsReceivedDrop", 0))
+
+        if state == "read":
+            tx_rate = round(float(c.get("mbpsSendRate", 0)), 2)
+            rx_rate = round(float(c.get("mbpsReceiveRate", 0)), 2)
+            loss_pct = round(float(c.get("packetsSendLossRate", 0) or c.get("packetsReceivedLossRate", 0)), 2)
+            drops = int(c.get("packetsSendDrop", 0) or c.get("packetsReceivedDrop", 0))
+            bytes_count = int(c.get("bytesSent", 0))
+            bytes_mb = round(bytes_count / (1024 * 1024), 2)
+            total_tx_rate += tx_rate
+        else:
+            rx_rate = round(float(c.get("mbpsReceiveRate", 0)), 2)
+            tx_rate = round(float(c.get("mbpsSendRate", 0)), 2)
+            loss_pct = round(float(c.get("packetsReceivedLossRate", 0)), 2)
+            drops = int(c.get("packetsReceivedDrop", 0))
+            bytes_count = int(c.get("bytesReceived", 0))
+            bytes_mb = round(bytes_count / (1024 * 1024), 2)
+            total_rx_rate += rx_rate
+
         created_str = c.get("created", "")
-        
         duration_sec = 0
         if created_str:
             try:
@@ -1679,12 +1694,9 @@ def api_srt_inbound():
             except Exception:
                 pass
 
-        bytes_rec = int(c.get("bytesReceived", 0))
         health = classify_health(rtt, loss_pct, drops)
-
         path_info = paths_map.get(path_name, {})
         tracks = path_info.get("tracks", [])
-
         matched_route = routes_map.get(path_name)
 
         conn_item = {
@@ -1692,12 +1704,14 @@ def api_srt_inbound():
             "stream_id": path_name,
             "remote_addr": remote_addr,
             "state": state,
+            "mbps_rate": tx_rate if state == "read" else rx_rate,
             "mbps_rx": rx_rate,
-            "mbps_tx": round(float(c.get("mbpsSendRate", 0)), 2),
+            "mbps_tx": tx_rate,
             "rtt_ms": rtt,
             "loss_pct": loss_pct,
             "dropped_packets": drops,
-            "bytes_received_mb": round(bytes_rec / (1024 * 1024), 2),
+            "bytes_mb": bytes_mb,
+            "bytes_received_mb": bytes_mb,
             "link_capacity_mbps": round(float(c.get("mbpsLinkCapacity", 0)), 2),
             "duration_seconds": max(0, duration_sec),
             "health": health,
@@ -1709,7 +1723,6 @@ def api_srt_inbound():
 
         if state == "publish":
             publishers.append(conn_item)
-            total_rx_rate += rx_rate
         else:
             readers.append(conn_item)
 
@@ -1729,7 +1742,9 @@ def api_srt_inbound():
         "publishers": publishers,
         "readers": readers,
         "total_publishers": len(publishers),
+        "total_readers": len(readers),
         "total_rx_rate_mbps": round(total_rx_rate, 2),
+        "total_tx_rate_mbps": round(total_tx_rate, 2),
         "srt_port": port_info["port"],
         "server_host": host
     })

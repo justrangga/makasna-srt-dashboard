@@ -406,6 +406,60 @@ tr:hover td { background: rgba(255,255,255,0.015); }
 .tag-input { background: rgba(0, 229, 255, 0.12); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.25); }
 .tag-output { background: rgba(245, 158, 11, 0.12); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.25); }
 .tag-active-src { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+.tag-reader { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); }
+.dot-blue { background: var(--blue); box-shadow: 0 0 8px rgba(59, 130, 246, 0.6); }
+
+/* SRT Ingest & Listeners Tabs */
+.srt-subtabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.srt-subtab {
+  background: var(--panel-elevated);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.srt-subtab:hover {
+  background: var(--panel-hover);
+  color: #fff;
+  border-color: rgba(255,255,255,0.18);
+}
+.srt-subtab.active-pub {
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--cyan);
+  border-color: rgba(0, 229, 255, 0.45);
+}
+.srt-subtab.active-read {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.5);
+}
+.badge-count {
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
 
 /* Action Buttons */
 .action-group {
@@ -1527,41 +1581,56 @@ video {
         </button>
       </div>
 
-      <!-- INBOUND SRT LIVE MONITOR CARD -->
+      <!-- SRT LIVE TRAFFIC & CLIENT CONNECTIONS MONITOR CARD -->
       <div style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin-bottom:20px; display:flex; flex-direction:column; gap:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
           <div style="display:flex; align-items:center; gap:10px;">
             <div class="dot dot-green" id="inbound-pulse-dot"></div>
             <div>
-              <div style="font-weight:700; font-size:13.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--cyan);">Inbound SRT Ingest Monitor</div>
-              <div style="font-size:11.5px; color:var(--muted);">Live monitoring of client encoders connecting &amp; sending streams into this gateway</div>
+              <div style="font-weight:700; font-size:13.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--cyan);">SRT Live Ingest &amp; Listeners Monitor</div>
+              <div style="font-size:11.5px; color:var(--muted);">Live monitoring of Ingest Publishers (Pengirim) and Connected Listeners (PC Blackgate / vMix / VLC)</div>
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span class="tag tag-input" id="inbound-publishers-badge">0 CLIENTS CONNECTED</span>
-            <span class="tag tag-output" id="inbound-bitrate-badge">↓ 0.00 Mbps TOTAL</span>
+            <span class="tag tag-input" id="inbound-publishers-badge">0 INGEST IN</span>
+            <span class="tag tag-reader" id="inbound-readers-badge">0 LISTENERS OUT</span>
+            <span class="tag tag-output" id="inbound-bitrate-badge">↓ 0.00 | ↑ 0.00 Mbps</span>
             <span class="tag tag-active-src" id="inbound-port-badge">PORT 8890</span>
-            <button class="btn-icon" style="font-size:11.5px; color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;" onclick="openConnectionUrlsModal()">Connection URLs (OBS / VLC)</button>
+            <button class="btn-icon" style="font-size:11.5px; color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;" onclick="openConnectionUrlsModal()">Connection URLs (OBS / VLC / vMix)</button>
           </div>
         </div>
 
-        <!-- Live Table of Connected Inbound SRT Clients -->
-        <div id="inbound-clients-wrapper">
+        <!-- Subtabs: Ingest vs Listeners -->
+        <div class="srt-subtabs-bar">
+          <button type="button" id="tab-srt-publishers" class="srt-subtab active-pub" onclick="setSrtTrafficTab('publishers')">
+            <span class="dot dot-green" id="srt-pub-tab-dot"></span>
+            <span>Ingest Publishers (Pengirim)</span>
+            <span id="srt-pub-count-pill" class="badge-count">0</span>
+          </button>
+          <button type="button" id="tab-srt-readers" class="srt-subtab" onclick="setSrtTrafficTab('readers')">
+            <span class="dot dot-gray" id="srt-read-tab-dot"></span>
+            <span>Active Listeners (Penerima / Blackgate)</span>
+            <span id="srt-read-count-pill" class="badge-count">0</span>
+          </button>
+        </div>
+
+        <!-- VIEW 1: PUBLISHERS (INGEST) -->
+        <div id="srt-publishers-view">
           <div id="inbound-empty-notice" style="background:var(--panel-elevated); border:1px dashed var(--border); border-radius:8px; padding:12px 14px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <div>
-              <span>Belum ada client SRT yang terhubung.</span>
-              <a href="javascript:void(0)" onclick="openConnectionUrlsModal()" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Klik di sini untuk melihat format URL Pengirim (OBS) &amp; Penerima (VLC)</a>
+              <span>Belum ada encoder pengirim SRT yang terhubung ke port 8890.</span>
+              <a href="javascript:void(0)" onclick="openConnectionUrlsModal()" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Klik di sini untuk melihat format URL Pengirim (OBS/vMix)</a>
             </div>
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
 
-          <div id="inbound-table-container" class="table-container" style="display:none; margin-top:6px; border-color:rgba(0,229,255,0.25);">
+          <div id="inbound-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(0,229,255,0.25);">
             <table class="inbound-table">
               <thead>
                 <tr>
                   <th>Stream ID (Path)</th>
                   <th>Client IP &amp; Port</th>
-                  <th>Bitrate &amp; Loss</th>
+                  <th>Ingest Bitrate &amp; Loss</th>
                   <th>RTT Latency</th>
                   <th>Traffic / Uptime</th>
                   <th>Status</th>
@@ -1569,6 +1638,34 @@ video {
                 </tr>
               </thead>
               <tbody id="inbound-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- VIEW 2: READERS (LISTENERS / CLIENTS PULLING STREAM) -->
+        <div id="srt-readers-view" style="display:none;">
+          <div id="readers-empty-notice" style="background:var(--panel-elevated); border:1px dashed var(--border); border-radius:8px; padding:12px 14px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <span>Belum ada client atau PC (seperti vMix, OBS, atau VLC) yang sedang me-listen feed SRT dari gateway ini.</span>
+              <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Format Listen: srt://139.190.97.109:8890?streamid=read:STREAM_NAME</a>
+            </div>
+            <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
+          </div>
+
+          <div id="readers-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(59,130,246,0.3);">
+            <table class="inbound-table">
+              <thead>
+                <tr>
+                  <th>Stream ID (Target Feed)</th>
+                  <th>Listener IP &amp; Port</th>
+                  <th>Egress Bitrate &amp; Loss</th>
+                  <th>RTT Latency</th>
+                  <th>Data Sent / Duration</th>
+                  <th>Health Status</th>
+                  <th style="text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="readers-tbody"></tbody>
             </table>
           </div>
         </div>
@@ -2476,7 +2573,27 @@ video {
 
       <!-- SECTION 2: PENERIMA (RECEIVER / SUBSCRIBER) -->
       <div id="ep-section-receiver" style="display:none; flex-direction:column; gap:12px;">
-        <!-- Card 1: VLC Media Player (SRT) -->
+        <!-- Card 1: vMix / Blackgate SRT Input (Caller Pull) -->
+        <div style="background:var(--panel-elevated); border:1px solid rgba(59,130,246,0.35); border-radius:8px; padding:12px 14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <b style="color:#60a5fa; font-size:13px;">vMix &amp; PC Blackgate (SRT Caller Pull)</b>
+            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vmix-receiver')">Copy SRT URL</button>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="url-vmix-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:#93c5fd; width:100%;" value="" onclick="this.select()">
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Type: <b style="color:#fff;">Caller</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Hostname: <b id="ep-ip-recv-text" style="color:var(--cyan);">139.190.97.109</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Port: <b id="ep-port-recv-text" style="color:#fff;">8890</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Stream ID: <b id="ep-sid-recv-text" style="color:#60a5fa;">read:MAKASNA</b></div>
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:6px; line-height:1.4;">
+            <span style="color:var(--amber); font-weight:600;">Penting di vMix:</span> Buka <i>Add Input &gt; Stream / SRT &gt; Type: SRT (Caller)</i>. Isi kolom <b>Stream ID</b> dengan <b id="ep-sid-recv-note" style="color:#fff;">read:MAKASNA</b> (tanpa menulis kata <code>streamid=</code>).
+          </div>
+        </div>
+
+        <!-- Card 2: VLC Media Player (SRT) -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">VLC Media Player (SRT Ultra-Low Latency)</b>
@@ -2490,7 +2607,7 @@ video {
           </div>
         </div>
 
-        <!-- Card 2: OBS Media Source (Penerima Video ke OBS) -->
+        <!-- Card 3: OBS Media Source (Penerima Video ke OBS) -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">OBS Studio (Media Source Ingest)</b>
@@ -2504,7 +2621,7 @@ video {
           </div>
         </div>
 
-        <!-- Card 3: HLS Web Stream (Browser / Safari / Mobile) -->
+        <!-- Card 4: HLS Web Stream (Browser / Safari / Mobile) -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">HLS Stream URL (Web Browser / Safari / Mobile)</b>
@@ -2515,7 +2632,7 @@ video {
           </div>
         </div>
 
-        <!-- Card 4: RTSP Stream -->
+        <!-- Card 5: RTSP Stream -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">RTSP Stream URL (vMix / NVR / Switcher)</b>
@@ -2591,11 +2708,39 @@ async function pollSystemStats() {
 setInterval(pollSystemStats, 3500);
 pollSystemStats();
 
-// Inbound SRT Ingest Poller
+// Inbound SRT Ingest & Listeners Poller
 let latestSrtPort = 8890;
 const SERVER_PUBLIC_IP = '139.190.97.109';
 let serverHostName = SERVER_PUBLIC_IP;
 let latestInboundPublishers = [];
+let latestInboundReaders = [];
+let currentSrtTab = 'publishers';
+let userSelectedSrtTab = false;
+
+function setSrtTrafficTab(tab) {
+  currentSrtTab = tab;
+  userSelectedSrtTab = true;
+  updateSrtTabUI();
+}
+
+function updateSrtTabUI() {
+  const pubBtn = document.getElementById('tab-srt-publishers');
+  const readBtn = document.getElementById('tab-srt-readers');
+  const pubView = document.getElementById('srt-publishers-view');
+  const readView = document.getElementById('srt-readers-view');
+
+  if (currentSrtTab === 'publishers') {
+    if (pubBtn) pubBtn.className = 'srt-subtab active-pub';
+    if (readBtn) readBtn.className = 'srt-subtab';
+    if (pubView) pubView.style.display = 'block';
+    if (readView) readView.style.display = 'none';
+  } else {
+    if (pubBtn) pubBtn.className = 'srt-subtab';
+    if (readBtn) readBtn.className = 'srt-subtab active-read';
+    if (pubView) pubView.style.display = 'none';
+    if (readView) readView.style.display = 'block';
+  }
+}
 
 async function pollInboundSrt() {
   try {
@@ -2603,81 +2748,166 @@ async function pollInboundSrt() {
     if (!d.ok) return;
 
     latestSrtPort = d.srt_port || 8890;
-    // Always enforce numeric Public IP for external clients (OBS, vMix, VLC)
     serverHostName = SERVER_PUBLIC_IP;
-    latestInboundPublishers = d.publishers || [];
+    const publishers = d.publishers || [];
+    const readers = d.readers || [];
+    latestInboundPublishers = publishers;
+    latestInboundReaders = readers;
     syncHyperdeckRouteOptions();
 
+    // Auto-switch tab if user hasn't explicitly chosen one yet
+    if (!userSelectedSrtTab) {
+      if (publishers.length === 0 && readers.length > 0) {
+        currentSrtTab = 'readers';
+      } else if (publishers.length > 0 && readers.length === 0) {
+        currentSrtTab = 'publishers';
+      }
+    }
+    updateSrtTabUI();
+
     const pubBadge = document.getElementById('inbound-publishers-badge');
+    const readBadge = document.getElementById('inbound-readers-badge');
     const rxBadge = document.getElementById('inbound-bitrate-badge');
     const portBadge = document.getElementById('inbound-port-badge');
-    const exampleCode = document.getElementById('ingest-url-example');
+    const pubCountPill = document.getElementById('srt-pub-count-pill');
+    const readCountPill = document.getElementById('srt-read-count-pill');
+    const pubTabDot = document.getElementById('srt-pub-tab-dot');
+    const readTabDot = document.getElementById('srt-read-tab-dot');
 
-    if (pubBadge) pubBadge.textContent = `${d.total_publishers} CLIENTS CONNECTED`;
-    if (rxBadge) rxBadge.textContent = `↓ ${d.total_rx_rate_mbps} Mbps TOTAL`;
+    if (pubBadge) pubBadge.textContent = `${d.total_publishers || 0} INGEST IN`;
+    if (readBadge) readBadge.textContent = `${d.total_readers || 0} LISTENERS OUT`;
+    if (rxBadge) rxBadge.textContent = `↓ ${d.total_rx_rate_mbps || 0} | ↑ ${d.total_tx_rate_mbps || 0} Mbps`;
     if (portBadge) portBadge.textContent = `PORT ${latestSrtPort}`;
-    if (exampleCode) exampleCode.textContent = `srt://${SERVER_PUBLIC_IP}:${latestSrtPort}?streamid=publish:STREAM_NAME`;
 
-    const emptyNotice = document.getElementById('inbound-empty-notice');
-    const tableContainer = document.getElementById('inbound-table-container');
-    const tbody = document.getElementById('inbound-tbody');
-    if (!tbody) return;
+    if (pubCountPill) pubCountPill.textContent = publishers.length;
+    if (readCountPill) readCountPill.textContent = readers.length;
 
-    if (!d.publishers || !d.publishers.length) {
-      if (emptyNotice) emptyNotice.style.display = 'flex';
-      if (tableContainer) tableContainer.style.display = 'none';
-      return;
+    if (pubTabDot) pubTabDot.className = publishers.length ? 'dot dot-green' : 'dot dot-gray';
+    if (readTabDot) readTabDot.className = readers.length ? 'dot dot-blue' : 'dot dot-gray';
+
+    // 1. Render Publishers Table
+    const pubEmptyNotice = document.getElementById('inbound-empty-notice');
+    const pubTableContainer = document.getElementById('inbound-table-container');
+    const pubTbody = document.getElementById('inbound-tbody');
+
+    if (pubTbody) {
+      if (!publishers.length) {
+        if (pubEmptyNotice) pubEmptyNotice.style.display = 'flex';
+        if (pubTableContainer) pubTableContainer.style.display = 'none';
+      } else {
+        if (pubEmptyNotice) pubEmptyNotice.style.display = 'none';
+        if (pubTableContainer) pubTableContainer.style.display = 'block';
+
+        pubTbody.innerHTML = publishers.map(pub => {
+          const dotClass = pub.health === 'Healthy' ? 'dot-green' : pub.health === 'Degraded' ? 'dot-amber' : 'dot-red';
+          const durationFormatted = formatSeconds(pub.duration_seconds);
+
+          return `
+            <tr>
+              <td>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="tag tag-input" style="font-weight:700; font-size:12px;">publish:${escapeHtml(pub.stream_id)}</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">
+                  ${pub.tracks && pub.tracks.length ? pub.tracks.join(', ') : 'MPEG-TS Ingest'}
+                </div>
+              </td>
+              <td>
+                <span style="font-family:'JetBrains Mono'; font-weight:600; font-size:12px;">${escapeHtml(pub.remote_addr)}</span>
+              </td>
+              <td>
+                <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">↓ ${pub.mbps_rx} Mbps</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:${pub.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${pub.loss_pct}% loss</div>
+              </td>
+              <td>
+                <span style="font-family:'JetBrains Mono'; font-weight:600;">${pub.rtt_ms} ms</span>
+              </td>
+              <td>
+                <div style="font-family:'JetBrains Mono'; font-weight:600;">${pub.bytes_received_mb} MB</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</div>
+              </td>
+              <td>
+                <div class="status-indicator">
+                  <span class="dot ${dotClass}"></span>
+                  <span>${pub.health}</span>
+                </div>
+              </td>
+              <td style="text-align:right;">
+                <div class="action-group" style="justify-content:flex-end;">
+                  <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">Preview</button>
+                  ${pub.routed
+                    ? `<span class="tag tag-active-src" title="Active on route: ${escapeHtml(pub.route_name)}">Routed</span>`
+                    : `<button class="btn-icon" style="color:var(--amber); font-weight:600;" onclick="adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">+ Route</button>`
+                  }
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
     }
 
-    if (emptyNotice) emptyNotice.style.display = 'none';
-    if (tableContainer) tableContainer.style.display = 'block';
+    // 2. Render Readers / Listeners Table
+    const rdrEmptyNotice = document.getElementById('readers-empty-notice');
+    const rdrTableContainer = document.getElementById('readers-table-container');
+    const rdrTbody = document.getElementById('readers-tbody');
 
-    tbody.innerHTML = d.publishers.map(pub => {
-      const dotClass = pub.health === 'Healthy' ? 'dot-green' : pub.health === 'Degraded' ? 'dot-amber' : 'dot-red';
-      const durationFormatted = formatSeconds(pub.duration_seconds);
+    if (rdrTbody) {
+      if (!readers.length) {
+        if (rdrEmptyNotice) rdrEmptyNotice.style.display = 'flex';
+        if (rdrTableContainer) rdrTableContainer.style.display = 'none';
+      } else {
+        if (rdrEmptyNotice) rdrEmptyNotice.style.display = 'none';
+        if (rdrTableContainer) rdrTableContainer.style.display = 'block';
 
-      return `
-        <tr>
-          <td>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span class="tag tag-input" style="font-weight:700; font-size:12px;">publish:${escapeHtml(pub.stream_id)}</span>
-            </div>
-            <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">
-              ${pub.tracks && pub.tracks.length ? pub.tracks.join(', ') : 'MPEG-TS Ingest'}
-            </div>
-          </td>
-          <td>
-            <span style="font-family:'JetBrains Mono'; font-weight:600; font-size:12px;">${escapeHtml(pub.remote_addr)}</span>
-          </td>
-          <td>
-            <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">↓ ${pub.mbps_rx} Mbps</div>
-            <div style="font-size:11px; font-family:'JetBrains Mono'; color:${pub.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${pub.loss_pct}% loss</div>
-          </td>
-          <td>
-            <span style="font-family:'JetBrains Mono'; font-weight:600;">${pub.rtt_ms} ms</span>
-          </td>
-          <td>
-            <div style="font-family:'JetBrains Mono'; font-weight:600;">${pub.bytes_received_mb} MB</div>
-            <div style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</div>
-          </td>
-          <td>
-            <div class="status-indicator">
-              <span class="dot ${dotClass}"></span>
-              <span>${pub.health}</span>
-            </div>
-          </td>
-          <td style="text-align:right;">
-            <div class="action-group" style="justify-content:flex-end;">
-              <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">Preview</button>
-              ${pub.routed
-                ? `<span class="tag tag-active-src" title="Active on route: ${escapeHtml(pub.route_name)}">Routed</span>`
-                : `<button class="btn-icon" style="color:var(--amber); font-weight:600;" onclick="adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">+ Route</button>`
-              }
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+        rdrTbody.innerHTML = readers.map(rdr => {
+          const dotClass = rdr.health === 'Healthy' ? 'dot-green' : rdr.health === 'Degraded' ? 'dot-amber' : 'dot-red';
+          const durationFormatted = formatSeconds(rdr.duration_seconds);
+          const readUrl = `srt://${SERVER_PUBLIC_IP}:${latestSrtPort}?streamid=read:${encodeURIComponent(rdr.stream_id)}`;
+
+          return `
+            <tr>
+              <td>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="tag tag-reader" style="font-weight:700; font-size:12px;">read:${escapeHtml(rdr.stream_id)}</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">
+                  ${rdr.tracks && rdr.tracks.length ? rdr.tracks.join(', ') : 'Live SRT Egress'}
+                </div>
+              </td>
+              <td>
+                <span style="font-family:'JetBrains Mono'; font-weight:600; font-size:12px; color:#fff;">${escapeHtml(rdr.remote_addr)}</span>
+                <div style="font-size:11px; color:var(--muted); margin-top:2px;">Downstream Receiver</div>
+              </td>
+              <td>
+                <div style="font-family:'JetBrains Mono'; font-weight:700; color:#60a5fa;">↑ ${rdr.mbps_tx} Mbps</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:${rdr.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${rdr.loss_pct}% loss (${rdr.dropped_packets} drops)</div>
+              </td>
+              <td>
+                <span style="font-family:'JetBrains Mono'; font-weight:600;">${rdr.rtt_ms} ms</span>
+                <div style="font-size:11px; color:var(--text-dim);">${rdr.link_capacity_mbps > 0 ? rdr.link_capacity_mbps + ' Mbps link' : 'RTT latency'}</div>
+              </td>
+              <td>
+                <div style="font-family:'JetBrains Mono'; font-weight:600;">${rdr.bytes_mb} MB sent</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</div>
+              </td>
+              <td>
+                <div class="status-indicator">
+                  <span class="dot ${dotClass}"></span>
+                  <span>${rdr.health}</span>
+                </div>
+              </td>
+              <td style="text-align:right;">
+                <div class="action-group" style="justify-content:flex-end;">
+                  <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyTextDirect('${escapeHtml(readUrl)}', 'SRT Read URL')" title="Salin URL Listener">Copy URL</button>
+                  <button class="btn-icon" style="color:#60a5fa; font-weight:600;" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">Preview</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
 
   } catch(e) {}
 }
@@ -2686,7 +2916,20 @@ function copyServerIngestUrl(streamId) {
   openConnectionUrlsModal(streamId);
 }
 
-function openConnectionUrlsModal(optStreamId) {
+function copyTextDirect(text, label) {
+  if (!text) return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert(`${label || 'Teks'} berhasil disalin ke clipboard:\n${text}`);
+    }).catch(() => {
+      prompt('Salin teks ini:', text);
+    });
+  } else {
+    prompt('Salin teks ini:', text);
+  }
+}
+
+function openConnectionUrlsModal(optStreamId, optTab) {
   const modal = document.getElementById('modal-connection-urls');
   if (!modal) return;
   const sInput = document.getElementById('ep-stream-name');
@@ -2696,6 +2939,9 @@ function openConnectionUrlsModal(optStreamId) {
     sInput.value = 'MAKASNA';
   }
   refreshEndpointUrls(sInput.value);
+  if (optTab) {
+    switchEndpointTab(optTab);
+  }
   modal.classList.remove('hidden');
 }
 
@@ -2749,19 +2995,31 @@ function refreshEndpointUrls(rawName) {
   if (elSidText) elSidText.textContent = `publish:${name}`;
 
   // 2. Receiver URLs
+  const vmixRecv = `srt://${srtHost}:${port}?streamid=read:${name}&latency=200000`;
   const vlcRecv = `srt://${srtHost}:${port}?streamid=read:${name}`;
   const obsRecv = `srt://${srtHost}:${port}?streamid=read:${name}`;
   const hlsRecv = `http://${srtHost}:8888/${name}/index.m3u8`;
   const rtspRecv = `rtsp://${srtHost}:8554/${name}`;
 
+  const elVmixRecv = document.getElementById('url-vmix-receiver');
   const elVlcRecv = document.getElementById('url-vlc-receiver');
   const elObsRecv = document.getElementById('url-obs-receiver');
   const elHlsRecv = document.getElementById('url-hls-receiver');
   const elRtspRecv = document.getElementById('url-rtsp-receiver');
+  if (elVmixRecv) elVmixRecv.value = vmixRecv;
   if (elVlcRecv) elVlcRecv.value = vlcRecv;
   if (elObsRecv) elObsRecv.value = obsRecv;
   if (elHlsRecv) elHlsRecv.value = hlsRecv;
   if (elRtspRecv) elRtspRecv.value = rtspRecv;
+
+  const elIpRecv = document.getElementById('ep-ip-recv-text');
+  const elPortRecv = document.getElementById('ep-port-recv-text');
+  const elSidRecv = document.getElementById('ep-sid-recv-text');
+  const elSidNote = document.getElementById('ep-sid-recv-note');
+  if (elIpRecv) elIpRecv.textContent = srtHost;
+  if (elPortRecv) elPortRecv.textContent = port;
+  if (elSidRecv) elSidRecv.textContent = `read:${name}`;
+  if (elSidNote) elSidNote.textContent = `read:${name}`;
 }
 
 function copyInputVal(id) {
