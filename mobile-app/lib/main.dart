@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/theme.dart';
 import 'providers/gateway_provider.dart';
 import 'providers/recorder_provider.dart';
-import 'screens/home_navigation_screen.dart';
+import 'screens/welcome_server_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +39,7 @@ class MakasnaRemoteApp extends StatelessWidget {
       title: 'MAKASNA GATEWAY REMOTE',
       debugShowCheckedModeBanner: false,
       theme: MakasnaTheme.themeData,
-      home: const HomeNavigationScreen(),
+      home: const WelcomeServerScreen(),
     );
   }
 }

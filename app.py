@@ -1025,6 +1025,19 @@ def download_booklet():
     return ("Booklet not found", 404)
 
 
+@app.route("/download/apk")
+def download_apk():
+    apk_path = os.path.join(BASE_DIR, "static", "makasna-remote.apk")
+    if os.path.exists(apk_path):
+        return send_from_directory(
+            os.path.join(BASE_DIR, "static"),
+            "makasna-remote.apk",
+            as_attachment=True,
+            mimetype="application/vnd.android.package-archive"
+        )
+    return ("APK not found", 404)
+
+
 @app.route("/favicon.ico")
 def favicon():
     static_dir = os.path.join(BASE_DIR, "static")

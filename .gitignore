@@ -28,4 +28,7 @@ venv/
 htmlcov/
 gdrive_token.json
 gdrive_config.json
+static/*.apk
+mobile-app/build/
+mobile-app/.dart_tool/
 recordings_meta.json

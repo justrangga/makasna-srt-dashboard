@@ -6,6 +6,7 @@ import '../models/srt_connection.dart';
 import '../providers/gateway_provider.dart';
 import '../widgets/metric_card.dart';
 import 'live_preview_screen.dart';
+import 'welcome_server_screen.dart';
 
 class SignalMonitorScreen extends StatefulWidget {
   const SignalMonitorScreen({Key? key}) : super(key: key);
@@ -243,6 +244,16 @@ class _SignalMonitorScreenState extends State<SignalMonitorScreen> with SingleTi
       appBar: AppBar(
         title: const Text('SIGNAL & LINK MONITOR'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.dns_outlined, color: MakasnaTheme.cyan),
+            tooltip: 'Ganti Server / Panduan',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WelcomeServerScreen(isSwitching: true)),
+              );
+            },
+          ),
           IconButton(
             icon: gateway.isConnecting
                 ? const SizedBox(

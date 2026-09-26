@@ -30,7 +30,6 @@ class MakasnaTheme {
         primary: cyan,
         secondary: blue,
         surface: panel,
-        background: background,
         error: red,
       ),
       appBarTheme: const AppBarTheme(
