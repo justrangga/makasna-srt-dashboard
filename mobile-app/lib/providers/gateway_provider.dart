@@ -68,6 +68,13 @@ class GatewayProvider extends ChangeNotifier {
   }
 
   Future<void> refreshAll({bool silent = false}) async {
+    if (_config.host.trim().isEmpty) {
+      _isConnected = false;
+      _isConnecting = false;
+      notifyListeners();
+      return;
+    }
+
     if (!silent) {
       _isConnecting = true;
       notifyListeners();

@@ -13,8 +13,11 @@ class MakasnaTheme {
   static const Color blue = Color(0xFF2563EB);
   static const Color blueLight = Color(0xFF60A5FA);
   static const Color green = Color(0xFF10B981);
+  static const Color greenDim = Color(0x2610B981);
   static const Color amber = Color(0xFFF59E0B);
+  static const Color amberDim = Color(0x26F59E0B);
   static const Color red = Color(0xFFEF4444);
+  static const Color redDim = Color(0x26EF4444);
   static const Color redGlow = Color(0x66EF4444);
 
   static const Color textPrimary = Color(0xFFFFFFFF);

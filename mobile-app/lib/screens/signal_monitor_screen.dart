@@ -242,7 +242,16 @@ class _SignalMonitorScreenState extends State<SignalMonitorScreen> with SingleTi
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SIGNAL & LINK MONITOR'),
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset('assets/images/logo.png', width: 24, height: 24),
+            ),
+            const SizedBox(width: 8),
+            const Text('SIGNAL MONITOR'),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.dns_outlined, color: MakasnaTheme.cyan),

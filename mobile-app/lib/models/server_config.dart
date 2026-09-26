@@ -28,6 +28,8 @@ class ServerConfig {
     return 'srt://$host:$srtPort';
   }
 
+  bool get hasValidHost => host.trim().isNotEmpty;
+
   String buildSrtReadUrl(String streamId, {int latencyMs = 200}) {
     return 'srt://$host:$srtPort?streamid=read:$streamId&latency=${latencyMs * 1000}';
   }

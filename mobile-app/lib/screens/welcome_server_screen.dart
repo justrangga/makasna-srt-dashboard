@@ -18,15 +18,13 @@ class WelcomeServerScreen extends StatefulWidget {
 class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // Selected Profile: 0 = Production Default (139.190.97.109), 1 = Custom Server
-  int _selectedProfileIndex = 0;
-
   late TextEditingController _hostController;
   late TextEditingController _httpPortController;
   late TextEditingController _srtPortController;
   late TextEditingController _userController;
   late TextEditingController _passController;
   bool _useHttps = false;
+  bool _obscurePassword = true;
 
   bool _isTesting = false;
   String? _testMessage;
@@ -41,18 +39,26 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
     _hostController = TextEditingController(text: currentConfig.host);
     _httpPortController = TextEditingController(text: currentConfig.httpPort.toString());
     _srtPortController = TextEditingController(text: currentConfig.srtPort.toString());
-    _userController = TextEditingController(text: currentConfig.username);
+    _userController = TextEditingController(text: currentConfig.username.isNotEmpty ? currentConfig.username : 'admin');
     _passController = TextEditingController(text: currentConfig.password);
     _useHttps = currentConfig.useHttps;
 
-    if (currentConfig.host != '139.190.97.109') {
-      _selectedProfileIndex = 1;
-    }
+    // Listen to changes so Tab 2 (Tata Cara) updates URLs dynamically in real-time
+    _hostController.addListener(_onFormChanged);
+    _httpPortController.addListener(_onFormChanged);
+    _srtPortController.addListener(_onFormChanged);
+  }
+
+  void _onFormChanged() {
+    setState(() {});
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _hostController.removeListener(_onFormChanged);
+    _httpPortController.removeListener(_onFormChanged);
+    _srtPortController.removeListener(_onFormChanged);
     _hostController.dispose();
     _httpPortController.dispose();
     _srtPortController.dispose();
@@ -61,51 +67,67 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
     super.dispose();
   }
 
-  ServerConfig _getActiveSelectedConfig() {
-    if (_selectedProfileIndex == 0) {
-      return ServerConfig(
-        host: '139.190.97.109',
-        httpPort: 8080,
-        srtPort: 8890,
-        username: _userController.text.trim().isNotEmpty ? _userController.text.trim() : 'admin',
-        password: _passController.text.trim().isNotEmpty ? _passController.text.trim() : '@linux1234',
-        useHttps: false,
-      );
-    } else {
-      return ServerConfig(
-        host: _hostController.text.trim(),
-        httpPort: int.tryParse(_httpPortController.text.trim()) ?? 8080,
-        srtPort: int.tryParse(_srtPortController.text.trim()) ?? 8890,
-        username: _userController.text.trim(),
-        password: _passController.text.trim(),
-        useHttps: _useHttps,
-      );
-    }
+  String get _currentHost => _hostController.text.trim();
+  String get _currentHttpPort => _httpPortController.text.trim().isNotEmpty ? _httpPortController.text.trim() : '8080';
+  String get _currentSrtPort => _srtPortController.text.trim().isNotEmpty ? _srtPortController.text.trim() : '8890';
+  bool get _hasHost => _currentHost.isNotEmpty;
+  String get _displayHost => _hasHost ? _currentHost : '[MASUKKAN_IP_SERVER]';
+  String get _displayScheme => _useHttps ? 'https' : 'http';
+
+  ServerConfig _getConfigFromForm() {
+    return ServerConfig(
+      host: _currentHost,
+      httpPort: int.tryParse(_currentHttpPort) ?? 8080,
+      srtPort: int.tryParse(_currentSrtPort) ?? 8890,
+      username: _userController.text.trim(),
+      password: _passController.text.trim(),
+      useHttps: _useHttps,
+    );
   }
 
   Future<void> _testConnection() async {
+    if (!_hasHost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: MakasnaTheme.amber,
+          content: Text('Silakan masukkan alamat IP / Hostname server terlebih dahulu'),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isTesting = true;
       _testMessage = null;
       _testSuccess = null;
     });
 
-    final cfg = _getActiveSelectedConfig();
+    final cfg = _getConfigFromForm();
     final res = await context.read<GatewayProvider>().testConnection(cfg);
 
     setState(() {
       _isTesting = false;
       _testSuccess = res['success'] == true;
       if (res['success'] == true) {
-        _testMessage = 'Terhubung ke server! Latensi: ${res['latency_ms']} ms';
+        _testMessage = 'Koneksi sukses terhubung ke $_currentHost! Latensi: ${res['latency_ms']} ms';
       } else {
-        _testMessage = res['message'] ?? 'Koneksi gagal';
+        _testMessage = res['message'] ?? 'Koneksi ke server gagal. Periksa IP dan Port.';
       }
     });
   }
 
   Future<void> _connectAndProceed() async {
-    final cfg = _getActiveSelectedConfig();
+    if (!_hasHost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: MakasnaTheme.red,
+          content: Text('Alamat IP server wajib diisi untuk membuka remote!'),
+        ),
+      );
+      return;
+    }
+
+    final cfg = _getConfigFromForm();
     await context.read<GatewayProvider>().updateConfig(cfg);
 
     if (mounted) {
@@ -118,123 +140,6 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
         );
       }
     }
-  }
-
-  Widget _buildProfileCard({
-    required int index,
-    required String title,
-    required String ip,
-    required int apiPort,
-    required int srtPort,
-    required String tag,
-    required bool isDefault,
-  }) {
-    final isSelected = _selectedProfileIndex == index;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedProfileIndex = index;
-          if (index == 0) {
-            _hostController.text = '139.190.97.109';
-            _httpPortController.text = '8080';
-            _srtPortController.text = '8890';
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF131D2E) : MakasnaTheme.panelElevated,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? MakasnaTheme.cyan : MakasnaTheme.border,
-            width: isSelected ? 1.8 : 1.0,
-          ),
-          boxShadow: isSelected
-              ? [BoxShadow(color: MakasnaTheme.cyan.withOpacity(0.2), blurRadius: 10)]
-              : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                      color: isSelected ? MakasnaTheme.cyan : MakasnaTheme.textDim,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isDefault ? MakasnaTheme.cyanDim : const Color(0x26F59E0B),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: isDefault ? MakasnaTheme.cyan.withOpacity(0.4) : MakasnaTheme.amber.withOpacity(0.4),
-                    ),
-                  ),
-                  child: Text(
-                    tag,
-                    style: TextStyle(
-                      color: isDefault ? MakasnaTheme.cyan : MakasnaTheme.amber,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.dns, size: 14, color: MakasnaTheme.textDim),
-                const SizedBox(width: 6),
-                Text(
-                  'IP: $ip',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Icon(Icons.api, size: 14, color: MakasnaTheme.textDim),
-                const SizedBox(width: 4),
-                Text(
-                  'API: $apiPort',
-                  style: const TextStyle(color: MakasnaTheme.textSecondary, fontFamily: 'monospace', fontSize: 11),
-                ),
-                const SizedBox(width: 10),
-                const Icon(Icons.stream, size: 14, color: MakasnaTheme.blueLight),
-                const SizedBox(width: 4),
-                Text(
-                  'SRT: $srtPort',
-                  style: const TextStyle(color: MakasnaTheme.blueLight, fontFamily: 'monospace', fontSize: 11),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildGuideSection(String title, IconData icon, Color iconColor, List<Widget> items) {
@@ -258,7 +163,7 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
                   title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 13.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.5,
                   ),
@@ -277,37 +182,58 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
 
   Widget _buildGuideRow(String label, String value, {bool copyable = true}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: const TextStyle(color: MakasnaTheme.textDim, fontSize: 11, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: const Color(0xFF0C1019),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: _hasHost ? MakasnaTheme.border : MakasnaTheme.amber.withOpacity(0.3)),
             ),
             child: Row(
               children: [
                 Expanded(
                   child: SelectableText(
                     value,
-                    style: const TextStyle(color: MakasnaTheme.cyan, fontFamily: 'monospace', fontSize: 11.5),
+                    style: TextStyle(
+                      color: _hasHost ? MakasnaTheme.cyan : MakasnaTheme.amber,
+                      fontFamily: 'monospace',
+                      fontSize: 11.5,
+                      fontWeight: _hasHost ? FontWeight.w500 : FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (copyable) ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   InkWell(
                     onTap: () {
+                      if (!_hasHost) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            backgroundColor: MakasnaTheme.amber,
+                            content: Text('Silakan masukkan IP server Anda pada tab "1. INPUT SERVER" terlebih dahulu.'),
+                          ),
+                        );
+                        return;
+                      }
                       Clipboard.setData(ClipboardData(text: value));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Berhasil disalin ke clipboard!'), duration: Duration(seconds: 1)),
+                        const SnackBar(content: Text('URL berhasil disalin ke clipboard!'), duration: Duration(seconds: 1)),
                       );
                     },
-                    child: const Icon(Icons.copy, size: 14, color: MakasnaTheme.textSecondary),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Icon(Icons.copy, size: 14, color: MakasnaTheme.textSecondary),
+                    ),
                   ),
                 ],
               ],
@@ -324,16 +250,30 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: MakasnaTheme.cyanDim,
-                borderRadius: BorderRadius.circular(4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset(
+                'assets/images/logo.png',
+                width: 26,
+                height: 26,
+                fit: BoxFit.cover,
               ),
-              child: const Text('MAKASNA', style: TextStyle(color: MakasnaTheme.cyan, fontWeight: FontWeight.w900, fontSize: 12)),
             ),
-            const SizedBox(width: 8),
-            const Text('GATEWAY REMOTE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 10),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'MAKASNA REMOTE',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.6),
+                ),
+                Text(
+                  'Broadcast Video Transport',
+                  style: TextStyle(fontSize: 10, color: MakasnaTheme.cyan, letterSpacing: 0.3),
+                ),
+              ],
+            ),
           ],
         ),
         bottom: TabBar(
@@ -342,176 +282,311 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
           labelColor: MakasnaTheme.cyan,
           unselectedLabelColor: MakasnaTheme.textDim,
           tabs: const [
-            Tab(icon: Icon(Icons.tune, size: 18), text: '1. PILIH SERVER'),
-            Tab(icon: Icon(Icons.menu_book, size: 18), text: '2. TATA CARA SERVER'),
+            Tab(icon: Icon(Icons.dns_outlined, size: 18), text: '1. INPUT SERVER'),
+            Tab(icon: Icon(Icons.menu_book_outlined, size: 18), text: '2. TATA CARA SERVER'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // TAB 1: PILIH SERVER
+          // ========================================================
+          // TAB 1: INPUT SERVER (BEBAS TANPA SARAN SERVER)
+          // ========================================================
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'PILIH ALAMAT SERVER YANG AKAN DI-REMOTE:',
-                  style: TextStyle(
-                    color: MakasnaTheme.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Profile 1: Production Server
-                _buildProfileCard(
-                  index: 0,
-                  title: 'Production Gateway (Server Utama)',
-                  ip: '139.190.97.109',
-                  apiPort: 8080,
-                  srtPort: 8890,
-                  tag: 'PRODUCTION',
-                  isDefault: true,
-                ),
-                const SizedBox(height: 10),
-
-                // Profile 2: Custom Server
-                _buildProfileCard(
-                  index: 1,
-                  title: 'Custom Server (Input Bebas)',
-                  ip: _hostController.text.isNotEmpty ? _hostController.text : 'Ganti Alamat Server',
-                  apiPort: int.tryParse(_httpPortController.text) ?? 8080,
-                  srtPort: int.tryParse(_srtPortController.text) ?? 8890,
-                  tag: 'CUSTOM',
-                  isDefault: false,
-                ),
-                const SizedBox(height: 16),
-
-                // Custom Form Fields if Profile 1 selected
-                if (_selectedProfileIndex == 1) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: MakasnaTheme.panelInput,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: MakasnaTheme.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'PARAMETER SERVER KUSTOM:',
-                          style: TextStyle(color: MakasnaTheme.cyan, fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _hostController,
-                          style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
-                          decoration: const InputDecoration(
-                            labelText: 'IP / HOSTNAME SERVER',
-                            prefixIcon: Icon(Icons.dns, size: 16, color: MakasnaTheme.cyan),
-                          ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _httpPortController,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
-                                decoration: const InputDecoration(labelText: 'PORT API (8080)'),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: _srtPortController,
-                                keyboardType: TextInputType.number,
-                                style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
-                                decoration: const InputDecoration(labelText: 'PORT SRT (8890)'),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-
-                // Credentials Panel
+                // Brand Header Card
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: MakasnaTheme.panelElevated,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: MakasnaTheme.border),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      const Text(
-                        'OTENTIKASI DASHBOARD:',
-                        style: TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _userController,
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
-                              decoration: const InputDecoration(labelText: 'Username'),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'KONEKSI REMOTE SERVER',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              controller: _passController,
-                              obscureText: true,
-                              style: const TextStyle(color: Colors.white, fontSize: 13),
-                              decoration: const InputDecoration(labelText: 'Password'),
+                            SizedBox(height: 3),
+                            Text(
+                              'Masukkan alamat IP dan Port server gateway Anda sendiri untuk memulai remote control siaran.',
+                              style: TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11.5, height: 1.3),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Test Banner
+                // Form Fields
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: MakasnaTheme.panel,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: MakasnaTheme.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Field 1: Server IP / Hostname
+                      const Text(
+                        'ALAMAT IP / HOSTNAME SERVER *',
+                        style: TextStyle(color: MakasnaTheme.cyan, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _hostController,
+                        style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13.5),
+                        decoration: InputDecoration(
+                          hintText: 'Masukkan IP server (cth: 103.177.96.62)',
+                          hintStyle: const TextStyle(color: MakasnaTheme.textDim, fontSize: 12.5),
+                          prefixIcon: const Icon(Icons.dns, size: 18, color: MakasnaTheme.cyan),
+                          suffixIcon: _hostController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 16, color: MakasnaTheme.textDim),
+                                  onPressed: () {
+                                    _hostController.clear();
+                                    setState(() {});
+                                  },
+                                )
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Field 2 & 3: Ports Row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PORT API / HTTP',
+                                  style: TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: _httpPortController,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    hintText: '8080',
+                                    prefixIcon: Icon(Icons.api, size: 16, color: MakasnaTheme.textDim),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PORT SRT STREAM',
+                                  style: TextStyle(color: MakasnaTheme.blueLight, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: _srtPortController,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    hintText: '8890',
+                                    prefixIcon: Icon(Icons.cell_tower, size: 16, color: MakasnaTheme.blueLight),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Field 4 & 5: Credentials
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'USERNAME',
+                                  style: TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: _userController,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    hintText: 'admin',
+                                    prefixIcon: Icon(Icons.person_outline, size: 16, color: MakasnaTheme.textDim),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PASSWORD',
+                                  style: TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: _passController,
+                                  obscureText: _obscurePassword,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    hintText: 'password',
+                                    prefixIcon: const Icon(Icons.lock_outline, size: 16, color: MakasnaTheme.textDim),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                        size: 16,
+                                        color: MakasnaTheme.textDim,
+                                      ),
+                                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // HTTPS Toggle
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Gunakan HTTPS (SSL)', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text('Aktifkan jika menggunakan domain SSL', style: TextStyle(color: MakasnaTheme.textDim, fontSize: 10.5)),
+                            ],
+                          ),
+                          Switch(
+                            value: _useHttps,
+                            activeColor: MakasnaTheme.cyan,
+                            onChanged: (val) => setState(() => _useHttps = val),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Live Dynamic Endpoints Box
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF090D15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _hasHost ? MakasnaTheme.cyan.withOpacity(0.3) : MakasnaTheme.border,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _hasHost ? Icons.check_circle_outline : Icons.info_outline,
+                            size: 14,
+                            color: _hasHost ? MakasnaTheme.cyan : MakasnaTheme.amber,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _hasHost ? 'LIVE ENDPOINT PREVIEW' : 'MENUNGGU INPUT IP SERVER',
+                            style: TextStyle(
+                              color: _hasHost ? MakasnaTheme.cyan : MakasnaTheme.amber,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'API Endpoint: $_displayScheme://$_displayHost:$_currentHttpPort',
+                        style: TextStyle(
+                          color: _hasHost ? Colors.white70 : MakasnaTheme.textDim,
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'SRT Stream : srt://$_displayHost:$_currentSrtPort',
+                        style: TextStyle(
+                          color: _hasHost ? MakasnaTheme.blueLight : MakasnaTheme.textDim,
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Test Connection Feedback Message
                 if (_testMessage != null) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: _testSuccess == true ? MakasnaTheme.green.withOpacity(0.15) : MakasnaTheme.red.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: _testSuccess == true ? MakasnaTheme.green : MakasnaTheme.red),
+                      color: _testSuccess == true ? MakasnaTheme.greenDim : MakasnaTheme.redDim,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _testSuccess == true ? MakasnaTheme.green : MakasnaTheme.red,
+                      ),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           _testSuccess == true ? Icons.check_circle : Icons.error_outline,
+                          size: 16,
                           color: _testSuccess == true ? MakasnaTheme.green : MakasnaTheme.red,
-                          size: 18,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _testMessage!,
                             style: TextStyle(
-                              color: _testSuccess == true ? MakasnaTheme.green : MakasnaTheme.red,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                              color: _testSuccess == true ? Colors.white : const Color(0xFFFFB3B3),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -521,43 +596,113 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
                   const SizedBox(height: 14),
                 ],
 
-                // Action Buttons
+                // Action Button 1: Test Connection
                 OutlinedButton.icon(
+                  onPressed: _isTesting ? null : _testConnection,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: MakasnaTheme.cyan,
                     side: const BorderSide(color: MakasnaTheme.cyan),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  onPressed: _isTesting ? null : _testConnection,
                   icon: _isTesting
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: MakasnaTheme.cyan))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: MakasnaTheme.cyan),
+                        )
                       : const Icon(Icons.network_check, size: 18),
-                  label: Text(_isTesting ? 'MEMERIKSA KONEKSI...' : 'UJI KONEKSI SERVER'),
+                  label: Text(_isTesting ? 'MENGHUBUNGI SERVER...' : 'UJI KONEKSI (PING)'),
                 ),
                 const SizedBox(height: 10),
+
+                // Action Button 2: Connect & Proceed
                 ElevatedButton.icon(
+                  onPressed: _connectAndProceed,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MakasnaTheme.cyan,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  onPressed: _connectAndProceed,
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  label: Text(
-                    widget.isSwitching ? 'TERAPKAN & GANTI SERVER' : 'HUBUNGKAN & MASUK KE DASHBOARD',
-                    style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                  icon: const Icon(Icons.arrow_forward, size: 18, color: Colors.black),
+                  label: const Text(
+                    'HUBUNGKAN & BUKA REMOTE SERVER',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Quick Switch to Tab 2
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => _tabController.animateTo(1),
+                    icon: const Icon(Icons.menu_book, size: 15, color: MakasnaTheme.textSecondary),
+                    label: const Text(
+                      'Lihat Tata Cara & Parameter URL untuk Server Ini →',
+                      style: TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11.5),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // TAB 2: TATA CARA PENGGUNAAN SERVER
+          // ========================================================
+          // TAB 2: TATA CARA PENGGUNAAN SERVER (DYNAMIC IP CLIENT)
+          // ========================================================
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Top Banner: Status Server IP yang Aktif
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _hasHost ? const Color(0xFF051B24) : const Color(0xFF241A06),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _hasHost ? MakasnaTheme.cyan : MakasnaTheme.amber,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _hasHost ? Icons.verified : Icons.warning_amber_rounded,
+                        color: _hasHost ? MakasnaTheme.cyan : MakasnaTheme.amber,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _hasHost
+                                  ? 'TARGET SERVER: $_currentHost (Port SRT: $_currentSrtPort)'
+                                  : 'IP SERVER BELUM DIMASUKKAN',
+                              style: TextStyle(
+                                color: _hasHost ? Colors.white : MakasnaTheme.amber,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _hasHost
+                                  ? 'Seluruh URL dan panduan di bawah ini otomatis menggunakan IP server yang Anda masukkan.'
+                                  : 'Masukkan IP server Anda pada Tab "1. INPUT SERVER" agar URL terisi otomatis sesuai server Anda.',
+                              style: const TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 // Section 1: Pengirim
                 _buildGuideSection(
                   '1. CARA MENGIRIM VIDEO (KAMERA / ENCODER KE SERVER)',
@@ -571,11 +716,11 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
                     const SizedBox(height: 10),
                     _buildGuideRow(
                       'Format URL Pengirim di OBS Studio (Service: Custom):',
-                      'srt://${_getActiveSelectedConfig().host}:8890?streamid=publish:NAMA_STREAM',
+                      'srt://$_displayHost:$_currentSrtPort?streamid=publish:NAMA_STREAM&latency=2000000',
                     ),
                     _buildGuideRow(
                       'Format Parameter vMix (Add Input > Stream/SRT > Type: Caller):',
-                      'Hostname: ${_getActiveSelectedConfig().host} | Port: 8890 | StreamID: publish:NAMA_STREAM',
+                      'Hostname: $_displayHost | Port: $_currentSrtPort | StreamID: publish:NAMA_STREAM',
                     ),
                     const SizedBox(height: 6),
                     const Text(
@@ -602,11 +747,15 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
                     const SizedBox(height: 10),
                     _buildGuideRow(
                       'Format Listener di vMix (Type: Caller):',
-                      'Hostname: ${_getActiveSelectedConfig().host} | Port: 8890 | StreamID: read:NAMA_STREAM',
+                      'Hostname: $_displayHost | Port: $_currentSrtPort | StreamID: read:NAMA_STREAM',
                     ),
                     _buildGuideRow(
                       'Format Memutar di VLC Player (Media > Open Network Stream):',
-                      'srt://${_getActiveSelectedConfig().host}:8890?streamid=read:NAMA_STREAM',
+                      'srt://$_displayHost:$_currentSrtPort?streamid=read:NAMA_STREAM',
+                    ),
+                    _buildGuideRow(
+                      'Format Membuka Web Dashboard Browser:',
+                      '$_displayScheme://$_displayHost:$_currentHttpPort',
                     ),
                     const SizedBox(height: 6),
                     const Text(

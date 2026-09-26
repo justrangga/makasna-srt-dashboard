@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/server_config.dart';
 import '../providers/gateway_provider.dart';
+import 'welcome_server_screen.dart';
 
 class SettingsProfileScreen extends StatefulWidget {
   const SettingsProfileScreen({Key? key}) : super(key: key);
@@ -100,28 +101,30 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
     }
   }
 
-  void _resetToDefault() {
-    setState(() {
-      _hostController.text = '139.190.97.109';
-      _httpPortController.text = '8080';
-      _srtPortController.text = '8890';
-      _userController.text = 'admin';
-      _passController.text = '@linux1234';
-      _useHttps = false;
-      _pollInterval = 2;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GATEWAY SERVER PROFILE'),
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset('assets/images/logo.png', width: 24, height: 24),
+            ),
+            const SizedBox(width: 8),
+            const Text('GATEWAY SERVER PROFILE'),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.restore, color: MakasnaTheme.textSecondary),
-            tooltip: 'Reset Default Server',
-            onPressed: _resetToDefault,
+            icon: const Icon(Icons.menu_book_outlined, color: MakasnaTheme.cyan),
+            tooltip: 'Tata Cara & Parameter Server',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WelcomeServerScreen(isSwitching: true)),
+              );
+            },
           ),
         ],
       ),
@@ -160,7 +163,7 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
                 style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
                 decoration: const InputDecoration(
                   labelText: 'SERVER IP / HOSTNAME',
-                  hintText: 'e.g. 139.190.97.109 atau stream.makasna.com',
+                  hintText: 'e.g. 103.177.96.62 atau server.domain.com',
                   prefixIcon: Icon(Icons.dns_outlined, color: MakasnaTheme.cyan, size: 18),
                 ),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Server IP tidak boleh kosong' : null,
