@@ -158,7 +158,12 @@
 
 #### K. Mobile Remote Broadcast Controller (Aplikasi Android)
 Tersedia aplikasi Android mandiri di direktori [`mobile-app/`](mobile-app/) untuk memantau dan mengontrol gateway langsung dari smartphone atau tablet tim produksi di lapangan tanpa perlu membuka browser/laptop:
-* **Pengaturan Server Dinamis:** Bebas mengganti alamat IP Publik, HTTP API Port, dan SRT Port kapan saja melalui layar *Settings Profile*.
+* **Download Langsung File APK:**
+  * [📱 Unduh Langsung dari Gateway Server](http://139.190.97.109:8080/download/apk)
+  * [📦 Unduh via GitHub Release (v1.2.0)](https://github.com/justrangga/makasna-srt-dashboard/releases/latest/download/makasna-remote.apk)
+* **Layar Awal: Dynamic Server Selector & Tata Cara Server:**
+  * Di bagian awal aplikasi, pengguna langsung disajikan pilihan profil server yang ingin di-remote (Default Server Produksi `139.190.97.109` atau input custom IP & Port bebas).
+  * Tab *Tata Cara Penggunaan Server* menyajikan panduan siaran lengkap (setting OBS, vMix, VLC, port 8890 SRT, encoder GOP 1s/2s, dan deteksi audio pecah).
 * **Signal & Ingest Monitor:** Memantau throughput masuk (`↓ X.XX Mbps`), throughput keluar (`↑ X.XX Mbps`), packet loss, RTT latency, serta daftar *Publishers* (pengirim feed kamera) dan *Active Listeners* (PC Blackgate / vMix penerima).
 * **HyperDeck Master Recorder Remote:** Mengontrol perekaman master ISO secara independen (Start/Stop dengan konfirmasi keamanan, OSD Monospace LCD Timecode, format MP4/MOV, dan Master Tally Lamp berkedip merah terang saat merekam).
 * **Stereo VU Metering & Deteksi Audio Pecah:** Visualisasi level suara stereo dan peringatan instan `PECAH! (CLIP)` ketika audio terdistorsi.
