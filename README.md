@@ -156,6 +156,15 @@
 * Bebas dari emoji informal; seluruh ikon menggunakan vektor garis SVG murni.
 * Sepenuhnya responsif untuk smartphone (kartu modular adaptif, navigasi bawah / *bottom navigation bar*, dan modal fullscreen sheet).
 
+#### K. Mobile Remote Broadcast Controller (Aplikasi Android)
+Tersedia aplikasi Android mandiri di direktori [`mobile-app/`](mobile-app/) untuk memantau dan mengontrol gateway langsung dari smartphone atau tablet tim produksi di lapangan tanpa perlu membuka browser/laptop:
+* **Pengaturan Server Dinamis:** Bebas mengganti alamat IP Publik, HTTP API Port, dan SRT Port kapan saja melalui layar *Settings Profile*.
+* **Signal & Ingest Monitor:** Memantau throughput masuk (`↓ X.XX Mbps`), throughput keluar (`↑ X.XX Mbps`), packet loss, RTT latency, serta daftar *Publishers* (pengirim feed kamera) dan *Active Listeners* (PC Blackgate / vMix penerima).
+* **HyperDeck Master Recorder Remote:** Mengontrol perekaman master ISO secara independen (Start/Stop dengan konfirmasi keamanan, OSD Monospace LCD Timecode, format MP4/MOV, dan Master Tally Lamp berkedip merah terang saat merekam).
+* **Stereo VU Metering & Deteksi Audio Pecah:** Visualisasi level suara stereo dan peringatan instan `PECAH! (CLIP)` ketika audio terdistorsi.
+* **Routes & Failover Switcher:** Menjalankan/menghentikan rute dan melakukan switch failover manual sumber utama ke cadangan.
+* Panduan kompilasi dan build APK tersedia lengkap di [`mobile-app/README.md`](mobile-app/README.md).
+
 ---
 
 ### 3. Panduan Instalasi & Deploy Server
@@ -358,6 +367,15 @@ sudo systemctl enable --now makasna-dashboard
 * High-contrast theme (`#08080A`, border `#27272A`, accents in Cyan `#00E5FF` and Royal Blue `#2563EB`).
 * Clean, professional vector line SVG icons.
 * Fully responsive across smartphones and multi-display control room workstations.
+
+#### K. Mobile Remote Broadcast Controller (Android App)
+A standalone mobile controller app is available under [`mobile-app/`](mobile-app/) to monitor and operate the gateway directly from field smartphones or director tablets without opening a web browser:
+* **Dynamic Server Configuration:** Change Server Public IP, HTTP API Port, and SRT Port anytime on-the-fly via the *Settings Profile* screen.
+* **Signal & Ingest Telemetry:** Monitor live Ingest Throughput (`↓ X.XX Mbps`), Egress Bitrate (`↑ X.XX Mbps`), packet loss, RTT latency, plus active *Publishers* (camera feeds) and *Active Listeners* (downstream PC Blackgate / vMix clients).
+* **HyperDeck Master Recorder Remote:** Trigger and stop master ISO recording on-demand with safety confirmations, monospace OSD LCD timecode counter, format container selector (MP4/MOV), and an authentic animated red Master Tally Lamp.
+* **Stereo Peak VU Metering & Digital Clip Alerts:** Dual-channel audio level bars with an instant red `PECAH! (CLIP)` distortion warning.
+* **Route & Failover Switcher:** Start/stop routes and execute 1-click manual failover switching between primary and backup sources.
+* Full compilation and build instructions are documented in [`mobile-app/README.md`](mobile-app/README.md).
 
 ---
 
