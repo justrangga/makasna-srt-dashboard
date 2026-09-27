@@ -6,6 +6,7 @@ import '../providers/recorder_provider.dart';
 import '../widgets/tally_lamp.dart';
 import '../widgets/timecode_display.dart';
 import '../widgets/vu_meter_bar.dart';
+import '../widgets/broadcast_video_player.dart';
 
 class HyperdeckRecorderScreen extends StatefulWidget {
   const HyperdeckRecorderScreen({Key? key}) : super(key: key);
@@ -169,6 +170,18 @@ class _HyperdeckRecorderScreenState extends State<HyperdeckRecorderScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Master 16:9 LCD Broadcast Video Monitor
+            if (rec.selectedFeed != null && rec.selectedFeed!.isNotEmpty) ...[
+              BroadcastVideoPlayer(
+                streamId: rec.selectedFeed!,
+                aspectRatio: 16 / 9,
+                autoPlay: true,
+                showControls: true,
+                defaultMuted: true,
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // Timecode OSD Display
             TimecodeDisplay(
               timecode: rec.state.timecodeString,

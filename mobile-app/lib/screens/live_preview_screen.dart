@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../providers/gateway_provider.dart';
+import '../widgets/broadcast_video_player.dart';
 import '../widgets/vu_meter_bar.dart';
 
 class LivePreviewScreen extends StatelessWidget {
@@ -14,11 +15,27 @@ class LivePreviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final gateway = context.watch<GatewayProvider>();
     final hlsUrl = gateway.config.buildHlsUrl(streamId);
+    final directHlsUrl = gateway.config.buildDirectHlsUrl(streamId);
     final srtReadUrl = gateway.config.buildSrtReadUrl(streamId);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('LIVE MONITOR: $streamId'),
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset('assets/images/logo.png', width: 24, height: 24),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'LIVE MONITOR: $streamId',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.copy, size: 18),
@@ -37,66 +54,13 @@ class LivePreviewScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Video Viewport Area (16:9 Broadcast Slate)
-            AspectRatio(
+            // Smooth Broadcast Video Player (Hardware Accelerated ExoPlayer)
+            BroadcastVideoPlayer(
+              streamId: streamId,
               aspectRatio: 16 / 9,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: MakasnaTheme.cyan.withOpacity(0.5), width: 1.5),
-                ),
-                child: Stack(
-                  children: [
-                    // Center Slate
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.live_tv, size: 44, color: MakasnaTheme.cyan),
-                          const SizedBox(height: 10),
-                          Text(
-                            'LIVE SRT STREAM: $streamId',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'monospace',
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'fMP4 Segmented Low Latency Egress',
-                            style: TextStyle(color: MakasnaTheme.textDim, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Live Tally Top Left
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: MakasnaTheme.red,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          '● LIVE',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              autoPlay: true,
+              showControls: true,
+              defaultMuted: false,
             ),
             const SizedBox(height: 14),
 
@@ -104,7 +68,45 @@ class LivePreviewScreen extends StatelessWidget {
             const VuMeterBar(levelL: 0.72, levelR: 0.68, isClipped: false),
             const SizedBox(height: 16),
 
-            // Connection URL Info Card
+            // Video Engine Technical Info Card
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0C1019),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: MakasnaTheme.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.bolt, color: MakasnaTheme.cyan, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'HARDWARE-ACCELERATED LOW LATENCY',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Playback menggunakan MediaMTX fMP4 stream dengan buffer adaptive auto-recovery untuk mencegah stuttering.',
+                          style: TextStyle(color: MakasnaTheme.textSecondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Downstream Connection URL Info Card
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -139,7 +141,7 @@ class LivePreviewScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text('HLS Web Player URL:', style: TextStyle(color: MakasnaTheme.textDim, fontSize: 11)),
+                  const Text('HLS Stream URL (Reverse Proxy):', style: TextStyle(color: MakasnaTheme.textDim, fontSize: 11)),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.all(8),
@@ -150,6 +152,20 @@ class LivePreviewScreen extends StatelessWidget {
                     child: SelectableText(
                       hlsUrl,
                       style: const TextStyle(color: MakasnaTheme.cyan, fontFamily: 'monospace', fontSize: 11.5),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Direct HLS Stream URL (Port 8888):', style: TextStyle(color: MakasnaTheme.textDim, fontSize: 11)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: SelectableText(
+                      directHlsUrl,
+                      style: const TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11.5),
                     ),
                   ),
                 ],

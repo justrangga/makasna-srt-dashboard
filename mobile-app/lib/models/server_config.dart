@@ -38,8 +38,23 @@ class ServerConfig {
     return 'srt://$host:$srtPort?streamid=publish:$streamId&latency=${latencyMs * 1000}';
   }
 
+  static String cleanStreamPath(String rawStreamId) {
+    var s = rawStreamId.trim();
+    if (s.startsWith('publish:')) s = s.substring(8);
+    else if (s.startsWith('read:')) s = s.substring(5);
+    else if (s.startsWith('inbound:')) s = s.substring(8);
+    return s;
+  }
+
   String buildHlsUrl(String streamId) {
-    return '$baseUrl/hls/$streamId/index.m3u8';
+    final clean = cleanStreamPath(streamId);
+    return '$baseUrl/hls/$clean/index.m3u8';
+  }
+
+  String buildDirectHlsUrl(String streamId) {
+    final clean = cleanStreamPath(streamId);
+    final scheme = useHttps ? 'https' : 'http';
+    return '$scheme://$host:8888/$clean/index.m3u8';
   }
 
   Map<String, dynamic> toJson() => {

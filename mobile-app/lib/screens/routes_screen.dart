@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/route_model.dart';
 import '../providers/gateway_provider.dart';
+import 'live_preview_screen.dart';
 
 class RoutesScreen extends StatelessWidget {
   const RoutesScreen({Key? key}) : super(key: key);
@@ -104,6 +105,27 @@ class RoutesScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (route.running) ...[
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: MakasnaTheme.cyan,
+                      side: const BorderSide(color: MakasnaTheme.cyan),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LivePreviewScreen(streamId: 'route_${route.id}'),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.play_circle_outline, size: 14),
+                    label: const Text('Preview', style: TextStyle(fontSize: 11)),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 if (route.failoverEnabled && route.secondarySource != null) ...[
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
