@@ -60,7 +60,7 @@ class LivePreviewScreen extends StatelessWidget {
               aspectRatio: 16 / 9,
               autoPlay: true,
               showControls: true,
-              defaultMuted: false,
+              defaultMuted: true,
             ),
             const SizedBox(height: 14),
 

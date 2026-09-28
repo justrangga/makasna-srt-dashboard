@@ -42,6 +42,8 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
   Timer? _reconnectTimer;
   int _retryCount = 0;
   String _activeUrl = '';
+  List<String> _candidateUrls = [];
+  int _currentCandidateIndex = 0;
 
   @override
   void initState() {
@@ -66,12 +68,27 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
 
   void _resolveUrlAndInit({bool force = false}) {
     final gateway = context.read<GatewayProvider>();
-    final newUrl = widget.customUrl ?? gateway.config.buildHlsUrl(widget.streamId);
+    if (widget.customUrl != null && widget.customUrl!.isNotEmpty) {
+      _candidateUrls = [widget.customUrl!];
+    } else {
+      _candidateUrls = gateway.config.getHlsCandidates(widget.streamId);
+      if (_candidateUrls.isEmpty) {
+        _candidateUrls = [gateway.config.buildHlsUrl(widget.streamId)];
+      }
+    }
 
-    if (newUrl != _activeUrl || force) {
-      _activeUrl = newUrl;
+    if (force || _activeUrl.isEmpty || !_candidateUrls.contains(_activeUrl)) {
+      _currentCandidateIndex = 0;
+      _activeUrl = _candidateUrls[_currentCandidateIndex];
       _initController();
     }
+  }
+
+  void _switchNextCandidate() {
+    if (_candidateUrls.length <= 1) return;
+    _currentCandidateIndex = (_currentCandidateIndex + 1) % _candidateUrls.length;
+    _activeUrl = _candidateUrls[_currentCandidateIndex];
+    _initController();
   }
 
   Future<void> _initController() async {
@@ -92,6 +109,7 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
     try {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(_activeUrl),
+        formatHint: VideoFormat.hls,
         httpHeaders: const {
           'User-Agent': 'MakasnaRemote/1.2.0 (Android Broadcast Player)',
           'Accept': '*/*',
@@ -105,15 +123,20 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
       _controller = controller;
       controller.addListener(_onControllerUpdate);
 
-      await controller.initialize().timeout(const Duration(seconds: 8));
+      await controller.initialize();
 
       if (!mounted) return;
 
-      await controller.setVolume(_isMuted ? 0.0 : 1.0);
+      // Start muted to comply with Android auto-play policies
+      await controller.setVolume(0.0);
       await controller.setLooping(true);
 
       if (widget.autoPlay) {
         await controller.play();
+      }
+
+      if (!_isMuted) {
+        await controller.setVolume(1.0);
       }
 
       setState(() {
@@ -125,17 +148,27 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
     } catch (e) {
       if (!mounted) return;
 
-      // Schedule auto-retry for broadcast streams (cameraman might just be starting stream)
+      // Try next candidate URL if available
+      if (_currentCandidateIndex < _candidateUrls.length - 1) {
+        _currentCandidateIndex++;
+        _activeUrl = _candidateUrls[_currentCandidateIndex];
+        _initController();
+        return;
+      }
+
       _retryCount++;
+      final errSummary = e.toString().replaceAll('Exception: ', '').split('\n').first;
       setState(() {
         _isInitialized = false;
         _isBuffering = false;
         _hasError = true;
-        _errorMessage = 'Sinyal feed belum aktif / buffering... ($_retryCount)';
+        _errorMessage = 'Gagal memutar: $errSummary ($_retryCount)';
       });
 
-      _reconnectTimer = Timer(const Duration(milliseconds: 2500), () {
+      _reconnectTimer = Timer(const Duration(milliseconds: 3000), () {
         if (mounted) {
+          _currentCandidateIndex = 0;
+          _activeUrl = _candidateUrls.isNotEmpty ? _candidateUrls[0] : '';
           _initController();
         }
       });
@@ -441,20 +474,35 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
                             ),
                           ),
 
-                          // Low Latency Sync Status
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                            decoration: BoxDecoration(
-                              color: const Color(0x3310B981),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: const Text(
-                              'SMOOTH HLS',
-                              style: TextStyle(
-                                color: MakasnaTheme.green,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
+                          // Port / Route Tag with tap to toggle
+                          InkWell(
+                            onTap: _candidateUrls.length > 1 ? _switchNextCandidate : null,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _activeUrl.contains(':8888')
+                                    ? const Color(0x333B82F6)
+                                    : const Color(0x3310B981),
+                                borderRadius: BorderRadius.circular(3),
+                                border: Border.all(
+                                  color: _activeUrl.contains(':8888')
+                                      ? MakasnaTheme.blue
+                                      : MakasnaTheme.green,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                _activeUrl.contains(':8888')
+                                    ? (_activeUrl.contains('video1_stream') ? 'DIRECT V-ONLY' : 'DIRECT 8888')
+                                    : (_activeUrl.contains('video1_stream') ? 'PROXY V-ONLY' : 'PROXY HLS'),
+                                style: TextStyle(
+                                  color: _activeUrl.contains(':8888')
+                                      ? MakasnaTheme.blueLight
+                                      : MakasnaTheme.green,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                           ),
@@ -494,46 +542,98 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
               ],
             ),
           ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                _hasError ? Icons.cell_tower : Icons.live_tv,
-                size: 38,
-                color: _hasError ? MakasnaTheme.amber : MakasnaTheme.cyan,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'FEED: ${widget.streamId}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'monospace',
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _hasError
-                    ? (_errorMessage ?? 'Menunggu sinyal ingest...')
-                    : 'Memuat feed video broadcast...',
-                style: TextStyle(
-                  color: _hasError ? MakasnaTheme.amber : MakasnaTheme.textDim,
-                  fontSize: 10.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _hasError ? Icons.cell_tower : Icons.live_tv,
+                  size: 34,
                   color: _hasError ? MakasnaTheme.amber : MakasnaTheme.cyan,
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  'FEED: ${widget.streamId}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'monospace',
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                if (_activeUrl.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _activeUrl,
+                    style: const TextStyle(
+                      color: Colors.white38,
+                      fontSize: 8.5,
+                      fontFamily: 'monospace',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Text(
+                  _hasError
+                      ? (_errorMessage ?? 'Menunggu sinyal ingest...')
+                      : 'Memuat feed video broadcast...',
+                  style: TextStyle(
+                    color: _hasError ? MakasnaTheme.amber : MakasnaTheme.textDim,
+                    fontSize: 10,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                if (_candidateUrls.length > 1) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: MakasnaTheme.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _switchNextCandidate,
+                        icon: const Icon(Icons.swap_horiz, size: 12),
+                        label: Text(
+                          'Coba Jalur Lain (${_currentCandidateIndex + 1}/${_candidateUrls.length})',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: MakasnaTheme.cyan,
+                          side: const BorderSide(color: MakasnaTheme.cyan),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => _initController(),
+                        icon: const Icon(Icons.refresh, size: 12),
+                        label: const Text('Muat Ulang', style: TextStyle(fontSize: 10)),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _hasError ? MakasnaTheme.amber : MakasnaTheme.cyan,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       ),
