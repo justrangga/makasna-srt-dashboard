@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/server_config.dart';
 import '../providers/gateway_provider.dart';
+import '../services/preferences_service.dart';
 import 'home_navigation_screen.dart';
 
 class WelcomeServerScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class WelcomeServerScreen extends StatefulWidget {
 }
 
 class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTickerProviderStateMixin {
+  final PreferencesService _prefs = PreferencesService();
   late TabController _tabController;
 
   late TextEditingController _hostController;
@@ -25,6 +27,7 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
   late TextEditingController _passController;
   bool _useHttps = false;
   bool _obscurePassword = true;
+  bool _rememberSession = true;
 
   bool _isTesting = false;
   String? _testMessage;
@@ -47,6 +50,25 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
     _hostController.addListener(_onFormChanged);
     _httpPortController.addListener(_onFormChanged);
     _srtPortController.addListener(_onFormChanged);
+
+    _loadSavedPreferences();
+  }
+
+  Future<void> _loadSavedPreferences() async {
+    final remember = await _prefs.loadRememberSession();
+    final saved = await _prefs.loadServerConfig();
+    if (!mounted) return;
+    setState(() {
+      _rememberSession = remember;
+      if (_hostController.text.trim().isEmpty && saved.host.trim().isNotEmpty) {
+        _hostController.text = saved.host;
+        _httpPortController.text = saved.httpPort.toString();
+        _srtPortController.text = saved.srtPort.toString();
+        if (saved.username.isNotEmpty) _userController.text = saved.username;
+        if (saved.password.isNotEmpty) _passController.text = saved.password;
+        _useHttps = saved.useHttps;
+      }
+    });
   }
 
   void _onFormChanged() {
@@ -128,6 +150,7 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
     }
 
     final cfg = _getConfigFromForm();
+    await _prefs.saveRememberSession(_rememberSession);
     await context.read<GatewayProvider>().updateConfig(cfg);
 
     if (mounted) {
@@ -500,6 +523,47 @@ class _WelcomeServerScreenState extends State<WelcomeServerScreen> with SingleTi
                             onChanged: (val) => setState(() => _useHttps = val),
                           ),
                         ],
+                      ),
+                      const Divider(color: MakasnaTheme.border, height: 18),
+
+                      // Remember Session Checkbox (Cache Login)
+                      InkWell(
+                        onTap: () => setState(() => _rememberSession = !_rememberSession),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Checkbox(
+                                  value: _rememberSession,
+                                  activeColor: MakasnaTheme.cyan,
+                                  checkColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                  onChanged: (val) => setState(() => _rememberSession = val ?? true),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Simpan Sesi Login (Auto-Connect)',
+                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                    Text(
+                                      'Cukup isi sekali. Aplikasi akan langsung tersambung otomatis saat dibuka berikutnya.',
+                                      style: TextStyle(color: MakasnaTheme.textDim, fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),

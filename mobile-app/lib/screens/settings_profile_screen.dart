@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/server_config.dart';
 import '../providers/gateway_provider.dart';
+import '../services/preferences_service.dart';
 import 'welcome_server_screen.dart';
 
 class SettingsProfileScreen extends StatefulWidget {
@@ -307,6 +308,55 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
                 label: const Text(
                   'SIMPAN & TERAPKAN PROFILE',
                   style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  side: const BorderSide(color: Colors.redAccent),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: MakasnaTheme.panelElevated,
+                      title: const Text('Ganti Server / Keluar', style: TextStyle(color: Colors.white, fontSize: 16)),
+                      content: const Text(
+                        'Apakah Anda ingin keluar dari sesi server saat ini dan kembali ke pemilihan server?',
+                        style: TextStyle(color: MakasnaTheme.textDim, fontSize: 13),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Batal', style: TextStyle(color: Colors.white70)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: MakasnaTheme.red),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Ya, Ganti Server', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true && mounted) {
+                    await PreferencesService().clearSession();
+                    if (mounted) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const WelcomeServerScreen()),
+                        (route) => false,
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.logout, size: 16, color: Colors.redAccent),
+                label: const Text(
+                  'GANTI SERVER / RESET SESI TERSIMPAN',
+                  style: TextStyle(fontSize: 12, letterSpacing: 0.5, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

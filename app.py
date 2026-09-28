@@ -22,7 +22,7 @@ import re
 import shutil
 import atexit
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from urllib.parse import urlsplit, parse_qs
 from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for, Response
@@ -31,6 +31,9 @@ import gdrive_service
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "makasna-srt-secret-2026")
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=60)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "admin")
 DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS", "@linux1234")
 
@@ -995,7 +998,9 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
+        remember = request.form.get("remember")
         if username == DASHBOARD_USER and password == DASHBOARD_PASS:
+            session.permanent = bool(remember is not None)
             session["logged_in"] = True
             session["username"] = username
             return redirect(url_for("index"))

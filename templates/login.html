@@ -144,6 +144,12 @@ button:hover { background: #1d4ed8; }
     <label>Password
       <input name="password" type="password" required autocomplete="current-password" placeholder="••••••••">
     </label>
+    <div style="display: flex; align-items: center; gap: 8px; margin: 4px 0 10px;">
+      <input type="checkbox" name="remember" id="remember" value="1" checked style="width: auto; margin: 0; cursor: pointer; accent-color: var(--cyan);">
+      <label for="remember" style="margin: 0; font-size: 12px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+        Ingat Sesi Login (Cache Sesi 60 Hari)
+      </label>
+    </div>
     <button type="submit">Sign In</button>
   </form>
 </main>
