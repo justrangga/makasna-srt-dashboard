@@ -463,7 +463,7 @@ def start_route_recording(route_id, options=None):
         paths = get_mediamtx_paths()
         path_names = [p.get("name") for p in paths if isinstance(p, dict)]
         if stream_name not in path_names:
-            return False, f"Inbound stream '{stream_name}' tidak aktif di MediaMTX."
+            return False, f"Inbound stream '{stream_name}' is not active in MediaMTX."
 
         route_name = f"Inbound: {stream_name}"
         route_safe_id = f"inbound_{stream_name}"
@@ -473,7 +473,7 @@ def start_route_recording(route_id, options=None):
         rid = target_id.replace("route:", "").strip()
         with active_routes_lock:
             if rid not in active_routes:
-                return False, "Rute belum berjalan. Silakan nyalakan rute terlebih dahulu sebelum merekam."
+                return False, "Route is not running. Please start the route before recording."
 
         routes = load_routes()
         route = next((r for r in routes if r["id"] == rid), None)
@@ -575,7 +575,7 @@ def start_route_recording(route_id, options=None):
 
     log_file_path = os.path.join(LOGS_DIR, f"record_{route_safe_id}.log")
     log_fp = open(log_file_path, "a")
-    log_fp.write(f"\n--- Starting HyperDeck ISO Recording for '{route_name}' ({ext.upper()}) at {now_iso()} ---\n")
+    log_fp.write(f"\n--- Starting Master ISO Recording for '{route_name}' ({ext.upper()}) at {now_iso()} ---\n")
     log_fp.write("CMD: " + " ".join(cmd) + "\n\n")
     log_fp.flush()
 
@@ -589,7 +589,7 @@ def start_route_recording(route_id, options=None):
         )
     except Exception as e:
         log_fp.close()
-        log_event(route_safe_id, route_name, "record_error", f"Failed to spawn HyperDeck recording: {e}", "error")
+        log_event(route_safe_id, route_name, "record_error", f"Failed to spawn master recording: {e}", "error")
         return False, str(e)
 
     with active_recorders_lock:
@@ -613,7 +613,7 @@ def start_route_recording(route_id, options=None):
         route["record_enabled"] = True
         save_routes(routes)
 
-    log_event(route_safe_id, route_name, "record_start", f"HyperDeck ISO recording started for '{route_name}' [{ext.upper()}] (PID {proc.pid})", "info")
+    log_event(route_safe_id, route_name, "record_start", f"Master ISO recording started for '{route_name}' [{ext.upper()}] (PID {proc.pid})", "info")
     return True, None
 
 
@@ -668,7 +668,7 @@ def stop_route_recording(route_id):
     except Exception:
         pass
 
-    log_event(route_safe_id, rname, "record_stop", f"HyperDeck ISO recording stopped for '{rname}'", "info")
+    log_event(route_safe_id, rname, "record_stop", f"Master ISO recording stopped for '{rname}'", "info")
     return True, None
 
 
@@ -1356,7 +1356,7 @@ def api_route_record_start(route_id):
     ok, err = start_route_recording(route_id, options=opts)
     if not ok:
         return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "HyperDeck recording started"})
+    return jsonify({"ok": True, "message": "Master ISO recording started"})
 
 
 @app.route("/api/routes/<path:route_id>/record/stop", methods=["POST"])
@@ -1365,7 +1365,7 @@ def api_route_record_stop(route_id):
     ok, err = stop_route_recording(route_id)
     if not ok:
         return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "HyperDeck recording stopped"})
+    return jsonify({"ok": True, "message": "Master ISO recording stopped"})
 
 
 @app.route("/api/routes/<path:route_id>/record/status", methods=["GET"])
@@ -1409,7 +1409,7 @@ def api_direct_record_start():
     ok, err = start_route_recording(target_id, options=opts)
     if not ok:
         return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "HyperDeck recording started"})
+    return jsonify({"ok": True, "message": "Master ISO recording started"})
 
 
 @app.route("/api/record/stop", methods=["POST"])
@@ -1432,7 +1432,7 @@ def api_direct_record_stop():
     ok, err = stop_route_recording(target_id)
     if not ok:
         return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "HyperDeck recording stopped"})
+    return jsonify({"ok": True, "message": "Master ISO recording stopped"})
 
 
 @app.route("/api/routes/<route_id>/switch-source", methods=["POST"])
@@ -1970,7 +1970,7 @@ def api_upload_recording_now(rel_path):
         rec["upload_progress"] = 0
         gdrive_service.save_recordings_meta(meta)
         log_event(rec.get("route_id", "system"), rec.get("route_name", "General"), "gdrive_queue", f"Manually queued {os.path.basename(fpath)} for Google Drive upload", "info")
-        return jsonify({"ok": True, "message": "File berhasil diantrekan untuk upload ke Google Drive di latar belakang."})
+        return jsonify({"ok": True, "message": "Recording queued for background upload to Google Drive."})
     else:
         return jsonify({"ok": False, "error": "Recording metadata not found"}), 404
 

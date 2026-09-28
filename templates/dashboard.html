@@ -852,8 +852,106 @@ video {
   }
 }
 
+@media (max-width: 640px) {
+  .top-nav {
+    height: auto !important;
+    min-height: 52px;
+    padding: 8px 12px !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+  .brand {
+    gap: 6px !important;
+  }
+  .brand-name {
+    font-size: 14px !important;
+  }
+  .brand-pill {
+    display: none !important;
+  }
+  .user-actions {
+    gap: 6px !important;
+    flex-wrap: wrap;
+  }
+  .user-actions .btn-icon, .btn-logout {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+    min-height: 30px !important;
+  }
+  .hyperdeck-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+  }
+  .hyperdeck-brand {
+    justify-content: space-between !important;
+  }
+  .hyperdeck-feed-selector {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  .hd-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .hyperdeck-tally-container {
+    justify-content: flex-end !important;
+  }
+  .hd-osd-top {
+    left: 8px !important;
+    right: 56px !important;
+    font-size: 10px !important;
+  }
+  .hd-osd-badge {
+    font-size: 9.5px !important;
+    padding: 2px 6px !important;
+  }
+  .hd-osd-bottom {
+    left: 8px !important;
+    right: 56px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+  }
+  .hd-osd-src {
+    font-size: 9.5px !important;
+    padding: 2px 6px !important;
+  }
+  .hd-timecode {
+    font-size: 13.5px !important;
+  }
+  .hd-timecode-box {
+    padding: 2px 6px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .hd-quick-settings {
+    grid-template-columns: 1fr !important;
+  }
+  .hd-transport-buttons {
+    display: flex !important;
+    gap: 8px !important;
+  }
+  .hd-btn {
+    flex: 1 !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+  }
+  #inbound-table-container,
+  #readers-table-container {
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+  }
+}
+
 /* ========================================================================= */
-/* BLACKMAGIC HYPERDECK STUDIO MASTER RECORDER STYLES */
+/* MASTER DECK RECORDER STYLES */
 /* ========================================================================= */
 .hyperdeck-console {
   background: radial-gradient(circle at 50% 0%, #151820 0%, #0c0d12 100%);
@@ -1593,7 +1691,7 @@ video {
             <div class="dot dot-green" id="inbound-pulse-dot"></div>
             <div>
               <div style="font-weight:700; font-size:13.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--cyan);">SRT Live Ingest &amp; Listeners Monitor</div>
-              <div style="font-size:11.5px; color:var(--muted);">Live monitoring of Ingest Publishers (Pengirim) and Connected Listeners (PC Blackgate / vMix / VLC)</div>
+              <div style="font-size:11.5px; color:var(--muted);">Live monitoring of Ingest Publishers (Source Encoders) and Connected Downstream Listeners (Receivers / vMix / VLC)</div>
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -1609,12 +1707,12 @@ video {
         <div class="srt-subtabs-bar">
           <button type="button" id="tab-srt-publishers" class="srt-subtab active-pub" onclick="setSrtTrafficTab('publishers')">
             <span class="dot dot-green" id="srt-pub-tab-dot"></span>
-            <span>Ingest Publishers (Pengirim)</span>
+            <span>Ingest Publishers (Video Sources)</span>
             <span id="srt-pub-count-pill" class="badge-count">0</span>
           </button>
           <button type="button" id="tab-srt-readers" class="srt-subtab" onclick="setSrtTrafficTab('readers')">
             <span class="dot dot-gray" id="srt-read-tab-dot"></span>
-            <span>Active Listeners (Penerima / Blackgate)</span>
+            <span>Active Listeners (Receivers)</span>
             <span id="srt-read-count-pill" class="badge-count">0</span>
           </button>
         </div>
@@ -1623,8 +1721,8 @@ video {
         <div id="srt-publishers-view">
           <div id="inbound-empty-notice" style="background:var(--panel-elevated); border:1px dashed var(--border); border-radius:8px; padding:12px 14px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <div>
-              <span>Belum ada encoder pengirim SRT yang terhubung ke port 8890.</span>
-              <a href="javascript:void(0)" onclick="openConnectionUrlsModal()" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Klik di sini untuk melihat format URL Pengirim (OBS/vMix)</a>
+              <span>No inbound SRT source encoders are currently connected to port 8890.</span>
+              <a href="javascript:void(0)" onclick="openConnectionUrlsModal()" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Click here to view publisher ingest URL formats (OBS / vMix)</a>
             </div>
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
@@ -1651,8 +1749,8 @@ video {
         <div id="srt-readers-view" style="display:none;">
           <div id="readers-empty-notice" style="background:var(--panel-elevated); border:1px dashed var(--border); border-radius:8px; padding:12px 14px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <div>
-              <span>Belum ada client atau PC (seperti vMix, OBS, atau VLC) yang sedang me-listen feed SRT dari gateway ini.</span>
-              <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Format Listen: srt://139.190.97.109:8890?streamid=read:STREAM_NAME</a>
+              <span>No downstream client listeners (such as vMix, OBS, or VLC) are currently pulling stream feeds from this gateway.</span>
+              <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Listener Pull URL: srt://139.190.97.109:8890?streamid=read:STREAM_NAME</a>
             </div>
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
@@ -1753,7 +1851,7 @@ video {
       </div>
 
       <!-- ========================================================================= -->
-      <!-- BLACKMAGIC HYPERDECK STUDIO BROADCAST MASTER RECORDER CONSOLE -->
+      <!-- BROADCAST MASTER DECK RECORDER CONSOLE -->
       <!-- ========================================================================= -->
       <div class="hyperdeck-console">
         <!-- HyperDeck Top Chassis Bezel -->
@@ -1761,7 +1859,7 @@ video {
           <div class="hyperdeck-brand">
             <div class="hyperdeck-screws"></div>
             <div class="hyperdeck-brand-text">
-              <span class="hd-title">HYPERDECK STUDIO</span>
+              <span class="hd-title">MASTER DECK RECORDER</span>
               <span class="hd-subtitle">BROADCAST ISO RECORDER</span>
             </div>
           </div>
@@ -1770,7 +1868,7 @@ video {
           <div class="hyperdeck-feed-selector">
             <span class="hd-feed-label">FEED SOURCE:</span>
             <select id="hd-route-select" class="hd-select" onchange="onHyperdeckFeedChange()">
-              <option value="">-- PILIH KAMERA / RUTE FEED --</option>
+              <option value="">-- SELECT FEED / CAMERA SOURCE --</option>
             </select>
           </div>
 
@@ -1853,7 +1951,7 @@ video {
                 </div>
                 <div class="hd-slot-info">
                   <span id="hd-slot1-free">49.2 GB Free</span>
-                  <span id="hd-slot1-time">~36.8 Jam Tersedia</span>
+                  <span id="hd-slot1-time">~36.8 Hours Available</span>
                 </div>
               </div>
 
@@ -1881,9 +1979,9 @@ video {
               <div class="hd-setting-item">
                 <label>SEGMENT DURATION</label>
                 <select id="hd-cfg-duration" class="hd-mini-select">
-                  <option value="900" selected>15 Menit</option>
-                  <option value="1800">30 Menit</option>
-                  <option value="3600">1 Jam (60m)</option>
+                  <option value="900" selected>15 Minutes</option>
+                  <option value="1800">30 Minutes</option>
+                  <option value="3600">1 Hour (60m)</option>
                 </select>
               </div>
 
@@ -1915,7 +2013,7 @@ video {
               </div>
 
               <div class="hd-setting-item">
-                <label>RESOLUSI VIDEO</label>
+                <label>OUTPUT RESOLUTION</label>
                 <select id="hd-cfg-resolution" class="hd-mini-select" onchange="onHyperdeckResChange()">
                   <option value="original" selected>Source Native (Original)</option>
                   <option value="1080p">1080p (1920&times;1080)</option>
@@ -1956,7 +2054,7 @@ video {
 
             <!-- Live Recording Status Bar -->
             <div class="hd-status-strip">
-              <span id="hd-status-msg" style="color:#e4e4e7; font-weight:600;">Pilih feed kamera lalu tekan tombol RECORD untuk memulai ISO recording.</span>
+              <span id="hd-status-msg" style="color:#e4e4e7; font-weight:600;">Select a camera feed then press RECORD to start master ISO recording.</span>
             </div>
           </div>
         </div>
@@ -2007,10 +2105,10 @@ video {
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:8px;">
             <div style="display:flex; gap:14px; flex-wrap:wrap;">
               <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer;">
-                <input type="checkbox" id="cfg-gdrive-auto-upload" checked> Otomatis upload saat rekaman selesai
+                <input type="checkbox" id="cfg-gdrive-auto-upload" checked> Auto-upload to cloud when segment completes
               </label>
               <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer;">
-                <input type="checkbox" id="cfg-gdrive-delete-after"> Hapus file lokal setelah sukses upload
+                <input type="checkbox" id="cfg-gdrive-delete-after"> Delete local file after successful upload
               </label>
             </div>
             <button type="button" class="btn-primary" onclick="saveGdriveSettings()">Save Cloud Settings</button>
@@ -2018,7 +2116,7 @@ video {
 
           <!-- Manual Code Paste Accordion -->
           <div style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);">
-            <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">Manual Authorization Code (Jika redirect terhalang firewall):</div>
+            <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">Manual Authorization Code (if OAuth redirect is firewalled):</div>
             <div style="display:flex; gap:8px;">
               <input type="text" id="gdrive-manual-code" class="form-control" placeholder="Paste Google Auth Code here">
               <button class="btn-icon" style="white-space:nowrap;" onclick="submitManualGdriveCode()">Submit Code</button>
@@ -2029,13 +2127,13 @@ video {
           <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
               <div>
-                <b style="color:#fff; font-size:12.5px;">Cara Cepat: Google Service Account (Bebas Error Redirect)</b>
-                <div style="font-size:11px; color:var(--muted);">Paste isi file JSON Key dari Service Account Google Cloud Anda di bawah ini:</div>
+                <b style="color:#fff; font-size:12.5px;">Direct Method: Google Cloud Service Account (No Redirect Needed)</b>
+                <div style="font-size:11px; color:var(--muted);">Paste your Google Cloud Service Account JSON Key below:</div>
               </div>
             </div>
             <textarea id="gdrive-sa-json" class="form-control" rows="3" style="font-family:'JetBrains Mono'; font-size:11px; resize:vertical;" placeholder='{"type": "service_account", "project_id": "...", "private_key": "...", "client_email": "..."}'></textarea>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:8px;">
-              <span style="font-size:11px; color:var(--muted);">*Cukup bagikan (Share) folder Google Drive ke email service account sebagai Editor.</span>
+              <span style="font-size:11px; color:var(--muted);">*Share your target Google Drive folder with the service account client_email as Editor.</span>
               <button type="button" class="btn-primary" style="background:var(--cyan); color:#000;" onclick="submitServiceAccountJson()">Connect Service Account</button>
             </div>
           </div>
@@ -2367,16 +2465,16 @@ video {
               <div class="form-group" style="margin:0;">
                 <label>Segment Duration Rule</label>
                 <select id="rf-rec-duration" class="form-control" onchange="calcEstimatedRecSize()">
-                  <option value="900" selected>15 Menit (900 detik)</option>
-                  <option value="1800">30 Menit (1800 detik)</option>
-                  <option value="3600">1 Jam (3600 detik)</option>
+                  <option value="900" selected>15 Minutes (900s)</option>
+                  <option value="1800">30 Minutes (1800s)</option>
+                  <option value="3600">1 Hour (3600s)</option>
                 </select>
               </div>
               <div class="form-group" style="margin:0;">
-                <label>Mode Rekaman &amp; Optimasi Storage</label>
+                <label>Recording Mode &amp; Storage Optimization</label>
                 <select id="rf-rec-mode" class="form-control" onchange="toggleRecModePanel(this.value); calcEstimatedRecSize()">
-                  <option value="compress" selected>Optimized Compression (Pangkas Ukuran 85-92% - Rekomendasi)</option>
-                  <option value="copy">Direct Stream Copy (Kualitas Penuh / ~2 GB per 15 Menit)</option>
+                  <option value="compress" selected>Optimized Compression (85-92% Size Reduction - Recommended)</option>
+                  <option value="copy">Direct Stream Copy (Lossless Passthrough / ~2 GB per 15 Min)</option>
                 </select>
               </div>
             </div>
@@ -2385,41 +2483,41 @@ video {
             <div id="rf-rec-compress-panel" style="background:rgba(0,0,0,0.35); border:1px solid rgba(0,229,255,0.2); border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; gap:10px;">
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                 <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--cyan); letter-spacing:0.06em;">
-                  Pengaturan Bitrate &amp; Resolusi Hemat Storage
+                  Bitrate &amp; Resolution Storage Optimization
                 </span>
                 <span id="rf-rec-estimate-text" style="font-size:11.5px; font-family:'JetBrains Mono'; color:var(--green); font-weight:600;">
-                  Estimasi: ~225 MB per 15 Menit (Hemat 89%)
+                  Estimate: ~225 MB per 15 Min (89% Savings)
                 </span>
               </div>
               <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
                 <div class="form-group" style="margin:0;">
-                  <label>Preset Bitrate Rekaman</label>
+                  <label>Bitrate Preset</label>
                   <select id="rf-rec-preset-select" class="form-control" onchange="applyRecBitratePreset(this.value); calcEstimatedRecSize()">
-                    <option value="1200">1200 kbps (Super Hemat ~135 MB/15m)</option>
-                    <option value="2000" selected>2000 kbps (Standar HD ~225 MB/15m)</option>
-                    <option value="3500">3500 kbps (Kualitas Tinggi ~390 MB/15m)</option>
+                    <option value="1200">1200 kbps (Ultra Light ~135 MB/15m)</option>
+                    <option value="2000" selected>2000 kbps (Standard HD ~225 MB/15m)</option>
+                    <option value="3500">3500 kbps (High Quality ~390 MB/15m)</option>
                     <option value="5000">5000 kbps (Studio Master ~560 MB/15m)</option>
                     <option value="custom">Custom Bitrate...</option>
                   </select>
                 </div>
                 <div class="form-group" style="margin:0;">
-                  <label>Bitrate Manual (kbps)</label>
+                  <label>Manual Bitrate (kbps)</label>
                   <input type="number" id="rf-rec-vbitrate" class="form-control" value="2000" min="400" max="25000" oninput="calcEstimatedRecSize()">
                 </div>
                 <div class="form-group" style="margin:0;">
-                  <label>Resolusi Rekaman</label>
+                  <label>Recording Resolution</label>
                   <select id="rf-rec-scale" class="form-control">
-                    <option value="720p" selected>720p (HD - Sangat Hemat)</option>
+                    <option value="720p" selected>720p (HD - Compact)</option>
                     <option value="1080p">1080p (Full HD)</option>
-                    <option value="480p">480p (SD - Ringan)</option>
-                    <option value="original">Original (Sesuai Sumber)</option>
+                    <option value="480p">480p (SD - Ultra Light)</option>
+                    <option value="original">Original (Source Match)</option>
                   </select>
                 </div>
                 <div class="form-group" style="margin:0;">
                   <label>Framerate</label>
                   <select id="rf-rec-fps" class="form-control">
                     <option value="original" selected>Original</option>
-                    <option value="25">25 fps (Standar Broadcast)</option>
+                    <option value="25">25 fps (Broadcast Standard)</option>
                     <option value="30">30 fps</option>
                     <option value="50">50 fps</option>
                     <option value="60">60 fps</option>
@@ -2439,7 +2537,7 @@ video {
               <div style="display:flex; align-items:center; gap:8px; margin-top:16px;">
                 <input type="checkbox" id="rf-rec-upload-gdrive" checked>
                 <label for="rf-rec-upload-gdrive" style="font-size:12px; color:var(--text); cursor:pointer;">
-                  Otomatis kirim setiap segment selesai ke Google Drive yang tersambung
+                  Automatically upload completed segments to connected Google Drive
                 </label>
               </div>
             </div>
@@ -2483,7 +2581,7 @@ video {
       </div>
       <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--muted); margin-bottom:8px;">
         <b style="color:#fff;">Android Remote Controller:</b><br>
-        Install aplikasi mobile controller untuk monitoring sinyal dan remote HyperDeck:
+        Install the Android mobile remote controller to monitor live feeds, routes, and master recording:
         <div style="margin-top:8px;">
           <a href="/download/apk" target="_blank">
             <button type="button" class="btn-primary" style="width:100%; justify-content:center; background:#10B981; border-color:#059669;">
@@ -2517,7 +2615,7 @@ video {
     <div class="modal-header">
       <div>
         <h2 style="font-size:17px; font-weight:700;">SRT Connection Endpoints &amp; URLs</h2>
-        <span style="font-size:11.5px; color:var(--muted);">Format URL lengkap untuk OBS, VLC, vMix, dan pemutar video</span>
+        <span style="font-size:11.5px; color:var(--muted);">Complete connection URL formats for OBS, VLC, vMix, and media players</span>
       </div>
       <button class="btn-icon" onclick="closeConnectionUrlsModal()">✕</button>
     </div>
@@ -2532,7 +2630,7 @@ video {
           </div>
           <div style="display:flex; gap:10px; align-items:center;">
             <input type="text" id="ep-stream-name" class="form-control" style="max-width:320px; font-family:'JetBrains Mono'; font-weight:700;" value="MAKASNA" placeholder="e.g. MAKASNA" oninput="refreshEndpointUrls(this.value)">
-            <span style="font-size:11.5px; color:var(--muted);">Semua URL di bawah otomatis diperbarui dengan IP server dan nama stream ini.</span>
+            <span style="font-size:11.5px; color:var(--muted);">All URLs below automatically update with this gateway IP and stream identifier.</span>
           </div>
         </div>
       </div>
@@ -2540,10 +2638,10 @@ video {
       <!-- Tab Buttons: Pengirim vs Penerima -->
       <div style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px;">
         <button type="button" id="btn-tab-sender" class="btn-primary" style="font-size:12.5px;" onclick="switchEndpointTab('sender')">
-          1. Untuk Pengirim (OBS / vMix / Encoder)
+          1. For Ingest / Sender (OBS / vMix / Hardware Encoder)
         </button>
         <button type="button" id="btn-tab-receiver" class="btn-icon" style="font-size:12.5px;" onclick="switchEndpointTab('receiver')">
-          2. Untuk Penerima (VLC / Pemutar / Monitoring)
+          2. For Downstream Receiver (vMix / VLC / Downstream Studio)
         </button>
       </div>
 
@@ -2559,7 +2657,7 @@ video {
             <input type="text" id="url-obs-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan); width:100%;" value="" onclick="this.select()">
           </div>
           <div style="font-size:11px; color:var(--muted); margin-top:5px;">
-            Petunjuk: Di OBS buka <b>Settings &gt; Stream</b>. Pilih Service: <b>Custom...</b>, isi Server dengan URL di atas, dan kosongkan Stream Key.
+            Instruction: In OBS open <b>Settings &gt; Stream</b>. Select Service: <b>Custom...</b>, paste the URL above into Server, and leave Stream Key empty.
           </div>
         </div>
 
@@ -2592,10 +2690,10 @@ video {
 
       <!-- SECTION 2: PENERIMA (RECEIVER / SUBSCRIBER) -->
       <div id="ep-section-receiver" style="display:none; flex-direction:column; gap:12px;">
-        <!-- Card 1: vMix / Blackgate SRT Input (Caller Pull) -->
+        <!-- Card 1: vMix / Studio Downstream Receiver SRT Input (Caller Pull) -->
         <div style="background:var(--panel-elevated); border:1px solid rgba(59,130,246,0.35); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <b style="color:#60a5fa; font-size:13px;">vMix &amp; PC Blackgate (SRT Caller Pull)</b>
+            <b style="color:#60a5fa; font-size:13px;">vMix &amp; Studio Downstream Receiver (SRT Caller Pull)</b>
             <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vmix-receiver')">Copy SRT URL</button>
           </div>
           <div style="display:flex; gap:8px;">
@@ -2608,7 +2706,7 @@ video {
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Stream ID: <b id="ep-sid-recv-text" style="color:#60a5fa;">read:MAKASNA</b></div>
           </div>
           <div style="font-size:11px; color:var(--muted); margin-top:6px; line-height:1.4;">
-            <span style="color:var(--amber); font-weight:600;">Penting di vMix:</span> Buka <i>Add Input &gt; Stream / SRT &gt; Type: SRT (Caller)</i>. Isi kolom <b>Stream ID</b> dengan <b id="ep-sid-recv-note" style="color:#fff;">read:MAKASNA</b> (tanpa menulis kata <code>streamid=</code>).
+            <span style="color:var(--amber); font-weight:600;">Important for vMix:</span> Open <i>Add Input &gt; Stream / SRT &gt; Type: SRT (Caller)</i>. Enter the <b>Stream ID</b> as <b id="ep-sid-recv-note" style="color:#fff;">read:MAKASNA</b> (do NOT prefix with <code>streamid=</code>).
           </div>
         </div>
 
@@ -2622,11 +2720,11 @@ video {
             <input type="text" id="url-vlc-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan); width:100%;" value="" onclick="this.select()">
           </div>
           <div style="font-size:11px; color:var(--muted); margin-top:5px;">
-            Petunjuk: Buka VLC &gt; <b>Media</b> &gt; <b>Open Network Stream</b> (Ctrl+N) &gt; Paste URL di atas &gt; Play.
+            Guide: Open VLC &gt; <b>Media</b> &gt; <b>Open Network Stream</b> (Ctrl+N) &gt; Paste the URL above &gt; Play.
           </div>
         </div>
 
-        <!-- Card 3: OBS Media Source (Penerima Video ke OBS) -->
+        <!-- Card 3: OBS Media Source (Downstream Video to OBS) -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">OBS Studio (Media Source Ingest)</b>
@@ -2636,7 +2734,7 @@ video {
             <input type="text" id="url-obs-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; width:100%;" value="" onclick="this.select()">
           </div>
           <div style="font-size:11px; color:var(--muted); margin-top:5px;">
-            Petunjuk: Di OBS tambah Source &gt; <b>Media Source</b> &gt; Hilangkan centang 'Local File' &gt; Masukkan URL ini di kolom <b>Input</b>.
+            Guide: In OBS add Source &gt; <b>Media Source</b> &gt; Uncheck 'Local File' &gt; Paste this URL into the <b>Input</b> field.
           </div>
         </div>
 
@@ -2665,7 +2763,7 @@ video {
     </div>
 
     <div class="modal-footer">
-      <button class="btn-icon" style="width:100%; justify-content:center; min-height:38px;" onclick="closeConnectionUrlsModal()">Tutup</button>
+      <button class="btn-icon" style="width:100%; justify-content:center; min-height:38px;" onclick="closeConnectionUrlsModal()">Close</button>
     </div>
   </div>
 </div>
@@ -2918,7 +3016,7 @@ async function pollInboundSrt() {
               </td>
               <td style="text-align:right;">
                 <div class="action-group" style="justify-content:flex-end;">
-                  <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyTextDirect('${escapeHtml(readUrl)}', 'SRT Read URL')" title="Salin URL Listener">Copy URL</button>
+                  <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyTextDirect('${escapeHtml(readUrl)}', 'SRT Read URL')" title="Copy Listener URL">Copy URL</button>
                   <button class="btn-icon" style="color:#60a5fa; font-weight:600;" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">Preview</button>
                 </div>
               </td>
@@ -2939,12 +3037,12 @@ function copyTextDirect(text, label) {
   if (!text) return;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(text).then(() => {
-      alert(`${label || 'Teks'} berhasil disalin ke clipboard:\n${text}`);
+      alert(`${label || 'Text'} copied to clipboard:\n${text}`);
     }).catch(() => {
-      prompt('Salin teks ini:', text);
+      prompt('Copy this text:', text);
     });
   } else {
-    prompt('Salin teks ini:', text);
+    prompt('Copy this text:', text);
   }
 }
 
@@ -3046,12 +3144,12 @@ function copyInputVal(id) {
   if (!el || !el.value) return;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(el.value).then(() => {
-      alert(`Berhasil disalin ke clipboard:\n${el.value}`);
+      alert(`Copied to clipboard:\n${el.value}`);
     }).catch(() => {
-      prompt('Salin URL ini:', el.value);
+      prompt('Copy this URL:', el.value);
     });
   } else {
-    prompt('Salin URL ini:', el.value);
+    prompt('Copy this URL:', el.value);
   }
 }
 
@@ -4289,7 +4387,7 @@ async function saveGdriveSettings() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id, client_secret, target_folder_name, auto_upload, delete_after_upload })
     });
-    alert('Pengaturan Google Cloud berhasil disimpan!');
+    alert('Google Cloud settings saved successfully!');
     fetchGdriveStatus();
   } catch(e) { alert(e.message); }
 }
@@ -4301,7 +4399,7 @@ async function connectGoogleDrive() {
       window.location.href = d.auth_url;
     }
   } catch(e) {
-    alert('Gagal memulai login Google: ' + e.message + '\n\nPeriksa Client ID & Client Secret di Settings / Custom App.');
+    alert('Failed to initiate Google login: ' + e.message + '\n\nCheck Client ID & Client Secret in Settings / Custom App.');
     toggleGdriveSettings();
   }
 }
@@ -4309,7 +4407,7 @@ async function connectGoogleDrive() {
 async function submitManualGdriveCode() {
   const code = document.getElementById('gdrive-manual-code').value.trim();
   if (!code) {
-    alert('Masukkan kode otorisasi dari Google');
+    alert('Please enter authorization code from Google');
     return;
   }
   try {
@@ -4328,14 +4426,14 @@ async function submitManualGdriveCode() {
 async function submitServiceAccountJson() {
   const text = document.getElementById('gdrive-sa-json').value.trim();
   if (!text) {
-    alert('Paste isi file JSON Service Account terlebih dahulu');
+    alert('Please paste the Service Account JSON Key content first');
     return;
   }
   let parsed;
   try {
     parsed = JSON.parse(text);
   } catch(e) {
-    alert('Format JSON tidak valid: ' + e.message);
+    alert('Invalid JSON format: ' + e.message);
     return;
   }
   try {
@@ -4352,7 +4450,7 @@ async function submitServiceAccountJson() {
 }
 
 async function disconnectGoogleDrive() {
-  if (!confirm('Putuskan sambungan Google Drive? Rekaman otomatis ke cloud akan dihentikan.')) return;
+  if (!confirm('Disconnect Google Drive? Automatic cloud upload will be paused.')) return;
   try {
     await api('/api/gdrive/disconnect', { method: 'POST' });
     fetchGdriveStatus();
@@ -4381,15 +4479,15 @@ async function fetchRecordings() {
       if (barEl) barEl.style.width = `${Math.min(100, d.disk.percent)}%`;
       if (timeEl) {
         const hoursRemaining = Math.max(0, Math.round((d.disk.free_gb / 1.1) * 10) / 10);
-        timeEl.textContent = `~${hoursRemaining} Jam Tersedia`;
+        timeEl.textContent = `~${hoursRemaining} Hours Available`;
       }
     }
     const countEl = document.getElementById('recordings-count-text');
     if (countEl) countEl.textContent = `${recordingsList.length} segments recorded`;
 
     if (!recordingsList.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--muted); padding:30px;">Belum ada rekaman segmentasi. Aktifkan fitur "Enable Recording" pada rute untuk mulai merekam otomatis.</td></tr>';
-      if (mContainer) mContainer.innerHTML = '<div style="text-align:center; color:var(--muted); padding:30px;">Belum ada rekaman segmentasi.</div>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--muted); padding:30px;">No recorded segments found. Enable recording on a route or use Master Deck Recorder to capture streams.</td></tr>';
+      if (mContainer) mContainer.innerHTML = '<div style="text-align:center; color:var(--muted); padding:30px;">No recorded segments found.</div>';
       return;
     }
 
@@ -4499,20 +4597,20 @@ async function fetchRecordings() {
     }
 
   } catch(e) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:20px;">Gagal memuat daftar rekaman: ${escapeHtml(e.message)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:20px;">Failed to load recordings: ${escapeHtml(e.message)}</td></tr>`;
   }
 }
 
 async function uploadRecordingNow(id) {
   try {
     const res = await api(`/api/recordings/upload-now/${encodeURIComponent(id)}`, { method: 'POST' });
-    alert(res.message || 'File rekaman berhasil diantrekan untuk upload ke Google Drive di latar belakang.');
+    alert(res.message || 'Recording queued for background upload to Google Drive.');
     fetchRecordings();
   } catch(e) { alert('Upload error: ' + e.message); }
 }
 
 async function deleteRecording(id) {
-  if (!confirm('Hapus file rekaman ini?')) return;
+  if (!confirm('Delete this recording file?')) return;
   try {
     await api(`/api/recordings/${encodeURIComponent(id)}`, { method: 'DELETE' });
     fetchRecordings();
@@ -4523,7 +4621,7 @@ window.addEventListener('DOMContentLoaded', () => {
   fetchGdriveStatus();
   const params = new URLSearchParams(window.location.search);
   if (params.get('gdrive') === 'connected') {
-    alert('Google Drive berhasil terhubung! Rekaman akan otomatis disinkronkan ke Google Drive Anda.');
+    alert('Google Drive connected successfully! Recordings will automatically sync to your Google Drive.');
     switchTab('recordings');
   } else if (params.get('gdrive') === 'error') {
     alert('Google Drive notice: ' + (params.get('msg') || 'Check configuration'));
@@ -4548,7 +4646,7 @@ async function fetchEvents() {
     if (countLabel) countLabel.textContent = events.length;
 
     if (!events.length) {
-      container.innerHTML = '<div style="padding:30px; color:var(--muted); text-align:center;">Belum ada catatan aktivitas / event log kosong.</div>';
+      container.innerHTML = '<div style="padding:30px; color:var(--muted); text-align:center;">No activity logged yet / event log is empty.</div>';
       return;
     }
     container.innerHTML = events.map(ev => {
@@ -4570,10 +4668,10 @@ async function fetchEvents() {
 }
 
 async function clearAllEvents() {
-  if (!confirm('Apakah Anda yakin ingin menghapus seluruh riwayat Gateway Event Log?')) return;
+  if (!confirm('Are you sure you want to clear the entire Gateway Event Log?')) return;
   try {
     const res = await api('/api/events', { method: 'DELETE' });
-    alert(res.message || 'Event log berhasil dibersihkan');
+    alert(res.message || 'Event log cleared successfully');
     fetchEvents();
   } catch(e) { alert(e.message); }
 }
@@ -4611,7 +4709,7 @@ function escapeHtml(str) {
 }
 
 // =========================================================================
-// BLACKMAGIC HYPERDECK STUDIO MASTER RECORDER LOGIC
+// MASTER DECK RECORDER LOGIC
 // =========================================================================
 let currentHyperdeckRouteId = '';
 let hdHlsPlayer = null;
@@ -4638,15 +4736,15 @@ function syncHyperdeckRouteOptions() {
   const routes = currentRoutes || [];
   const inbounds = latestInboundPublishers || [];
 
-  let html = '<option value="">-- PILIH FEED (INBOUND SRT MASUK / KITA CALL) --</option>';
+  let html = '<option value="">-- SELECT FEED (INBOUND SRT / ACTIVE ROUTE) --</option>';
 
   // Group 1: Live Inbound SRT Ingest (Port 8890)
   if (inbounds.length > 0) {
-    html += '<optgroup label="── LIVE INBOUND SRT (PORT 8890 MASUK) ──">';
+    html += '<optgroup label="── LIVE INBOUND SRT (PORT 8890 INGEST) ──">';
     inbounds.forEach(pub => {
       const isRec = Boolean(lastActiveRecorders && (lastActiveRecorders[`inbound_${pub.stream_id}`] || lastActiveRecorders[`inbound:${pub.stream_id}`]));
       const recBadge = isRec ? ' [● REC]' : '';
-      html += `<option value="inbound:${escapeHtml(pub.stream_id)}">● [INBOUND MASUK] publish:${escapeHtml(pub.stream_id)} (${pub.remote_ip} • ${pub.rx_rate_mbps} Mbps)${recBadge}</option>`;
+      html += `<option value="inbound:${escapeHtml(pub.stream_id)}">● [INGEST] publish:${escapeHtml(pub.stream_id)} (${pub.remote_ip} • ${pub.rx_rate_mbps} Mbps)${recBadge}</option>`;
     });
     html += '</optgroup>';
   }
@@ -4654,14 +4752,14 @@ function syncHyperdeckRouteOptions() {
   // Group 2: SRT Caller (Server Pull / Kita Call)
   const callerRoutes = routes.filter(r => r.primary_source?.type === 'caller');
   if (callerRoutes.length > 0) {
-    html += '<optgroup label="── SRT CALLER (SERVER PULL / KITA CALL) ──">';
+    html += '<optgroup label="── SRT CALLER (REMOTE PULL) ──">';
     callerRoutes.forEach(r => {
       const statusIcon = r.running ? '● [RUNNING]' : '○ [STOPPED]';
       const isRec = Boolean(r.is_recording || (lastActiveRecorders && lastActiveRecorders[r.id]));
       const recBadge = isRec ? ' [● REC]' : '';
       const p = r.primary_source;
       const targetStr = p.caller_host ? `${p.caller_host}:${p.caller_port || p.port}` : (p.stream_id || '');
-      html += `<option value="route:${r.id}">${statusIcon} [KITA CALL] ${escapeHtml(r.name)} (${targetStr})${recBadge}</option>`;
+      html += `<option value="route:${r.id}">${statusIcon} [CALLER PULL] ${escapeHtml(r.name)} (${targetStr})${recBadge}</option>`;
     });
     html += '</optgroup>';
   }
@@ -4873,7 +4971,7 @@ function updateHyperdeckRecordingState(isRec, elapsedSec) {
     }
     if (btnRec) btnRec.classList.add('active');
     if (statusMsg) {
-      statusMsg.innerHTML = `<span style="color:var(--red); font-weight:700;">● MEREKAM AKTIF</span> &mdash; Menulis segmen ISO ke local SSD & siap diarsipkan ke Cloud.`;
+      statusMsg.innerHTML = `<span style="color:var(--red); font-weight:700;">● RECORDING ACTIVE</span> &mdash; Writing ISO segments to local SSD & ready for cloud archive.`;
     }
 
     hdElapsedSec = elapsedSec || 0;
@@ -4895,7 +4993,7 @@ function updateHyperdeckRecordingState(isRec, elapsedSec) {
     }
     if (btnRec) btnRec.classList.remove('active');
     if (statusMsg) {
-      statusMsg.innerHTML = `Pilih feed kamera lalu tekan tombol <b>RECORD</b> untuk memulai perekaman ISO.`;
+      statusMsg.innerHTML = `Select a camera feed then press <b>RECORD</b> to start master ISO recording.`;
     }
 
     if (hdTimerInterval) {
@@ -4910,7 +5008,7 @@ function updateHyperdeckRecordingState(isRec, elapsedSec) {
 
 async function hyperdeckRecord() {
   if (!currentHyperdeckRouteId) {
-    alert('Silakan pilih sumber feed kamera (Inbound SRT atau Route Caller) pada dropdown FEED SOURCE terlebih dahulu.');
+    alert('Please select a camera feed source from the FEED SOURCE dropdown first.');
     return;
   }
 
@@ -4919,7 +5017,7 @@ async function hyperdeckRecord() {
     const rid = currentHyperdeckRouteId.replace('route:', '');
     const route = currentRoutes.find(r => r.id === rid);
     if (!route || !route.running) {
-      alert('Rute feed yang dipilih sedang STOPPED (Mati). Silakan nyalakan rute terlebih dahulu untuk merekam.');
+      alert('Selected route is currently STOPPED. Please start the route before recording.');
       return;
     }
   }
@@ -4972,7 +5070,7 @@ async function hyperdeckRecord() {
     fetchRoutes();
     fetchRecordings();
   } catch(e) {
-    alert('Gagal memulai perekaman: ' + e.message);
+    alert('Failed to start recording: ' + e.message);
   } finally {
     if (btnRec) btnRec.style.opacity = '1';
   }
@@ -4999,7 +5097,7 @@ async function hyperdeckStop() {
     fetchRoutes();
     fetchRecordings();
   } catch(e) {
-    alert('Gagal menghentikan perekaman: ' + e.message);
+    alert('Failed to stop recording: ' + e.message);
   } finally {
     if (btnStop) btnStop.style.opacity = '1';
   }
@@ -5068,7 +5166,7 @@ function initHyperdeckWebAudio() {
       videoEl.muted = false;
       videoEl.volume = 1.0;
     } catch(err) {
-      console.warn('HyperDeck Web Audio init error:', err);
+      console.warn('Master Deck Web Audio init error:', err);
     }
   }
 }
@@ -5099,7 +5197,7 @@ function toggleHyperdeckAudioListen(e) {
     } else {
       btn.textContent = '🔇';
       btn.classList.remove('active');
-      btn.title = 'Audio monitor MUTE. Klik untuk dengar suara di headphone/speaker.';
+      btn.title = 'Audio monitor MUTED. Click to unmute speaker.';
     }
   }
 }
