@@ -6,17 +6,25 @@ import '../providers/gateway_provider.dart';
 import '../widgets/broadcast_video_player.dart';
 import '../widgets/vu_meter_bar.dart';
 
-class LivePreviewScreen extends StatelessWidget {
+class LivePreviewScreen extends StatefulWidget {
   final String streamId;
 
   const LivePreviewScreen({Key? key, required this.streamId}) : super(key: key);
 
   @override
+  State<LivePreviewScreen> createState() => _LivePreviewScreenState();
+}
+
+class _LivePreviewScreenState extends State<LivePreviewScreen> {
+  bool _isPlaying = true;
+  bool _isMuted = true;
+
+  @override
   Widget build(BuildContext context) {
     final gateway = context.watch<GatewayProvider>();
-    final hlsUrl = gateway.config.buildHlsUrl(streamId);
-    final directHlsUrl = gateway.config.buildDirectHlsUrl(streamId);
-    final srtReadUrl = gateway.config.buildSrtReadUrl(streamId);
+    final hlsUrl = gateway.config.buildHlsUrl(widget.streamId);
+    final directHlsUrl = gateway.config.buildDirectHlsUrl(widget.streamId);
+    final srtReadUrl = gateway.config.buildSrtReadUrl(widget.streamId);
 
     return Scaffold(
       appBar: AppBar(
@@ -29,7 +37,7 @@ class LivePreviewScreen extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'LIVE MONITOR: $streamId',
+                'LIVE MONITOR: ${widget.streamId}',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -56,16 +64,25 @@ class LivePreviewScreen extends StatelessWidget {
           children: [
             // Smooth Broadcast Video Player (Hardware Accelerated ExoPlayer)
             BroadcastVideoPlayer(
-              streamId: streamId,
+              streamId: widget.streamId,
               aspectRatio: 16 / 9,
               autoPlay: true,
               showControls: true,
               defaultMuted: true,
+              onPlayStateChanged: (playing) {
+                if (mounted) setState(() => _isPlaying = playing);
+              },
+              onMuteStateChanged: (muted) {
+                if (mounted) setState(() => _isMuted = muted);
+              },
             ),
             const SizedBox(height: 14),
 
-            // Live Audio VU Meter
-            const VuMeterBar(levelL: 0.72, levelR: 0.68, isClipped: false),
+            // Live Audio VU Meter (Dynamic Peak Ballistics & Cadence)
+            VuMeterBar(
+              active: _isPlaying,
+              isMuted: _isMuted,
+            ),
             const SizedBox(height: 16),
 
             // Video Engine Technical Info Card

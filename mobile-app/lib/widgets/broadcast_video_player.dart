@@ -14,6 +14,8 @@ class BroadcastVideoPlayer extends StatefulWidget {
   final bool showControls;
   final bool defaultMuted;
   final bool isFullscreen;
+  final ValueChanged<bool>? onPlayStateChanged;
+  final ValueChanged<bool>? onMuteStateChanged;
 
   const BroadcastVideoPlayer({
     Key? key,
@@ -24,6 +26,8 @@ class BroadcastVideoPlayer extends StatefulWidget {
     this.showControls = true,
     this.defaultMuted = true,
     this.isFullscreen = false,
+    this.onPlayStateChanged,
+    this.onMuteStateChanged,
   }) : super(key: key);
 
   @override
@@ -139,6 +143,9 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
         await controller.setVolume(1.0);
       }
 
+      widget.onPlayStateChanged?.call(controller.value.isPlaying);
+      widget.onMuteStateChanged?.call(_isMuted);
+
       setState(() {
         _isInitialized = true;
         _isBuffering = false;
@@ -201,8 +208,10 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
     setState(() {
       if (_controller!.value.isPlaying) {
         _controller!.pause();
+        widget.onPlayStateChanged?.call(false);
       } else {
         _controller!.play();
+        widget.onPlayStateChanged?.call(true);
       }
     });
     _resetHideTimer();
@@ -213,6 +222,7 @@ class _BroadcastVideoPlayerState extends State<BroadcastVideoPlayer> {
     setState(() {
       _isMuted = !_isMuted;
       _controller!.setVolume(_isMuted ? 0.0 : 1.0);
+      widget.onMuteStateChanged?.call(_isMuted);
     });
     _resetHideTimer();
   }

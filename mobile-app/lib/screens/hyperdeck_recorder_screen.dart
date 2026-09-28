@@ -191,8 +191,11 @@ class _HyperdeckRecorderScreenState extends State<HyperdeckRecorderScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Real-time True Peak VU Meter
-            const VuMeterBar(levelL: 0.68, levelR: 0.64, isClipped: false),
+            // Real-time True Peak VU Meter (Dynamic Ballistics & Peak Hold)
+            VuMeterBar(
+              active: rec.selectedFeed != null && rec.selectedFeed!.isNotEmpty,
+              title: 'MASTER RECORDING VU METER',
+            ),
             const SizedBox(height: 16),
 
             // Controls Panel Card
