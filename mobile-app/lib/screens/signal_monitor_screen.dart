@@ -6,6 +6,7 @@ import '../models/srt_connection.dart';
 import '../providers/gateway_provider.dart';
 import '../widgets/metric_card.dart';
 import 'live_preview_screen.dart';
+import 'route_editor_screen.dart';
 import 'welcome_server_screen.dart';
 
 class SignalMonitorScreen extends StatefulWidget {
@@ -197,6 +198,27 @@ class _SignalMonitorScreenState extends State<SignalMonitorScreen> with SingleTi
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (isPublisher) ...[
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: MakasnaTheme.amber,
+                      side: const BorderSide(color: MakasnaTheme.amber),
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RouteEditorScreen(prefillInboundStream: conn.streamId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.alt_route, size: 14),
+                    label: const Text('+ Jadikan Rute', style: TextStyle(fontSize: 11)),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: MakasnaTheme.cyan,

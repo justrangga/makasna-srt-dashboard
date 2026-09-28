@@ -16,13 +16,23 @@ class HyperdeckRecorderScreen extends StatefulWidget {
 }
 
 class _HyperdeckRecorderScreenState extends State<HyperdeckRecorderScreen> {
+  late TextEditingController _bitrateController;
+
   @override
   void initState() {
     super.initState();
+    final rec = context.read<RecorderProvider>();
+    _bitrateController = TextEditingController(text: rec.customBitrateKbps.toString());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final gateway = context.read<GatewayProvider>();
       context.read<RecorderProvider>().updateClient(gateway.apiClient);
     });
+  }
+
+  @override
+  void dispose() {
+    _bitrateController.dispose();
+    super.dispose();
   }
 
   void _confirmStartRecord() {
@@ -49,7 +59,7 @@ class _HyperdeckRecorderScreenState extends State<HyperdeckRecorderScreen> {
           ],
         ),
         content: Text(
-          'Rekam feed [${rec.selectedFeed}] dengan format ${rec.format.toUpperCase()}?\n\n'
+          'Rekam feed [${rec.selectedFeed}] dengan format ${rec.format.toUpperCase()} (${rec.bitrateMode == 'passthrough' ? 'Passthrough Asli' : '${rec.customBitrateKbps} kbps'})?\n\n'
           'Perekaman berjalan independen tanpa memutus siaran utama.',
           style: const TextStyle(color: MakasnaTheme.textSecondary, fontSize: 13),
         ),
@@ -271,6 +281,135 @@ class _HyperdeckRecorderScreenState extends State<HyperdeckRecorderScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+
+                  // Bitrate Mode (Passthrough vs Custom Re-encode)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: rec.bitrateMode == 'passthrough' ? MakasnaTheme.cyanDim : null,
+                            side: BorderSide(
+                              color: rec.bitrateMode == 'passthrough' ? MakasnaTheme.cyan : MakasnaTheme.border,
+                            ),
+                          ),
+                          onPressed: rec.state.active ? null : () => rec.setBitrateMode('passthrough'),
+                          child: const Text('Stream Asli (Copy)'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: rec.bitrateMode != 'passthrough' ? MakasnaTheme.cyanDim : null,
+                            side: BorderSide(
+                              color: rec.bitrateMode != 'passthrough' ? MakasnaTheme.cyan : MakasnaTheme.border,
+                            ),
+                          ),
+                          onPressed: rec.state.active
+                              ? null
+                              : () {
+                                  if (rec.bitrateMode == 'passthrough') {
+                                    rec.setBitrateMode('6000', customKbps: int.tryParse(_bitrateController.text) ?? 6000);
+                                  }
+                                },
+                          child: const Text('Custom Bitrate'),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Custom Bitrate Controls when Custom mode is active
+                  if (rec.bitrateMode != 'passthrough') ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: MakasnaTheme.panelElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: MakasnaTheme.cyan.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'PILIHAN TARGET BITRATE REKAMAN (KBPS)',
+                            style: TextStyle(color: MakasnaTheme.cyan, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [2500, 4500, 6000, 8000, 12000, 16000].map((kbps) {
+                              final isSelected = rec.customBitrateKbps == kbps && rec.bitrateMode != 'custom';
+                              return ChoiceChip(
+                                label: Text('${(kbps / 1000).toStringAsFixed(1)} Mbps'),
+                                selected: isSelected,
+                                selectedColor: MakasnaTheme.cyan,
+                                labelStyle: TextStyle(
+                                  color: isSelected ? Colors.black : Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                onSelected: rec.state.active
+                                    ? null
+                                    : (sel) {
+                                        if (sel) {
+                                          _bitrateController.text = kbps.toString();
+                                          rec.setBitrateMode(kbps.toString(), customKbps: kbps);
+                                        }
+                                      },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _bitrateController,
+                                  enabled: !rec.state.active,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Ketik Bitrate Manual (kbps)',
+                                    prefixIcon: Icon(Icons.speed, color: MakasnaTheme.cyan, size: 16),
+                                    suffixText: 'kbps',
+                                    isDense: true,
+                                  ),
+                                  onChanged: (val) {
+                                    final n = int.tryParse(val.trim());
+                                    if (n != null && n > 0) {
+                                      rec.setCustomBitrate(n);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Target Resolution Selector
+                    DropdownButtonFormField<String>(
+                      value: rec.resolutionMode,
+                      dropdownColor: MakasnaTheme.panelElevated,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(
+                        labelText: 'RESOLUSI OUTPUT REKAMAN',
+                        prefixIcon: Icon(Icons.aspect_ratio, color: MakasnaTheme.cyan, size: 18),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'original', child: Text('Source Asli (Passthrough Res)')),
+                        DropdownMenuItem(value: '1080p', child: Text('1080p Full HD (1920x1080)')),
+                        DropdownMenuItem(value: '720p', child: Text('720p HD (1280x720)')),
+                      ],
+                      onChanged: rec.state.active ? null : (val) => rec.setResolutionMode(val ?? 'original'),
+                    ),
+                  ],
                   const SizedBox(height: 12),
 
                   // Segment Duration

@@ -135,6 +135,35 @@ class ApiClient {
     return list.map((e) => RouteModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<bool> createRoute(Map<String, dynamic> data) async {
+    await _ensureAuth();
+    final uri = Uri.parse('${config.baseUrl}/api/routes');
+    final res = await _client.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode(data),
+    );
+    return res.statusCode == 200 || res.statusCode == 201;
+  }
+
+  Future<bool> updateRoute(String routeId, Map<String, dynamic> data) async {
+    await _ensureAuth();
+    final uri = Uri.parse('${config.baseUrl}/api/routes/$routeId');
+    final res = await _client.put(
+      uri,
+      headers: _headers,
+      body: jsonEncode(data),
+    );
+    return res.statusCode == 200;
+  }
+
+  Future<bool> deleteRoute(String routeId) async {
+    await _ensureAuth();
+    final uri = Uri.parse('${config.baseUrl}/api/routes/$routeId');
+    final res = await _client.delete(uri, headers: _headers);
+    return res.statusCode == 200;
+  }
+
   Future<bool> startRoute(String routeId) async {
     await _ensureAuth();
     final uri = Uri.parse('${config.baseUrl}/api/routes/$routeId/start');

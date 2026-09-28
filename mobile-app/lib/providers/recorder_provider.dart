@@ -15,7 +15,7 @@ class RecorderProvider extends ChangeNotifier {
   String _format = 'mp4'; // 'mp4' or 'mov'
   String get format => _format;
 
-  String _bitrateMode = 'copy'; // 'copy', '10000', '6000', 'custom'
+  String _bitrateMode = '6000'; // 'passthrough', '2500', '4500', '6000', '8000', '12000', 'custom'
   String get bitrateMode => _bitrateMode;
   int _customBitrateKbps = 6000;
   int get customBitrateKbps => _customBitrateKbps;
@@ -52,6 +52,12 @@ class RecorderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCustomBitrate(int kbps) {
+    _customBitrateKbps = kbps;
+    _bitrateMode = 'custom';
+    notifyListeners();
+  }
+
   void setResolutionMode(String res) {
     _resolutionMode = res;
     notifyListeners();
@@ -83,12 +89,18 @@ class RecorderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final int bitrateVal = _bitrateMode == 'custom'
+          ? _customBitrateKbps
+          : (int.tryParse(_bitrateMode) ?? 6000);
+
       final opts = <String, dynamic>{
-        'target_route': _selectedFeed,
+        'target_id': _selectedFeed,
+        'route_id': _selectedFeed,
         'record_format': _format,
-        'segment_duration': _segmentSeconds,
-        'record_bitrate': _bitrateMode == 'custom' ? _customBitrateKbps : _bitrateMode,
-        'record_resolution': _resolutionMode,
+        'record_mode': _bitrateMode == 'passthrough' ? 'passthrough' : 'compress',
+        'record_duration': _segmentSeconds,
+        'record_vbitrate': bitrateVal,
+        'record_scale': _resolutionMode,
       };
 
       final ok = await _apiClient!.startRecording(_selectedFeed!, opts);

@@ -102,6 +102,24 @@ class GatewayProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> createRoute(Map<String, dynamic> data) async {
+    final ok = await _apiClient.createRoute(data);
+    if (ok) await refreshAll(silent: true);
+    return ok;
+  }
+
+  Future<bool> updateRoute(String routeId, Map<String, dynamic> data) async {
+    final ok = await _apiClient.updateRoute(routeId, data);
+    if (ok) await refreshAll(silent: true);
+    return ok;
+  }
+
+  Future<bool> deleteRoute(String routeId) async {
+    final ok = await _apiClient.deleteRoute(routeId);
+    if (ok) await refreshAll(silent: true);
+    return ok;
+  }
+
   Future<bool> startRoute(String routeId) async {
     final ok = await _apiClient.startRoute(routeId);
     if (ok) await refreshAll(silent: true);
