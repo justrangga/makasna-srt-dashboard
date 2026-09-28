@@ -2126,18 +2126,21 @@ video {
         </div>
 
         <!-- Failover Control Box -->
-        <div class="telemetry-box">
+        <div class="telemetry-box" id="box-failover-control">
           <div class="telemetry-box-title">
-            <h3>Source Failover</h3>
+            <h3 id="telem-failover-title">Source Failover</h3>
             <span class="tag tag-active-src" id="telem-active-source-badge">PRIMARY ACTIVE</span>
           </div>
-          <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">
-            Policy: <b id="telem-failover-policy" style="color:#fff;">Maintain primary</b>
-          </p>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <button id="btn-switch-primary" class="btn-icon" onclick="switchSource('primary')">Select Primary</button>
-            <button id="btn-switch-secondary" class="btn-icon" onclick="switchSource('secondary')">Select Secondary</button>
+          <div id="telem-route-failover-panel">
+            <p id="telem-failover-policy-row" style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+              Policy: <b id="telem-failover-policy" style="color:#fff;">Maintain primary</b>
+            </p>
+            <div id="telem-failover-buttons" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <button id="btn-switch-primary" class="btn-icon" onclick="switchSource('primary')">Select Primary</button>
+              <button id="btn-switch-secondary" class="btn-icon" onclick="switchSource('secondary')">Select Secondary</button>
+            </div>
           </div>
+          <div id="telem-inbound-details" style="display:none;"></div>
         </div>
       </div>
 
@@ -2190,9 +2193,9 @@ video {
         </div>
 
         <!-- Outbound Destination Stats -->
-        <div class="telemetry-box">
+        <div class="telemetry-box" id="box-destination-stats">
           <div class="telemetry-box-title">
-            <h3>Destination Fan-out</h3>
+            <h3 id="telem-dest-title">Destination Fan-out</h3>
             <span class="tag tag-output" id="telem-dest-count">0 OUTPUTS</span>
           </div>
           <div id="telem-destinations-list" style="display:flex; flex-direction:column; gap:8px;">
@@ -3064,14 +3067,20 @@ function formatSeconds(secs) {
 }
 
 function previewIncomingStream(streamId) {
+  activeTelemetryRouteId = null;
+  currentPreviewStreamName = streamId;
+
   const video = document.getElementById('telem-video');
   document.getElementById('telem-route-name').textContent = `Inbound Stream: ${streamId}`;
   document.getElementById('telem-route-id').textContent = `Publisher Path: ${streamId} · Port: ${latestSrtPort}`;
   document.getElementById('modal-telemetry').classList.remove('hidden');
 
-  currentPreviewStreamName = streamId;
   const streamUrl = `/hls/${streamId}/index.m3u8`;
   initHlsPlayer(video, streamUrl);
+
+  pollTelemetry();
+  if (telemTimer) clearInterval(telemTimer);
+  telemTimer = setInterval(pollTelemetry, 2500);
 }
 
 function adoptStreamToRoute(streamId) {
@@ -3305,12 +3314,23 @@ async function deleteRoute(id) {
 // Telemetry Inspection Modal
 async function inspectRoute(id) {
   activeTelemetryRouteId = id;
+  currentPreviewStreamName = null;
   const route = currentRoutes.find(r => r.id === id);
   if (!route) return;
 
   document.getElementById('telem-route-name').textContent = route.name;
   document.getElementById('telem-route-id').textContent = `ID: ${route.id} | ${route.primary_source.type}:${route.primary_source.port || route.primary_source.stream_id}`;
   document.getElementById('telem-failover-policy').textContent = route.failover_policy.replace('_', ' ');
+
+  const failoverTitle = document.getElementById('telem-failover-title');
+  if (failoverTitle) failoverTitle.textContent = 'Source Failover';
+  const routeFailoverPanel = document.getElementById('telem-route-failover-panel');
+  if (routeFailoverPanel) routeFailoverPanel.style.display = 'block';
+  const inboundDetails = document.getElementById('telem-inbound-details');
+  if (inboundDetails) inboundDetails.style.display = 'none';
+
+  const destTitle = document.getElementById('telem-dest-title');
+  if (destTitle) destTitle.textContent = 'Destination Fan-out';
 
   document.getElementById('modal-telemetry').classList.remove('hidden');
 
@@ -3325,6 +3345,7 @@ function closeTelemetryModal() {
   if (telemTimer) clearInterval(telemTimer);
   telemTimer = null;
   activeTelemetryRouteId = null;
+  currentPreviewStreamName = null;
   if (hlsInstance) {
     try { hlsInstance.destroy(); } catch(e) {}
     hlsInstance = null;
@@ -3335,42 +3356,180 @@ function closeTelemetryModal() {
   }
 }
 
+function applyHealthBadgeStyle(badgeEl, health) {
+  if (!badgeEl) return;
+  const h = (health || '').toLowerCase();
+  badgeEl.className = 'tag';
+  if (h === 'healthy') {
+    badgeEl.style.background = 'rgba(34,197,94,0.15)';
+    badgeEl.style.color = '#22c55e';
+    badgeEl.style.border = '1px solid rgba(34,197,94,0.3)';
+  } else if (h === 'degraded') {
+    badgeEl.style.background = 'rgba(245,158,11,0.15)';
+    badgeEl.style.color = '#f59e0b';
+    badgeEl.style.border = '1px solid rgba(245,158,11,0.3)';
+  } else if (h === 'critical') {
+    badgeEl.style.background = 'rgba(239,68,68,0.15)';
+    badgeEl.style.color = '#ef4444';
+    badgeEl.style.border = '1px solid rgba(239,68,68,0.3)';
+  } else {
+    badgeEl.style.background = 'rgba(255,255,255,0.06)';
+    badgeEl.style.color = 'var(--muted)';
+    badgeEl.style.border = '1px solid var(--border)';
+  }
+}
+
 async function pollTelemetry() {
-  if (!activeTelemetryRouteId) return;
-  try {
-    const d = await api(`/api/routes/${activeTelemetryRouteId}/telemetry`);
-    if (!d.ok) return;
+  if (activeTelemetryRouteId) {
+    try {
+      const d = await api(`/api/routes/${activeTelemetryRouteId}/telemetry`);
+      if (!d.ok) return;
 
-    document.getElementById('telem-active-source-badge').textContent = `${(d.active_source || 'PRIMARY').toUpperCase()} ACTIVE`;
+      const failoverTitle = document.getElementById('telem-failover-title');
+      if (failoverTitle) failoverTitle.textContent = 'Source Failover';
+      const routeFailoverPanel = document.getElementById('telem-route-failover-panel');
+      if (routeFailoverPanel) routeFailoverPanel.style.display = 'block';
+      const inboundDetails = document.getElementById('telem-inbound-details');
+      if (inboundDetails) inboundDetails.style.display = 'none';
 
-    const m = d.metrics || {};
-    document.getElementById('m-rate').textContent = `↓ ${m.receive_rate_mbps || 0} Mbps`;
-    document.getElementById('m-rtt').textContent = `${m.rtt_ms || 0} ms`;
-    document.getElementById('m-loss').textContent = `${m.packet_loss_pct || 0}%`;
-    document.getElementById('m-drop').textContent = m.dropped_packets || 0;
-    document.getElementById('m-retrans').textContent = m.retransmitted_packets || 0;
-    document.getElementById('m-capacity').textContent = `${m.link_capacity_mbps || 0} Mbps`;
-    document.getElementById('m-res').textContent = m.resolution || 'Waiting';
-    document.getElementById('m-fps').textContent = m.framerate || '--';
-    document.getElementById('m-bytes').textContent = `${m.total_bytes_mb || 0} MB`;
+      document.getElementById('telem-active-source-badge').textContent = `${(d.active_source || 'PRIMARY').toUpperCase()} ACTIVE`;
 
-    document.getElementById('telem-health-badge').textContent = m.health || 'RUNNING';
+      const m = d.metrics || {};
+      document.getElementById('m-rate').textContent = `↓ ${m.receive_rate_mbps || 0} Mbps`;
+      document.getElementById('m-rtt').textContent = `${m.rtt_ms || 0} ms`;
+      
+      const lossVal = m.packet_loss_pct || 0;
+      const lossEl = document.getElementById('m-loss');
+      lossEl.textContent = `${lossVal}%`;
+      lossEl.style.color = (lossVal > 5) ? '#ef4444' : (lossVal > 1 ? '#f59e0b' : 'inherit');
 
-    const destList = document.getElementById('telem-destinations-list');
-    document.getElementById('telem-dest-count').textContent = `${(d.destinations || []).length} OUTPUTS`;
-    destList.innerHTML = (d.destinations || []).map((dest, i) => `
-      <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-weight:600; font-size:12.5px;">${escapeHtml(dest.label || `Destination ${i+1}`)}</div>
-          <div style="font-size:10.5px; font-family:'JetBrains Mono'; color:var(--muted);">${escapeHtml(dest.url)}</div>
+      const dropVal = m.dropped_packets || 0;
+      const dropEl = document.getElementById('m-drop');
+      dropEl.textContent = typeof dropVal === 'number' ? dropVal.toLocaleString() : dropVal;
+      dropEl.style.color = (dropVal > 100) ? '#ef4444' : (dropVal > 0 ? '#f59e0b' : 'inherit');
+
+      const retVal = m.retransmitted_packets || 0;
+      document.getElementById('m-retrans').textContent = typeof retVal === 'number' ? retVal.toLocaleString() : retVal;
+      document.getElementById('m-capacity').textContent = `${m.link_capacity_mbps || 0} Mbps`;
+      document.getElementById('m-res').textContent = m.resolution || 'Waiting';
+      document.getElementById('m-fps').textContent = m.framerate || '--';
+      document.getElementById('m-bytes').textContent = `${m.total_bytes_mb || 0} MB`;
+
+      const healthBadge = document.getElementById('telem-health-badge');
+      healthBadge.textContent = (m.health || 'RUNNING').toUpperCase();
+      applyHealthBadgeStyle(healthBadge, m.health);
+
+      const destTitle = document.getElementById('telem-dest-title');
+      if (destTitle) destTitle.textContent = 'Destination Fan-out';
+      document.getElementById('telem-dest-count').textContent = `${(d.destinations || []).length} OUTPUTS`;
+      const destList = document.getElementById('telem-destinations-list');
+      destList.innerHTML = (d.destinations || []).map((dest, i) => `
+        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:600; font-size:12.5px;">${escapeHtml(dest.label || `Destination ${i+1}`)}</div>
+            <div style="font-size:10.5px; font-family:'JetBrains Mono'; color:var(--muted);">${escapeHtml(dest.url)}</div>
+          </div>
+          <div style="text-align:right;">
+            <span class="tag tag-output">${dest.mode === 'copy' ? 'COPY' : `${dest.video_bitrate}k`}</span>
+          </div>
         </div>
-        <div style="text-align:right;">
-          <span class="tag tag-output">${dest.mode === 'copy' ? 'COPY' : `${dest.video_bitrate}k`}</span>
-        </div>
-      </div>
-    `).join('') || '<div style="color:var(--muted); font-size:12px;">No egress destinations configured.</div>';
+      `).join('') || '<div style="color:var(--muted); font-size:12px;">No egress destinations configured.</div>';
 
-  } catch(e) {}
+    } catch(e) {}
+
+  } else if (currentPreviewStreamName) {
+    try {
+      const d = await api('/api/srt/inbound');
+      if (!d.ok) return;
+
+      const pub = (d.publishers || []).find(p => p.stream_id === currentPreviewStreamName) ||
+                  (d.readers || []).find(r => r.stream_id === currentPreviewStreamName);
+
+      if (!pub) {
+        document.getElementById('telem-health-badge').textContent = 'OFFLINE';
+        return;
+      }
+
+      // Populate metrics
+      const rxRate = pub.mbps_rx !== undefined ? pub.mbps_rx : (pub.mbps_rate || 0);
+      document.getElementById('m-rate').textContent = `↓ ${rxRate} Mbps`;
+      document.getElementById('m-rtt').textContent = `${pub.rtt_ms || 0} ms`;
+
+      const lossVal = pub.loss_pct || 0;
+      const lossEl = document.getElementById('m-loss');
+      lossEl.textContent = `${lossVal}%`;
+      lossEl.style.color = (lossVal > 5) ? '#ef4444' : (lossVal > 1 ? '#f59e0b' : '#22c55e');
+
+      const dropVal = pub.dropped_packets || 0;
+      const dropEl = document.getElementById('m-drop');
+      dropEl.textContent = typeof dropVal === 'number' ? dropVal.toLocaleString() : dropVal;
+      dropEl.style.color = (dropVal > 100) ? '#ef4444' : (dropVal > 0 ? '#f59e0b' : 'inherit');
+
+      const retVal = pub.retransmitted_packets || 0;
+      document.getElementById('m-retrans').textContent = typeof retVal === 'number' ? retVal.toLocaleString() : retVal;
+      document.getElementById('m-capacity').textContent = `${pub.link_capacity_mbps || 0} Mbps`;
+      document.getElementById('m-res').textContent = (pub.tracks && pub.tracks.length) ? pub.tracks.join(' · ') : 'Live Stream';
+      document.getElementById('m-fps').textContent = '--';
+      document.getElementById('m-bytes').textContent = `${pub.bytes_received_mb || pub.bytes_mb || 0} MB`;
+
+      const healthBadge = document.getElementById('telem-health-badge');
+      healthBadge.textContent = (pub.health || 'RUNNING').toUpperCase();
+      applyHealthBadgeStyle(healthBadge, pub.health);
+
+      // Ingest Publisher Connection Box
+      const failoverTitle = document.getElementById('telem-failover-title');
+      if (failoverTitle) failoverTitle.textContent = 'Ingest Publisher Details';
+      document.getElementById('telem-active-source-badge').textContent = `PORT ${d.srt_port || 8890}`;
+      
+      const routeFailoverPanel = document.getElementById('telem-route-failover-panel');
+      if (routeFailoverPanel) routeFailoverPanel.style.display = 'none';
+
+      const inboundDetails = document.getElementById('telem-inbound-details');
+      if (inboundDetails) {
+        inboundDetails.style.display = 'block';
+        inboundDetails.innerHTML = `
+          <div style="font-size:12px; display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+            <div><span style="color:var(--muted);">Remote Ingest:</span> <b style="font-family:'JetBrains Mono';">${escapeHtml(pub.remote_addr)}</b></div>
+            <div><span style="color:var(--muted);">SRT Buffer:</span> <b>${pub.buffer_delay_ms || 1000} ms</b></div>
+            <div><span style="color:var(--muted);">Uptime:</span> <b>${formatSeconds(pub.duration_seconds || 0)}</b></div>
+            <div><span style="color:var(--muted);">Health:</span> <b style="color:${pub.health === 'Critical' ? '#ef4444' : (pub.health === 'Degraded' ? '#f59e0b' : '#22c55e')};">${pub.health}</b></div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--cyan); font-weight:600;" onclick="copyToClipboard('srt://${d.server_host || location.hostname}:${d.srt_port || 8890}?streamid=read:${encodeURIComponent(pub.stream_id)}&latency=2000000', 'SRT Read URL Copied!')">📋 Copy Read URL</button>
+            ${!pub.routed ? `<button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--green); font-weight:600;" onclick="closeTelemetryModal(); adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">➕ Create Route</button>` : ''}
+          </div>
+        `;
+      }
+
+      // Destination Box -> Active Readers
+      const matchingReaders = (d.readers || []).filter(r => r.stream_id === pub.stream_id);
+      const destTitle = document.getElementById('telem-dest-title');
+      if (destTitle) destTitle.textContent = 'Active Listeners (Readers)';
+      document.getElementById('telem-dest-count').textContent = `${matchingReaders.length} LISTENERS`;
+      const destList = document.getElementById('telem-destinations-list');
+      if (matchingReaders.length > 0) {
+        destList.innerHTML = matchingReaders.map((r, i) => `
+          <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:600; font-size:12.5px;">Reader #${i+1} · <span style="font-family:'JetBrains Mono'; font-size:11px; color:#60a5fa;">${escapeHtml(r.remote_addr)}</span></div>
+              <div style="font-size:10.5px; color:var(--muted);">RTT: ${r.rtt_ms || 0}ms · Loss: ${r.loss_pct || 0}% · Uptime: ${formatSeconds(r.duration_seconds || 0)}</div>
+            </div>
+            <div style="text-align:right;">
+              <span class="tag tag-output">↑ ${r.mbps_tx || r.mbps_rate || 0} Mbps</span>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        destList.innerHTML = `
+          <div style="color:var(--muted); font-size:12px; padding:6px 0;">
+            No external listeners currently reading <code style="color:var(--cyan);">read:${escapeHtml(pub.stream_id)}</code>.
+            ${pub.routed ? `<div style="margin-top:6px; color:#22c55e; font-size:11.5px;">✓ Routing active: <b>${escapeHtml(pub.route_name || 'Configured Route')}</b></div>` : '<div style="margin-top:6px; font-size:11.5px;">Stream is available for pull or routing.</div>'}
+          </div>
+        `;
+      }
+
+    } catch(e) {}
+  }
 }
 
 async function switchSource(target) {

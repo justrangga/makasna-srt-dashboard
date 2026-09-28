@@ -270,9 +270,9 @@ def classify_health(rtt, loss_rate, drops):
     rtt_val = rtt or 0
     loss_val = loss_rate or 0
     drop_val = drops or 0
-    if loss_val > 5.0 or rtt_val > 350 or drop_val > 100:
+    if loss_val > 5.0 or rtt_val > 350 or (drop_val > 100 and loss_val > 0.5):
         return "Critical"
-    if loss_val > 1.0 or rtt_val > 180 or drop_val > 10:
+    if loss_val > 1.0 or rtt_val > 180 or (drop_val > 10 and loss_val > 0.1):
         return "Degraded"
     return "Healthy"
 
@@ -1723,6 +1723,10 @@ def api_srt_inbound():
             "rtt_ms": rtt,
             "loss_pct": loss_pct,
             "dropped_packets": drops,
+            "retransmitted_packets": int(c.get("packetsReceivedRetrans", 0) if state == "publish" else c.get("packetsRetrans", 0)),
+            "packet_loss_count": int(c.get("packetsReceivedLoss", 0) if state == "publish" else c.get("packetsSendLoss", 0)),
+            "buffer_delay_ms": int(c.get("msReceiveTsbPdDelay", 0) if state == "publish" else c.get("msSendTsbPdDelay", 0)),
+            "buffer_current_ms": int(c.get("msReceiveBuf", 0) if state == "publish" else c.get("msSendBuf", 0)),
             "bytes_mb": bytes_mb,
             "bytes_received_mb": bytes_mb,
             "link_capacity_mbps": round(float(c.get("mbpsLinkCapacity", 0)), 2),
