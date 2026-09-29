@@ -1748,6 +1748,45 @@ def api_srt_inbound():
         else:
             readers.append(conn_item)
 
+    # Also discover active inbound feeds published via RTMP/RTSP (e.g. from Mobile Camera Broadcaster)
+    existing_pub_paths = {p.get("stream_id") for p in publishers}
+    for p in paths:
+        if not isinstance(p, dict):
+            continue
+        p_name = p.get("name", "")
+        if not p_name or p_name in existing_pub_paths:
+            continue
+        source = p.get("source", {})
+        if isinstance(source, dict) and source.get("type"):
+            matched_route = routes_map.get(p_name)
+            tracks = p.get("tracks", [])
+            bytes_count = int(p.get("bytesReceived", 0))
+            bytes_mb = round(bytes_count / (1024 * 1024), 2)
+            publishers.append({
+                "id": source.get("id", p_name),
+                "stream_id": p_name,
+                "remote_addr": f"{source.get('type', 'rtmp')}",
+                "state": "publish",
+                "mbps_rate": 0.0,
+                "mbps_rx": 0.0,
+                "mbps_tx": 0.0,
+                "rtt_ms": 0,
+                "loss_pct": 0.0,
+                "dropped_packets": 0,
+                "retransmitted_packets": 0,
+                "packet_loss_count": 0,
+                "buffer_delay_ms": 0,
+                "buffer_current_ms": 0,
+                "bytes_received_mb": bytes_mb,
+                "bytes_sent_mb": 0.0,
+                "duration_seconds": 0,
+                "health": "Healthy",
+                "tracks": tracks if tracks else ["Camera Broadcaster"],
+                "routed": bool(matched_route),
+                "route_id": matched_route.get("id") if matched_route else None,
+                "route_name": matched_route.get("name") if matched_route else None
+            })
+
     port_info = {"port": 8890}
     try:
         r = requests.get(f"{MEDIAMTX_API}/v3/config/global/get", timeout=2.0)
