@@ -23,6 +23,7 @@ import shutil
 import atexit
 import uuid
 import logging
+import fcntl
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone, timedelta
 from functools import wraps
@@ -1066,9 +1067,22 @@ def supervisor_thread():
         time.sleep(2)
 
 
-# Start background threads
-supervisor = threading.Thread(target=supervisor_thread, daemon=True)
-supervisor.start()
+def try_acquire_supervisor_lock():
+    lock_file = os.path.join(LOGS_DIR, "supervisor.lock")
+    try:
+        f = open(lock_file, "w")
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        app.config["SUPERVISOR_LOCK_FP"] = f
+        return True
+    except (IOError, OSError):
+        return False
+
+
+# Start background threads (single-leader election via file lock)
+if try_acquire_supervisor_lock():
+    supervisor = threading.Thread(target=supervisor_thread, daemon=True)
+    supervisor.start()
+    logger.info("Supervisor background thread started on primary worker")
 
 
 def gdrive_uploader_worker():
@@ -1165,8 +1179,10 @@ def gdrive_uploader_worker():
         time.sleep(10)
 
 
-uploader_worker = threading.Thread(target=gdrive_uploader_worker, daemon=True)
-uploader_worker.start()
+if app.config.get("SUPERVISOR_LOCK_FP"):
+    uploader_worker = threading.Thread(target=gdrive_uploader_worker, daemon=True)
+    uploader_worker.start()
+    logger.info("Google Drive uploader background thread started on primary worker")
 
 
 
