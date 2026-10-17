@@ -1144,11 +1144,17 @@ def index():
 
 
 @app.route("/download/booklet")
+@app.route("/download/sop")
 def download_booklet():
-    pdf_path = os.path.join(BASE_DIR, "makasna-client-booklet.pdf")
+    pdf_path = os.path.join(BASE_DIR, "static", "MAKASNA_SOP_PENGOPERASIAN_SISTEM.pdf")
     if os.path.exists(pdf_path):
-        return send_from_directory(BASE_DIR, "makasna-client-booklet.pdf", as_attachment=True)
-    return ("Booklet not found", 404)
+        return send_from_directory(
+            os.path.join(BASE_DIR, "static"),
+            "MAKASNA_SOP_PENGOPERASIAN_SISTEM.pdf",
+            as_attachment=True,
+            mimetype="application/pdf"
+        )
+    return ("SOP document not found", 404)
 
 
 @app.route("/download/apk")
