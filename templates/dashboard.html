@@ -842,7 +842,7 @@ html, body {
     display: flex !important;
   }
   .workspace {
-    padding: 16px 14px 85px 14px !important; /* Ample clearance so bottom nav never cuts off buttons */
+    padding: 14px 12px calc(95px + env(safe-area-inset-bottom, 20px)) 12px !important; /* Ample clearance so bottom nav never cuts off buttons */
     max-width: 100% !important;
   }
 
@@ -1014,21 +1014,32 @@ html, body {
   .overlay-header-actions {
     width: 100% !important;
     display: flex !important;
-    flex-direction: column !important;
+    flex-direction: row !important;
+    align-items: center !important;
     gap: 8px !important;
   }
-  .overlay-header-actions > * {
-    width: 100% !important;
+  .overlay-header-actions > div:first-child {
+    flex: 1 !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+  .overlay-header-actions .btn-primary {
+    width: auto !important;
+    flex-shrink: 0 !important;
+    padding: 6px 14px !important;
+    min-height: 36px !important;
+    font-size: 11.5px !important;
   }
   .overlay-monitor-header {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 8px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 8px 12px !important;
   }
   .overlay-monitor-header > div:last-child {
-    width: 100% !important;
+    width: auto !important;
     display: flex !important;
-    justify-content: space-between !important;
+    gap: 6px !important;
   }
   .sliders-grid {
     grid-template-columns: 1fr !important; /* Full width sliders on mobile so text never squishes */
@@ -2153,10 +2164,21 @@ html, body {
           position: absolute;
           top: 3px;
           left: 6px;
-          font-size: 8.5px;
+          font-size: 8px;
           font-weight: 700;
           letter-spacing: 0.5px;
-          color: rgba(255, 255, 255, 0.45);
+          padding: 1.5px 5px;
+          border-radius: 3px;
+        }
+        .guide-lbl-action {
+          color: #e2e8f0;
+          background: rgba(0, 0, 0, 0.75);
+          border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+        .guide-lbl-title {
+          color: #00e5ff;
+          background: rgba(0, 0, 0, 0.75);
+          border: 1px solid rgba(0, 229, 255, 0.4);
         }
         .overlay-drag-canvas {
           position: absolute;
@@ -2173,6 +2195,7 @@ html, body {
           box-sizing: border-box;
           touch-action: none;
           pointer-events: auto;
+          max-width: 100%;
         }
         .overlay-drag-item:active {
           cursor: grabbing;
@@ -2192,13 +2215,15 @@ html, body {
           align-items: center;
           justify-content: space-between;
           padding: 2px 6px;
-          font-size: 9.5px;
+          font-size: 9px;
           font-weight: 700;
           color: #fff;
-          background: rgba(0, 0, 0, 0.75);
+          background: rgba(0, 0, 0, 0.85);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 4px 4px 0 0;
           pointer-events: none;
+          white-space: nowrap;
+          overflow: hidden;
         }
         .drag-content {
           padding: 4px;
@@ -2214,20 +2239,53 @@ html, body {
           filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7));
         }
         .overlay-monitor-footer {
-          padding: 10px 14px;
-          background: rgba(255,255,255,0.02);
+          padding: 12px 14px;
+          background: rgba(13, 16, 23, 0.85);
           border-top: 1px solid var(--border);
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .telemetry-layer-card {
+          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 8px;
+          padding: 8px 10px;
           display: flex;
           flex-direction: column;
           gap: 6px;
         }
-        .coord-readout-col {
+        .telemetry-layer-head {
           display: flex;
+          justify-content: space-between;
           align-items: center;
-          gap: 10px;
+        }
+        .telemetry-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 6px;
+        }
+        .stat-pill {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-radius: 6px;
+          padding: 5px 4px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+        }
+        .stat-label {
+          font-size: 8.5px;
+          font-weight: 700;
+          color: var(--muted);
+          letter-spacing: 0.5px;
+        }
+        .stat-pill b {
           font-size: 11px;
-          color: #a1a1aa;
-          flex-wrap: wrap;
+          font-family: 'JetBrains Mono', monospace;
+          color: #fff;
         }
         .coord-title {
           font-weight: 700;
@@ -2235,8 +2293,12 @@ html, body {
           letter-spacing: 0.5px;
           color: #e4e4e7;
         }
-        .coord-val b {
-          color: #fff;
+        .tag-live-sm {
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          padding: 2px 6px;
+          border-radius: 4px;
         }
         .dot-indicator {
           width: 7px;
@@ -2374,28 +2436,28 @@ html, body {
         }
       </style>
 
-      <div class="page-header" style="margin-bottom:16px;">
+      <div class="page-header" style="margin-bottom:14px;">
         <div class="page-title">
           <div style="display:flex; align-items:center; gap:10px;">
-            <div style="width:34px; height:34px; border-radius:8px; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); display:flex; align-items:center; justify-content:center;">
+            <div style="width:36px; height:36px; border-radius:8px; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
             </div>
             <div>
-              <h1 style="font-size:20px; font-weight:800; letter-spacing:0.5px; margin:0;">Station ID &amp; Overlay Studio</h1>
-              <p style="font-size:12px; color:var(--muted); margin:2px 0 0 0;">Interactive TV broadcast overlay manager — drag and position station logos &amp; lower-thirds for YouTube restreaming and master playout.</p>
+              <h1 style="font-size:18px; font-weight:800; letter-spacing:0.5px; margin:0; line-height:1.2;">Station ID &amp; Overlay Studio</h1>
+              <p style="font-size:11.5px; color:var(--muted); margin:2px 0 0 0; line-height:1.3;">Interactive TV broadcast overlay manager &amp; master playout.</p>
             </div>
           </div>
         </div>
-        <div class="overlay-header-actions" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <div style="display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--border); padding:6px 12px; border-radius:8px; flex:1; min-width:200px;">
-            <span style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">PREVIEW FEED:</span>
-            <select id="overlay-feed-select" class="hd-select" style="width:100%; min-width:0; padding:4px 8px; font-size:12px;" onchange="onOverlayFeedChange()">
+        <div class="overlay-header-actions" style="display:flex; gap:8px; align-items:center; margin-top:8px; width:100%;">
+          <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:0;">
+            <span style="font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">FEED:</span>
+            <select id="overlay-feed-select" class="hd-select" style="width:100%; min-width:0; padding:4px 6px; font-size:11.5px;" onchange="onOverlayFeedChange()">
               <option value="">-- SELECT BROADCAST FEED --</option>
             </select>
           </div>
-          <button class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:12.5px; padding:8px 16px; min-height:40px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            <span>Save Configuration</span>
+          <button class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:700; padding:6px 14px; min-height:36px; white-space:nowrap; border-radius:6px; flex-shrink:0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span>Save</span>
           </button>
         </div>
       </div>
@@ -2429,13 +2491,16 @@ html, body {
                   <div class="hd-cb c1"></div><div class="hd-cb c2"></div><div class="hd-cb c3"></div>
                   <div class="hd-cb c4"></div><div class="hd-cb c5"></div><div class="hd-cb c6"></div><div class="hd-cb c7"></div>
                 </div>
-                <div class="hd-no-signal-text">SELECT FEED SOURCE OR START STREAM TO PREVIEW</div>
+                <div class="hd-no-signal-text">
+                  <span style="width:6px; height:6px; background:#ffb300; border-radius:50%; box-shadow:0 0 6px #ffb300; display:inline-block; flex-shrink:0;"></span>
+                  <span>STANDBY &middot; SELECT FEED SOURCE OR START STREAM</span>
+                </div>
               </div>
 
               <!-- Title Safe & Action Safe Broadcast Guidelines -->
               <div id="overlay-guidelines" class="overlay-safe-guides">
-                <div class="guide-action-safe"><span class="guide-label">ACTION SAFE (90%)</span></div>
-                <div class="guide-title-safe"><span class="guide-label">TITLE SAFE (80%)</span></div>
+                <div class="guide-action-safe"><span class="guide-label guide-lbl-action">ACTION SAFE 90%</span></div>
+                <div class="guide-title-safe"><span class="guide-label guide-lbl-title">TITLE SAFE 80%</span></div>
                 <div class="guide-crosshair-h"></div>
                 <div class="guide-crosshair-v"></div>
               </div>
@@ -2443,10 +2508,10 @@ html, body {
               <!-- Interactive Drag & Drop Canvas Layer -->
               <div id="overlay-drag-canvas" class="overlay-drag-canvas">
                 <!-- Draggable Box 1: Station ID Logo -->
-                <div id="drag-box-1" class="overlay-drag-item drag-cyan" style="left:88%; top:6%; width:14%;">
+                <div id="drag-box-1" class="overlay-drag-item drag-cyan" style="left:82%; top:5%; width:14%;">
                   <div class="drag-header">
                     <span>L1</span>
-                    <span id="drag-coord-1" style="color:#00e5ff; font-family:monospace;">88,6</span>
+                    <span id="drag-coord-1" style="color:#00e5ff; font-family:'JetBrains Mono',monospace;">82%, 5%</span>
                   </div>
                   <div class="drag-content">
                     <img id="preview-img-1" src="/static/overlays/station_logo.png" alt="Station ID Logo" />
@@ -2454,10 +2519,10 @@ html, body {
                 </div>
 
                 <!-- Draggable Box 2: Lower-Third / Live Bug -->
-                <div id="drag-box-2" class="overlay-drag-item drag-amber" style="left:6%; top:86%; width:18%;">
+                <div id="drag-box-2" class="overlay-drag-item drag-amber" style="left:5%; top:84%; width:18%;">
                   <div class="drag-header">
                     <span>L2</span>
-                    <span id="drag-coord-2" style="color:#ffb300; font-family:monospace;">6,86</span>
+                    <span id="drag-coord-2" style="color:#ffb300; font-family:'JetBrains Mono',monospace;">5%, 84%</span>
                   </div>
                   <div class="drag-content">
                     <img id="preview-img-2" src="/static/overlays/live_badge.png" alt="Lower Third" />
@@ -2469,21 +2534,38 @@ html, body {
 
           <!-- Bottom Telemetry Status Strip -->
           <div class="overlay-monitor-footer">
-            <div class="coord-readout-col">
-              <span class="dot-indicator dot-cyan"></span>
-              <span class="coord-title">LAYER 1 (STATION ID):</span>
-              <span class="coord-val">X: <b id="readout-x1">88.0%</b></span>
-              <span class="coord-val">Y: <b id="readout-y1">6.0%</b></span>
-              <span class="coord-val">Scale: <b id="readout-s1">14.0%</b></span>
-              <span class="coord-val">Alpha: <b id="readout-a1">95%</b></span>
+            <!-- LAYER 1 TELEMETRY CARD -->
+            <div class="telemetry-layer-card">
+              <div class="telemetry-layer-head">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="dot-indicator dot-cyan"></span>
+                  <span class="coord-title">LAYER 1 &mdash; STATION ID (LOGO)</span>
+                </div>
+                <span class="tag-live-sm" style="color:#00e5ff; background:rgba(0,229,255,0.1); border:1px solid rgba(0,229,255,0.25);">BUG</span>
+              </div>
+              <div class="telemetry-stats-grid">
+                <div class="stat-pill"><span class="stat-label">X-POS</span><b id="readout-x1">82.0%</b></div>
+                <div class="stat-pill"><span class="stat-label">Y-POS</span><b id="readout-y1">5.0%</b></div>
+                <div class="stat-pill"><span class="stat-label">SCALE</span><b id="readout-s1">14.0%</b></div>
+                <div class="stat-pill"><span class="stat-label">ALPHA</span><b id="readout-a1">95%</b></div>
+              </div>
             </div>
-            <div class="coord-readout-col">
-              <span class="dot-indicator dot-amber"></span>
-              <span class="coord-title">LAYER 2 (LOWER-THIRD):</span>
-              <span class="coord-val">X: <b id="readout-x2">6.0%</b></span>
-              <span class="coord-val">Y: <b id="readout-y2">86.0%</b></span>
-              <span class="coord-val">Scale: <b id="readout-s2">18.0%</b></span>
-              <span class="coord-val">Alpha: <b id="readout-a2">100%</b></span>
+
+            <!-- LAYER 2 TELEMETRY CARD -->
+            <div class="telemetry-layer-card">
+              <div class="telemetry-layer-head">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="dot-indicator dot-amber"></span>
+                  <span class="coord-title">LAYER 2 &mdash; LOWER-THIRD / LIVE</span>
+                </div>
+                <span class="tag-live-sm" style="color:#ffb300; background:rgba(255,179,0,0.1); border:1px solid rgba(255,179,0,0.25);">BANNER</span>
+              </div>
+              <div class="telemetry-stats-grid">
+                <div class="stat-pill"><span class="stat-label">X-POS</span><b id="readout-x2">5.0%</b></div>
+                <div class="stat-pill"><span class="stat-label">Y-POS</span><b id="readout-y2">84.0%</b></div>
+                <div class="stat-pill"><span class="stat-label">SCALE</span><b id="readout-s2">18.0%</b></div>
+                <div class="stat-pill"><span class="stat-label">ALPHA</span><b id="readout-a2">100%</b></div>
+              </div>
             </div>
           </div>
         </div>
@@ -2537,10 +2619,10 @@ html, body {
             <div style="margin-top:10px;">
               <label class="control-label">QUICK POSITION PRESETS</label>
               <div class="preset-pill-group">
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 88, 6)">Top-Right (Standard)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 6, 6)">Top-Left</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 88, 86)">Bottom-Right</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 6, 86)">Bottom-Left</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 82, 5)">Top-Right (Standard)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 5, 5)">Top-Left</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 82, 82)">Bottom-Right</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 5, 82)">Bottom-Left</button>
               </div>
             </div>
 
@@ -2549,17 +2631,17 @@ html, body {
               <div class="slider-row">
                 <div class="slider-label-row">
                   <span>Horizontal (X-Pos)</span>
-                  <span id="txt-x1" class="slider-val-txt">88.0%</span>
+                  <span id="txt-x1" class="slider-val-txt">82.0%</span>
                 </div>
-                <input type="range" id="rng-x1" min="0" max="95" step="0.5" value="88" class="range-slider" oninput="onSliderChange('overlay_1')">
+                <input type="range" id="rng-x1" min="0" max="95" step="0.5" value="82" class="range-slider" oninput="onSliderChange('overlay_1')">
               </div>
 
               <div class="slider-row">
                 <div class="slider-label-row">
                   <span>Vertical (Y-Pos)</span>
-                  <span id="txt-y1" class="slider-val-txt">6.0%</span>
+                  <span id="txt-y1" class="slider-val-txt">5.0%</span>
                 </div>
-                <input type="range" id="rng-y1" min="0" max="95" step="0.5" value="6" class="range-slider" oninput="onSliderChange('overlay_1')">
+                <input type="range" id="rng-y1" min="0" max="95" step="0.5" value="5" class="range-slider" oninput="onSliderChange('overlay_1')">
               </div>
 
               <div class="slider-row">
@@ -2614,10 +2696,10 @@ html, body {
             <div style="margin-top:10px;">
               <label class="control-label">QUICK POSITION PRESETS</label>
               <div class="preset-pill-group">
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 6, 86)">Bottom-Left (News)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 36, 88)">Bottom-Center (Ticker)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 6, 6)">Top-Left (Bug)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 76, 86)">Bottom-Right</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 5, 84)">Bottom-Left (News)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 41, 84)">Bottom-Center (Ticker)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 5, 5)">Top-Left (Bug)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 76, 84)">Bottom-Right</button>
               </div>
             </div>
 
@@ -2626,17 +2708,17 @@ html, body {
               <div class="slider-row">
                 <div class="slider-label-row">
                   <span>Horizontal (X-Pos)</span>
-                  <span id="txt-x2" class="slider-val-txt">6.0%</span>
+                  <span id="txt-x2" class="slider-val-txt">5.0%</span>
                 </div>
-                <input type="range" id="rng-x2" min="0" max="95" step="0.5" value="6" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
+                <input type="range" id="rng-x2" min="0" max="95" step="0.5" value="5" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
               </div>
 
               <div class="slider-row">
                 <div class="slider-label-row">
                   <span>Vertical (Y-Pos)</span>
-                  <span id="txt-y2" class="slider-val-txt">86.0%</span>
+                  <span id="txt-y2" class="slider-val-txt">84.0%</span>
                 </div>
-                <input type="range" id="rng-y2" min="0" max="95" step="0.5" value="86" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
+                <input type="range" id="rng-y2" min="0" max="95" step="0.5" value="84" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
               </div>
 
               <div class="slider-row">
@@ -6094,8 +6176,8 @@ function applyStateToOverlayDOM() {
   const rngS1 = document.getElementById('rng-s1');
   const rngA1 = document.getElementById('rng-a1');
 
-  if (rngX1) rngX1.value = ov1.x_percent ?? 88;
-  if (rngY1) rngY1.value = ov1.y_percent ?? 6;
+  if (rngX1) rngX1.value = ov1.x_percent ?? 82;
+  if (rngY1) rngY1.value = ov1.y_percent ?? 5;
   if (rngS1) rngS1.value = ov1.scale_percent ?? 14;
   if (rngA1) rngA1.value = Math.round((ov1.opacity ?? 0.95) * 100);
 
@@ -6112,8 +6194,8 @@ function applyStateToOverlayDOM() {
   const rngS2 = document.getElementById('rng-s2');
   const rngA2 = document.getElementById('rng-a2');
 
-  if (rngX2) rngX2.value = ov2.x_percent ?? 6;
-  if (rngY2) rngY2.value = ov2.y_percent ?? 86;
+  if (rngX2) rngX2.value = ov2.x_percent ?? 5;
+  if (rngY2) rngY2.value = ov2.y_percent ?? 84;
   if (rngS2) rngS2.value = ov2.scale_percent ?? 18;
   if (rngA2) rngA2.value = Math.round((ov2.opacity ?? 1.0) * 100);
 
@@ -6124,15 +6206,17 @@ function updateDOMPositionsFromSliders() {
   // Layer 1
   const box1 = document.getElementById('drag-box-1');
   const chk1 = document.getElementById('cfg-ov1-enabled');
-  const x1 = parseFloat(document.getElementById('rng-x1')?.value || 88);
-  const y1 = parseFloat(document.getElementById('rng-y1')?.value || 6);
+  const x1 = parseFloat(document.getElementById('rng-x1')?.value || 82);
+  const y1 = parseFloat(document.getElementById('rng-y1')?.value || 5);
   const s1 = parseFloat(document.getElementById('rng-s1')?.value || 14);
   const a1 = parseInt(document.getElementById('rng-a1')?.value || 95);
 
   if (box1) {
     box1.style.display = (chk1 && !chk1.checked) ? 'none' : 'block';
-    box1.style.left = x1 + '%';
-    box1.style.top = y1 + '%';
+    const effX1 = Math.max(0, Math.min(x1, 100 - s1));
+    const effY1 = Math.max(0, Math.min(y1, 95));
+    box1.style.left = effX1 + '%';
+    box1.style.top = effY1 + '%';
     box1.style.width = s1 + '%';
     box1.style.opacity = (a1 / 100).toFixed(2);
   }
@@ -6155,20 +6239,22 @@ function updateDOMPositionsFromSliders() {
   if (rY1) rY1.textContent = y1.toFixed(1) + '%';
   if (rS1) rS1.textContent = s1.toFixed(1) + '%';
   if (rA1) rA1.textContent = a1 + '%';
-  if (coord1) coord1.textContent = `${Math.round(x1)},${Math.round(y1)}`;
+  if (coord1) coord1.textContent = `${Math.round(x1)}%, ${Math.round(y1)}%`;
 
   // Layer 2
   const box2 = document.getElementById('drag-box-2');
   const chk2 = document.getElementById('cfg-ov2-enabled');
-  const x2 = parseFloat(document.getElementById('rng-x2')?.value || 6);
-  const y2 = parseFloat(document.getElementById('rng-y2')?.value || 86);
+  const x2 = parseFloat(document.getElementById('rng-x2')?.value || 5);
+  const y2 = parseFloat(document.getElementById('rng-y2')?.value || 84);
   const s2 = parseFloat(document.getElementById('rng-s2')?.value || 18);
   const a2 = parseInt(document.getElementById('rng-a2')?.value || 100);
 
   if (box2) {
     box2.style.display = (chk2 && !chk2.checked) ? 'none' : 'block';
-    box2.style.left = x2 + '%';
-    box2.style.top = y2 + '%';
+    const effX2 = Math.max(0, Math.min(x2, 100 - s2));
+    const effY2 = Math.max(0, Math.min(y2, 95));
+    box2.style.left = effX2 + '%';
+    box2.style.top = effY2 + '%';
     box2.style.width = s2 + '%';
     box2.style.opacity = (a2 / 100).toFixed(2);
   }
@@ -6191,7 +6277,7 @@ function updateDOMPositionsFromSliders() {
   if (rY2) rY2.textContent = y2.toFixed(1) + '%';
   if (rS2) rS2.textContent = s2.toFixed(1) + '%';
   if (rA2) rA2.textContent = a2 + '%';
-  if (coord2) coord2.textContent = `${Math.round(x2)},${Math.round(y2)}`;
+  if (coord2) coord2.textContent = `${Math.round(x2)}%, ${Math.round(y2)}%`;
 
   updateFilterCodePreview();
 }
@@ -6448,8 +6534,8 @@ async function saveOverlayConfig() {
 }
 
 function resetOverlayDefaults() {
-  applyPreset('overlay_1', 88, 6);
-  applyPreset('overlay_2', 6, 86);
+  applyPreset('overlay_1', 82, 5);
+  applyPreset('overlay_2', 5, 84);
   const s1 = document.getElementById('rng-s1');
   const a1 = document.getElementById('rng-a1');
   const s2 = document.getElementById('rng-s2');

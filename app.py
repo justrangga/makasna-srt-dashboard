@@ -70,8 +70,8 @@ DEFAULT_OVERLAY_CONFIG = {
         "enabled": True,
         "name": "Station ID (Logo)",
         "file": "/static/overlays/station_logo.png",
-        "x_percent": 88.0,
-        "y_percent": 6.0,
+        "x_percent": 82.0,
+        "y_percent": 5.0,
         "scale_percent": 14.0,
         "opacity": 0.95
     },
@@ -79,8 +79,8 @@ DEFAULT_OVERLAY_CONFIG = {
         "enabled": True,
         "name": "Lower Third / Live Bug",
         "file": "/static/overlays/live_badge.png",
-        "x_percent": 6.0,
-        "y_percent": 86.0,
+        "x_percent": 5.0,
+        "y_percent": 84.0,
         "scale_percent": 18.0,
         "opacity": 1.0
     }
