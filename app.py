@@ -22,6 +22,8 @@ import re
 import shutil
 import atexit
 import uuid
+import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from urllib.parse import urlsplit, parse_qs
@@ -49,6 +51,15 @@ OVERLAYS_DIR = os.path.join(BASE_DIR, "static", "overlays")
 os.makedirs(LOGS_DIR, exist_ok=True)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 os.makedirs(OVERLAYS_DIR, exist_ok=True)
+
+# Rotating Audit & System Loggers
+AUDIT_LOG_FILE = os.path.join(LOGS_DIR, "system_audit.log")
+audit_handler = RotatingFileHandler(AUDIT_LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding="utf-8")
+audit_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+logger = logging.getLogger("makasna_gateway")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    logger.addHandler(audit_handler)
 
 DEFAULT_OVERLAY_CONFIG = {
     "enabled": True,
@@ -158,9 +169,21 @@ def log_event(route_id, route_name, event_type, message, level="info"):
             else:
                 _events_cache = []
         _events_cache.insert(0, entry)
-        if len(_events_cache) > 300:
-            del _events_cache[300:]
+        if len(_events_cache) > 500:
+            del _events_cache[500:]
         _events_dirty = True
+
+    # Persist directly to system audit log file
+    try:
+        log_line = f"[{route_name}] [{event_type}] {message}"
+        if level == "error":
+            logger.error(log_line)
+        elif level == "warning":
+            logger.warning(log_line)
+        else:
+            logger.info(log_line)
+    except Exception:
+        pass
 
 def flush_events_to_disk():
     global _events_dirty
@@ -295,12 +318,17 @@ def get_system_stats():
 
     routes = load_routes()
     active_count = sum(1 for rid, info in active_routes.items() if info.get("proc") and info["proc"].poll() is None)
+    disk = psutil.disk_usage('/')
 
     return {
         "cpu": cpu,
         "ram_percent": mem.percent,
         "ram_used_mb": mem.used // (1024 * 1024),
         "ram_total_mb": mem.total // (1024 * 1024),
+        "disk_percent": disk.percent,
+        "disk_used_gb": round((disk.total - disk.free) / (1024 ** 3), 1),
+        "disk_free_gb": round(disk.free / (1024 ** 3), 1),
+        "disk_total_gb": round(disk.total / (1024 ** 3), 1),
         "rx_mbps": max(0.0, rx_mbps),
         "tx_mbps": max(0.0, tx_mbps),
         "active_routes": active_count,
@@ -888,8 +916,11 @@ def stop_route_process(route_id):
 # Background Process Supervisor & Failover Engine
 # =========================================================================
 route_backoffs = {}
+_last_known_publishers = {}
+_last_known_readers = {}
 
 def supervisor_thread():
+    global _last_known_publishers, _last_known_readers
     last_flush = time.time()
     while True:
         try:
@@ -905,6 +936,34 @@ def supervisor_thread():
             srt_conns = get_mediamtx_srt_connections()
             paths = get_mediamtx_paths()
             paths_map = {p.get("name"): p for p in paths if isinstance(p, dict)}
+
+            # Track inbound SRT publishers and listeners for logging
+            current_pubs = {}
+            current_rdrs = {}
+            for conn in srt_conns:
+                cid = conn.get("id")
+                state = conn.get("state")
+                path_name = conn.get("path") or "unknown"
+                remote_addr = conn.get("remoteAddr", "unknown")
+                if state == "publish":
+                    current_pubs[cid] = {"path": path_name, "remote": remote_addr}
+                    if cid not in _last_known_publishers:
+                        log_event("srt_ingest", "SRT Inbound", "publisher_connected", f"SRT publisher connected on stream '{path_name}' from {remote_addr}", "info")
+                elif state == "read":
+                    current_rdrs[cid] = {"path": path_name, "remote": remote_addr}
+                    if cid not in _last_known_readers:
+                        log_event("srt_egress", "SRT Listener", "reader_connected", f"SRT listener connected to stream '{path_name}' from {remote_addr}", "info")
+
+            for old_cid, old_info in list(_last_known_publishers.items()):
+                if old_cid not in current_pubs:
+                    log_event("srt_ingest", "SRT Inbound", "publisher_disconnected", f"SRT publisher disconnected from stream '{old_info['path']}' ({old_info['remote']})", "warning")
+
+            for old_cid, old_info in list(_last_known_readers.items()):
+                if old_cid not in current_rdrs:
+                    log_event("srt_egress", "SRT Listener", "reader_disconnected", f"SRT listener disconnected from stream '{old_info['path']}' ({old_info['remote']})", "info")
+
+            _last_known_publishers = current_pubs
+            _last_known_readers = current_rdrs
 
             with active_routes_lock:
                 for rid, info in list(active_routes.items()):
@@ -1120,11 +1179,14 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         remember = request.form.get("remember")
+        client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if username == DASHBOARD_USER and password == DASHBOARD_PASS:
             session.permanent = bool(remember is not None)
             session["logged_in"] = True
             session["username"] = username
+            log_event("system", "Auth", "login_success", f"User '{username}' logged in successfully from {client_ip}", "info")
             return redirect(url_for("index"))
+        log_event("system", "Auth", "login_failed", f"Failed login attempt for user '{username}' from {client_ip}", "warning")
         return render_template("login.html", error="Invalid username or password")
     if session.get("logged_in"):
         return redirect(url_for("index"))
@@ -1133,6 +1195,9 @@ def login():
 
 @app.route("/logout")
 def logout():
+    user = session.get("username", "admin")
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    log_event("system", "Auth", "logout", f"User '{user}' logged out from {client_ip}", "info")
     session.clear()
     return redirect(url_for("login"))
 
@@ -1791,6 +1856,79 @@ def api_probe_source():
 @login_required
 def api_system_stats():
     return jsonify({"ok": True, "stats": get_system_stats()})
+
+
+def get_current_srt_port():
+    try:
+        r = requests.get(f"{MEDIAMTX_API}/v3/config/global/get", timeout=1.5)
+        addr = r.json().get("srtAddress", ":8890")
+        match = re.search(r":(\d+)$", addr)
+        return int(match.group(1)) if match else 8890
+    except Exception:
+        return 8890
+
+
+@app.route("/api/system/health", methods=["GET"])
+@login_required
+def api_system_health():
+    stats = get_system_stats()
+    srt_conns = get_mediamtx_srt_connections()
+    pubs = [c for c in srt_conns if c.get("state") == "publish"]
+    rdrs = [c for c in srt_conns if c.get("state") == "read"]
+    return jsonify({
+        "ok": True,
+        "status": "healthy",
+        "system": stats,
+        "telemetry": {
+            "srt_port": get_current_srt_port(),
+            "srt_publishers": len(pubs),
+            "srt_listeners": len(rdrs),
+            "active_routes": stats.get("active_routes", 0),
+            "total_routes": stats.get("total_routes", 0),
+            "cpu_percent": stats.get("cpu", 0),
+            "ram_percent": stats.get("ram_percent", 0),
+            "disk_percent": stats.get("disk_percent", 0),
+            "rx_mbps": stats.get("rx_mbps", 0),
+            "tx_mbps": stats.get("tx_mbps", 0)
+        },
+        "timestamp": now_iso()
+    })
+
+
+@app.route("/api/telemetry", methods=["GET"])
+@login_required
+def api_telemetry_aggregate():
+    return api_system_health()
+
+
+@app.route("/api/logs", methods=["GET"])
+@login_required
+def api_get_logs():
+    lines_count = request.args.get("lines", 100, type=int)
+    log_name = request.args.get("file", "system_audit.log")
+    safe_name = os.path.basename(log_name)
+    target_path = os.path.join(LOGS_DIR, safe_name)
+
+    available_files = []
+    if os.path.exists(LOGS_DIR):
+        available_files = sorted(os.listdir(LOGS_DIR))
+
+    if not os.path.exists(target_path):
+        return jsonify({"ok": False, "error": f"Log file '{safe_name}' not found", "available_files": available_files}), 404
+
+    try:
+        with open(target_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+            tail_lines = all_lines[-lines_count:] if lines_count > 0 else all_lines
+        return jsonify({
+            "ok": True,
+            "filename": safe_name,
+            "lines": [line.rstrip("\r\n") for line in tail_lines],
+            "total_lines": len(all_lines),
+            "available_files": available_files
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/events", methods=["GET"])
