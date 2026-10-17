@@ -26,6 +26,7 @@ from datetime import datetime, timezone, timedelta
 from functools import wraps
 from urllib.parse import urlsplit, parse_qs
 from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for, Response
+from werkzeug.utils import secure_filename
 
 import gdrive_service
 
@@ -43,8 +44,68 @@ LEGACY_FORWARDS_FILE = os.path.join(BASE_DIR, "forwards.json")
 EVENTS_FILE = os.path.join(BASE_DIR, "events.json")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 RECORDINGS_DIR = gdrive_service.RECORDINGS_DIR
+OVERLAY_CONFIG_FILE = os.path.join(BASE_DIR, "overlay_config.json")
+OVERLAYS_DIR = os.path.join(BASE_DIR, "static", "overlays")
 os.makedirs(LOGS_DIR, exist_ok=True)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
+os.makedirs(OVERLAYS_DIR, exist_ok=True)
+
+DEFAULT_OVERLAY_CONFIG = {
+    "enabled": True,
+    "apply_to_egress": True,
+    "feed_source": "live/feed1",
+    "overlay_1": {
+        "enabled": True,
+        "name": "Station ID (Logo)",
+        "file": "/static/overlays/station_logo.png",
+        "x_percent": 88.0,
+        "y_percent": 6.0,
+        "scale_percent": 14.0,
+        "opacity": 0.95
+    },
+    "overlay_2": {
+        "enabled": True,
+        "name": "Lower Third / Live Bug",
+        "file": "/static/overlays/live_badge.png",
+        "x_percent": 6.0,
+        "y_percent": 86.0,
+        "scale_percent": 18.0,
+        "opacity": 1.0
+    }
+}
+
+def load_overlay_config():
+    if os.path.exists(OVERLAY_CONFIG_FILE):
+        try:
+            with open(OVERLAY_CONFIG_FILE, "r") as f:
+                data = json.load(f)
+                res = DEFAULT_OVERLAY_CONFIG.copy()
+                res.update(data)
+                return res
+        except Exception as e:
+            print(f"[OVERLAY] Error loading config: {e}", file=sys.stderr)
+    return DEFAULT_OVERLAY_CONFIG.copy()
+
+def save_overlay_config(cfg):
+    try:
+        with open(OVERLAY_CONFIG_FILE, "w") as f:
+            json.dump(cfg, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"[OVERLAY] Error saving config: {e}", file=sys.stderr)
+        return False
+
+def get_available_overlays():
+    files = []
+    if os.path.exists(OVERLAYS_DIR):
+        for f in sorted(os.listdir(OVERLAYS_DIR)):
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                files.append({
+                    "name": f,
+                    "url": f"/static/overlays/{f}",
+                    "path": os.path.join(OVERLAYS_DIR, f)
+                })
+    return files
 
 MEDIAMTX_API = os.environ.get("MEDIAMTX_API", "http://127.0.0.1:9997")
 MEDIAMTX_CONF = os.environ.get("MEDIAMTX_CONF", "/etc/mediamtx/mediamtx.yml")
@@ -326,29 +387,86 @@ def build_source_url(source_config):
     return f"rtsp://127.0.0.1:8554/{stream_id or 'live'}"
 
 
-def build_video_filters(dest):
-    filters = []
-    # Deinterlace (essential for broadcast 1080i sources)
-    if dest.get("deinterlace"):
-        filters.append("bwdif=mode=1")
+def build_video_filters(dest, overlay_cfg=None):
+    if overlay_cfg is None:
+        overlay_cfg = load_overlay_config()
 
-    # Resolution scaling
+    use_overlay = overlay_cfg.get("enabled", False) and (
+        dest.get("overlay", True) if "overlay" in dest else overlay_cfg.get("apply_to_egress", True)
+    )
+
     scale = dest.get("scale", "original")
+    scale_filter = None
     if scale == "1080p":
-        filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
+        scale_filter = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"
     elif scale == "720p":
-        filters.append("scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2")
+        scale_filter = "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2"
     elif scale == "576p":
-        filters.append("scale=1024:576:force_original_aspect_ratio=decrease,pad=1024:576:(ow-iw)/2:(oh-ih)/2")
+        scale_filter = "scale=1024:576:force_original_aspect_ratio=decrease,pad=1024:576:(ow-iw)/2:(oh-ih)/2"
     elif scale == "480p":
-        filters.append("scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2")
+        scale_filter = "scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2"
 
-    # Framerate conversion
-    fps = str(dest.get("fps", "original")).strip()
-    if fps in ("25", "30", "50", "60"):
-        filters.append(f"fps={fps}")
+    deint_filter = "bwdif=mode=1" if dest.get("deinterlace") else None
+    fps_val = str(dest.get("fps", "original")).strip()
+    fps_filter = f"fps={fps_val}" if fps_val in ("25", "30", "50", "60") else None
 
-    return ",".join(filters) if filters else None
+    pre_filters = []
+    if deint_filter:
+        pre_filters.append(deint_filter)
+    if scale_filter:
+        pre_filters.append(scale_filter)
+    if fps_filter:
+        pre_filters.append(fps_filter)
+
+    ov1 = overlay_cfg.get("overlay_1", {}) if use_overlay else {}
+    ov2 = overlay_cfg.get("overlay_2", {}) if use_overlay else {}
+    ov1_active = ov1.get("enabled", False) and bool(ov1.get("file"))
+    ov2_active = ov2.get("enabled", False) and bool(ov2.get("file"))
+
+    if not (ov1_active or ov2_active):
+        return ",".join(pre_filters) if pre_filters else None
+
+    def resolve_path(p):
+        if not p:
+            return ""
+        if p.startswith("/static/"):
+            return os.path.join(BASE_DIR, p.lstrip("/"))
+        return p
+
+    f1 = resolve_path(ov1.get("file", ""))
+    f2 = resolve_path(ov2.get("file", ""))
+
+    filter_parts = []
+    last_label = "in"
+
+    if pre_filters:
+        filter_parts.append(f"[in]{','.join(pre_filters)}[v_pre]")
+        last_label = "v_pre"
+
+    if ov1_active and os.path.exists(f1):
+        base_w = 1280 if scale == "720p" else 1920
+        scale_pct = float(ov1.get("scale_percent", 14.0)) / 100.0
+        w_px = max(30, int(base_w * scale_pct))
+        opacity = max(0.1, min(1.0, float(ov1.get("opacity", 0.95))))
+        x_pct = float(ov1.get("x_percent", 88.0)) / 100.0
+        y_pct = float(ov1.get("y_percent", 6.0)) / 100.0
+        filter_parts.append(f"movie='{f1}',scale={w_px}:-1,format=rgba,colorchannelmixer=aa={opacity}[ov1]")
+        next_label = "tmp_ov" if (ov2_active and os.path.exists(f2)) else "out"
+        filter_parts.append(f"[{last_label}][ov1]overlay=W*{x_pct}:H*{y_pct}[{next_label}]")
+        last_label = next_label
+
+    if ov2_active and os.path.exists(f2):
+        base_w = 1280 if scale == "720p" else 1920
+        scale_pct = float(ov2.get("scale_percent", 18.0)) / 100.0
+        w_px = max(30, int(base_w * scale_pct))
+        opacity = max(0.1, min(1.0, float(ov2.get("opacity", 1.0))))
+        x_pct = float(ov2.get("x_percent", 6.0)) / 100.0
+        y_pct = float(ov2.get("y_percent", 86.0)) / 100.0
+        filter_parts.append(f"movie='{f2}',scale={w_px}:-1,format=rgba,colorchannelmixer=aa={opacity}[ov2]")
+        filter_parts.append(f"[{last_label}][ov2]overlay=W*{x_pct}:H*{y_pct}[out]")
+        last_label = "out"
+
+    return ";".join(filter_parts) if filter_parts else None
 
 
 def build_ffmpeg_cmd(route, source_config):
@@ -378,6 +496,8 @@ def build_ffmpeg_cmd(route, source_config):
         f"rtmp://127.0.0.1:1935/route_{route_id}"
     ])
 
+    overlay_cfg = load_overlay_config()
+
     # 2. Fan-out to all configured Destinations
     for dest in route.get("destinations", []):
         durl = dest.get("url", "").strip()
@@ -393,20 +513,15 @@ def build_ffmpeg_cmd(route, source_config):
         else:
             cmd.extend(["-map", "0:a:0?"])
 
-        if mode == "copy":
-            if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
-                cmd.extend(["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"])
-            else:
-                cmd.extend(["-c:v", "copy", "-c:a", "copy"])
-        else:
-            # Custom bitrate / transcode & processing
+        vf = build_video_filters(dest, overlay_cfg=overlay_cfg)
+
+        if vf or mode != "copy":
             v_codec = dest.get("video_codec", "libx264")
             v_bitrate = int(dest.get("video_bitrate", 4500))
             max_b = int(dest.get("max_bitrate", int(v_bitrate * 1.15)))
             buf_b = int(dest.get("buffer_size", int(v_bitrate * 2)))
             preset = dest.get("encoder_preset", "veryfast")
 
-            vf = build_video_filters(dest)
             if vf:
                 cmd.extend(["-vf", vf])
 
@@ -435,6 +550,12 @@ def build_ffmpeg_cmd(route, source_config):
                     "-b:a", f"{a_bitrate}k",
                     "-ar", str(a_sample_rate)
                 ])
+        else:
+            # Pure passthrough
+            if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
+                cmd.extend(["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"])
+            else:
+                cmd.extend(["-c:v", "copy", "-c:a", "copy"])
 
         # Format detection
         if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
@@ -1433,6 +1554,65 @@ def api_direct_record_stop():
     if not ok:
         return jsonify({"ok": False, "error": err}), 400
     return jsonify({"ok": True, "message": "Master ISO recording stopped"})
+
+
+# =========================================================================
+# OVERLAY & STATION ID REST API
+# =========================================================================
+@app.route("/api/overlay/config", methods=["GET"])
+@login_required
+def api_get_overlay_config():
+    cfg = load_overlay_config()
+    assets = get_available_overlays()
+    return jsonify({
+        "ok": True,
+        "config": cfg,
+        "assets": assets
+    })
+
+
+@app.route("/api/overlay/save", methods=["POST"])
+@login_required
+def api_save_overlay():
+    data = get_safe_json()
+    cfg = load_overlay_config()
+    for k, v in data.items():
+        if isinstance(v, dict) and k in cfg and isinstance(cfg[k], dict):
+            cfg[k].update(v)
+        else:
+            cfg[k] = v
+    if save_overlay_config(cfg):
+        return jsonify({"ok": True, "message": "Overlay configuration saved successfully", "config": cfg})
+    return jsonify({"ok": False, "error": "Failed to save overlay configuration"}), 500
+
+
+@app.route("/api/overlay/upload", methods=["POST"])
+@login_required
+def api_upload_overlay():
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "No file uploaded"}), 400
+    file = request.files["file"]
+    layer = request.form.get("layer", "overlay_1")
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "error": "Empty filename"}), 400
+
+    filename = secure_filename(file.filename)
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".png", ".webp", ".jpg", ".jpeg"):
+        return jsonify({"ok": False, "error": "Only image files (.png, .webp, .jpg) are supported"}), 400
+
+    save_name = f"{layer}_{int(time.time())}{ext}"
+    save_path = os.path.join(OVERLAYS_DIR, save_name)
+    file.save(save_path)
+
+    web_path = f"/static/overlays/{save_name}"
+    cfg = load_overlay_config()
+    if layer in cfg and isinstance(cfg[layer], dict):
+        cfg[layer]["file"] = web_path
+        cfg[layer]["enabled"] = True
+        save_overlay_config(cfg)
+
+    return jsonify({"ok": True, "file": web_path, "layer": layer, "config": cfg, "assets": get_available_overlays()})
 
 
 @app.route("/api/routes/<route_id>/switch-source", methods=["POST"])

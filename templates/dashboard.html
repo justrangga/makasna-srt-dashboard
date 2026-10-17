@@ -1660,7 +1660,7 @@ video {
       <span>Routes</span>
     </div>
     <div class="nav-item" id="side-recordings" onclick="switchTab('recordings')">
-      <span>Recordings</span>
+      <span>Station ID / Overlays</span>
     </div>
     <div class="nav-item" id="side-events" onclick="switchTab('events')">
       <span>Event Log</span>
@@ -1838,336 +1838,620 @@ video {
       </div>
     </div>
 
-    <!-- VIEW 3: Recordings & Google Drive -->
+        <!-- VIEW 3: Station ID & Overlay Studio -->
     <div id="view-recordings" style="display:none;">
-      <div class="page-header">
+      <style>
+        .overlay-studio-grid {
+          display: grid;
+          grid-template-columns: 1.35fr 1fr;
+          gap: 20px;
+          align-items: start;
+        }
+        @media (max-width: 1080px) {
+          .overlay-studio-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        .overlay-monitor-card {
+          background: #090a0f;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .overlay-monitor-header {
+          padding: 10px 14px;
+          background: rgba(255,255,255,0.02);
+          border-bottom: 1px solid var(--border);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .overlay-screen-outer {
+          width: 100%;
+          position: relative;
+          background: #000;
+        }
+        .overlay-screen-viewport {
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          position: relative;
+          overflow: hidden;
+          background: #050608;
+        }
+        #overlay-preview-video {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+        }
+        .overlay-safe-guides {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 5;
+          transition: opacity 0.2s;
+        }
+        .guide-action-safe {
+          position: absolute;
+          inset: 5%;
+          border: 1px dashed rgba(255, 255, 255, 0.2);
+        }
+        .guide-title-safe {
+          position: absolute;
+          inset: 10%;
+          border: 1px dashed rgba(0, 229, 255, 0.35);
+        }
+        .guide-crosshair-h {
+          position: absolute;
+          top: 50%;
+          left: 45%;
+          right: 45%;
+          height: 1px;
+          background: rgba(255, 255, 255, 0.25);
+        }
+        .guide-crosshair-v {
+          position: absolute;
+          left: 50%;
+          top: 45%;
+          bottom: 45%;
+          width: 1px;
+          background: rgba(255, 255, 255, 0.25);
+        }
+        .guide-label {
+          position: absolute;
+          top: 3px;
+          left: 6px;
+          font-size: 8.5px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          color: rgba(255, 255, 255, 0.45);
+        }
+        .overlay-drag-canvas {
+          position: absolute;
+          inset: 0;
+          z-index: 10;
+          user-select: none;
+          touch-action: none;
+        }
+        .overlay-drag-item {
+          position: absolute;
+          cursor: grab;
+          border-radius: 6px;
+          box-sizing: border-box;
+          touch-action: none;
+        }
+        .overlay-drag-item:active {
+          cursor: grabbing;
+        }
+        .drag-cyan {
+          border: 2px dashed #00e5ff;
+          background: rgba(0, 229, 255, 0.08);
+          box-shadow: 0 4px 14px rgba(0, 229, 255, 0.25);
+        }
+        .drag-amber {
+          border: 2px dashed #ffb300;
+          background: rgba(255, 179, 0, 0.08);
+          box-shadow: 0 4px 14px rgba(255, 179, 0, 0.25);
+        }
+        .drag-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 2px 6px;
+          font-size: 9.5px;
+          font-weight: 700;
+          color: #fff;
+          background: rgba(0, 0, 0, 0.75);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 4px 4px 0 0;
+          pointer-events: none;
+        }
+        .drag-content {
+          padding: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+        }
+        .drag-content img {
+          width: 100%;
+          height: auto;
+          display: block;
+          filter: drop-shadow(0 2px 5px rgba(0,0,0,0.7));
+        }
+        .overlay-monitor-footer {
+          padding: 10px 14px;
+          background: rgba(255,255,255,0.02);
+          border-top: 1px solid var(--border);
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .coord-readout-col {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 11px;
+          color: #a1a1aa;
+          flex-wrap: wrap;
+        }
+        .coord-title {
+          font-weight: 700;
+          font-size: 10.5px;
+          letter-spacing: 0.5px;
+          color: #e4e4e7;
+        }
+        .coord-val b {
+          color: #fff;
+        }
+        .dot-indicator {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          display: inline-block;
+        }
+        .dot-cyan { background: #00e5ff; box-shadow: 0 0 6px #00e5ff; }
+        .dot-amber { background: #ffb300; box-shadow: 0 0 6px #ffb300; }
+        .overlay-controls-card {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .overlay-control-box {
+          background: var(--panel);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          padding: 14px 16px;
+        }
+        .control-box-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          padding-bottom: 8px;
+        }
+        .control-label {
+          display: block;
+          font-size: 10px;
+          font-weight: 700;
+          color: var(--muted);
+          letter-spacing: 0.5px;
+          margin-bottom: 4px;
+        }
+        .form-row-sm {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+        }
+        .form-control-sm {
+          width: 100%;
+          background: rgba(0,0,0,0.3);
+          border: 1px solid var(--border);
+          color: var(--text);
+          padding: 6px 10px;
+          border-radius: 6px;
+          font-size: 12px;
+        }
+        .preset-pill-group {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .preset-pill {
+          background: rgba(255,255,255,0.04);
+          border: 1px solid var(--border);
+          color: #d4d4d8;
+          font-size: 10.5px;
+          padding: 4px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .preset-pill:hover {
+          background: rgba(0, 229, 255, 0.12);
+          border-color: #00e5ff;
+          color: #fff;
+        }
+        .sliders-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px 14px;
+          margin-top: 10px;
+        }
+        .slider-row {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        .slider-label-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 10.5px;
+          color: var(--muted);
+        }
+        .slider-val-txt {
+          font-weight: 700;
+          color: #fff;
+        }
+        .range-slider {
+          width: 100%;
+          accent-color: #00e5ff;
+          cursor: pointer;
+          height: 5px;
+        }
+        .range-slider-amber {
+          accent-color: #ffb300;
+        }
+        .toggle-switch-sm {
+          position: relative;
+          display: inline-block;
+          width: 38px;
+          height: 20px;
+        }
+        .toggle-switch-sm input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .toggle-slider-sm {
+          position: absolute;
+          cursor: pointer;
+          inset: 0;
+          background-color: rgba(255,255,255,0.15);
+          transition: .2s;
+          border-radius: 20px;
+        }
+        .toggle-slider-sm:before {
+          position: absolute;
+          content: "";
+          height: 14px;
+          width: 14px;
+          left: 3px;
+          bottom: 3px;
+          background-color: white;
+          transition: .2s;
+          border-radius: 50%;
+        }
+        .toggle-switch-sm input:checked + .toggle-slider-sm {
+          background-color: #00e5ff;
+        }
+        .toggle-switch-sm input:checked + .toggle-slider-sm:before {
+          transform: translateX(18px);
+        }
+      </style>
+
+      <div class="page-header" style="margin-bottom:16px;">
         <div class="page-title">
-          <h1>Recordings &amp; Cloud Archive</h1>
-          <p>Local segmented recording rules (15m, 30m, 1h) with automated Google Drive sync.</p>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:34px; height:34px; border-radius:8px; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); display:flex; align-items:center; justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            </div>
+            <div>
+              <h1 style="font-size:20px; font-weight:800; letter-spacing:0.5px; margin:0;">Station ID &amp; Overlay Studio</h1>
+              <p style="font-size:12px; color:var(--muted); margin:2px 0 0 0;">Interactive TV broadcast overlay manager — drag and position station logos &amp; lower-thirds for YouTube restreaming and master playout.</p>
+            </div>
+          </div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <button class="btn-icon" onclick="fetchRecordings()">Refresh List</button>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--border); padding:5px 12px; border-radius:8px;">
+            <span style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px;">PREVIEW FEED:</span>
+            <select id="overlay-feed-select" class="hd-select" style="min-width:160px; padding:4px 8px; font-size:12px;" onchange="onOverlayFeedChange()">
+              <option value="">-- SELECT BROADCAST FEED --</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; gap:6px; font-size:12.5px; padding:8px 16px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span>Save Overlay Configuration</span>
+          </button>
         </div>
       </div>
 
-      <!-- ========================================================================= -->
-      <!-- BROADCAST MASTER DECK RECORDER CONSOLE -->
-      <!-- ========================================================================= -->
-      <div class="hyperdeck-console">
-        <!-- HyperDeck Top Chassis Bezel -->
-        <div class="hyperdeck-header">
-          <div class="hyperdeck-brand">
-            <div class="hyperdeck-screws"></div>
-            <div class="hyperdeck-brand-text">
-              <span class="hd-title">MASTER DECK RECORDER</span>
-              <span class="hd-subtitle">BROADCAST ISO RECORDER</span>
+      <!-- MAIN WORKSPACE LAYOUT -->
+      <div class="overlay-studio-grid">
+        <!-- LEFT COLUMN: 16:9 Broadcast Monitor & Interactive Canvas Box -->
+        <div class="overlay-monitor-card">
+          <div class="overlay-monitor-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="pulse-indicator" style="background:#00e5ff; width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px #00e5ff;"></span>
+              <span style="font-size:11px; font-weight:800; letter-spacing:1px; color:#e4e4e7;">16:9 CONFIDENCE MONITOR (DRAGGABLE OVERLAYS)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button type="button" id="btn-toggle-guides" class="btn-mini" onclick="toggleOverlayGuides()" style="font-size:10.5px; padding:3px 8px; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#a1a1aa; border-radius:4px; cursor:pointer;">
+                GUIDES: ON
+              </button>
+              <span id="overlay-res-badge" class="badge-mini" style="font-size:10px; background:rgba(0,229,255,0.15); color:#00e5ff; border:1px solid rgba(0,229,255,0.3); padding:2px 6px; border-radius:4px; font-weight:700;">1080p CANVAS</span>
             </div>
           </div>
 
-          <!-- Active Feed / Camera Selector -->
-          <div class="hyperdeck-feed-selector">
-            <span class="hd-feed-label">FEED SOURCE:</span>
-            <select id="hd-route-select" class="hd-select" onchange="onHyperdeckFeedChange()">
-              <option value="">-- SELECT FEED / CAMERA SOURCE --</option>
-            </select>
-          </div>
+          <!-- 16:9 Screen Container -->
+          <div class="overlay-screen-outer">
+            <div id="overlay-screen-viewport" class="overlay-screen-viewport">
+              <!-- Video Background -->
+              <video id="overlay-preview-video" autoplay muted playsinline></video>
 
-          <!-- Master Tally Status Lamp -->
-          <div class="hyperdeck-tally-container">
-            <div id="hd-master-tally" class="hd-tally hd-tally-stby">
-              <span class="hd-tally-dot"></span>
-              <span id="hd-tally-text">STANDBY</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- HyperDeck Main Deck Body -->
-        <div class="hyperdeck-body">
-          <!-- LEFT: Built-in Color LCD Confidence Monitor -->
-          <div class="hyperdeck-screen-frame">
-            <div class="hyperdeck-screen">
-              <video id="hd-video" autoplay muted playsinline></video>
-
-              <!-- No Signal Fallback / Test Pattern -->
-              <div id="hd-no-signal" class="hd-no-signal">
+              <!-- Colorbars / Standby Pattern -->
+              <div id="overlay-no-signal" class="hd-no-signal">
                 <div class="hd-colorbars">
                   <div class="hd-cb c1"></div><div class="hd-cb c2"></div><div class="hd-cb c3"></div>
                   <div class="hd-cb c4"></div><div class="hd-cb c5"></div><div class="hd-cb c6"></div><div class="hd-cb c7"></div>
                 </div>
-                <div class="hd-no-signal-text">NO INPUT SELECTED / FEED STANDBY</div>
+                <div class="hd-no-signal-text">SELECT FEED SOURCE OR START STREAM TO PREVIEW</div>
               </div>
 
-              <!-- On-Screen Display (OSD) Overlays -->
-              <div class="hd-osd-top">
-                <div id="hd-osd-tally" class="hd-osd-badge hd-osd-stby">● STBY</div>
-                <div id="hd-osd-format" class="hd-osd-badge">H.264 • 1080p • 5.0 Mbps • AAC</div>
+              <!-- Title Safe & Action Safe Broadcast Guidelines -->
+              <div id="overlay-guidelines" class="overlay-safe-guides">
+                <div class="guide-action-safe"><span class="guide-label">ACTION SAFE (90%)</span></div>
+                <div class="guide-title-safe"><span class="guide-label">TITLE SAFE (80%)</span></div>
+                <div class="guide-crosshair-h"></div>
+                <div class="guide-crosshair-v"></div>
               </div>
 
-              <!-- Audio Peak VU Meters (Left & Right Channel) with True Peak & Clip Detect -->
-              <div class="hd-vu-meter-panel">
-                <div class="hd-vu-clip-row">
-                  <span id="hd-clip-l" class="hd-vu-clip-badge" title="Channel 1 (L) Clip Indicator">CLIP</span>
-                  <span id="hd-clip-r" class="hd-vu-clip-badge" title="Channel 2 (R) Clip Indicator">CLIP</span>
-                </div>
-                <div class="hd-vu-bars-container">
-                  <div class="hd-vu-ch">
-                    <div class="hd-vu-bar"><div id="hd-vu-l" class="hd-vu-fill"></div></div>
-                    <span class="hd-vu-lbl">L</span>
+              <!-- Interactive Drag & Drop Canvas Layer -->
+              <div id="overlay-drag-canvas" class="overlay-drag-canvas">
+                <!-- Draggable Box 1: Station ID Logo -->
+                <div id="drag-box-1" class="overlay-drag-item drag-cyan" style="left:88%; top:6%; width:14%;">
+                  <div class="drag-header">
+                    <span>⠿ L1: STATION ID</span>
+                    <span id="drag-coord-1" style="color:#00e5ff; font-family:monospace;">(88%, 6%)</span>
                   </div>
-                  <div class="hd-vu-ch">
-                    <div class="hd-vu-bar"><div id="hd-vu-r" class="hd-vu-fill"></div></div>
-                    <span class="hd-vu-lbl">R</span>
+                  <div class="drag-content">
+                    <img id="preview-img-1" src="/static/overlays/station_logo.png" alt="Station ID Logo" />
                   </div>
                 </div>
-                <div id="hd-vu-db-text" class="hd-vu-db-readout">-&infin; dB</div>
-                <button type="button" id="hd-audio-listen-btn" class="hd-audio-btn" onclick="toggleHyperdeckAudioListen(event)" title="Monitor Audio Speaker (Mute/Unmute)">🔇</button>
-              </div>
 
-              <div class="hd-osd-bottom">
-                <div id="hd-osd-src-name" class="hd-osd-src">INPUT: NONE</div>
-                <div class="hd-timecode-box">
-                  <div class="hd-tc-label">TIMECODE / ELAPSED</div>
-                  <div id="hd-timecode-display" class="hd-timecode">00:00:00:00</div>
+                <!-- Draggable Box 2: Lower-Third / Live Bug -->
+                <div id="drag-box-2" class="overlay-drag-item drag-amber" style="left:6%; top:86%; width:18%;">
+                  <div class="drag-header">
+                    <span>⠿ L2: LOWER-THIRD</span>
+                    <span id="drag-coord-2" style="color:#ffb300; font-family:monospace;">(6%, 86%)</span>
+                  </div>
+                  <div class="drag-content">
+                    <img id="preview-img-2" src="/static/overlays/live_badge.png" alt="Lower Third" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- RIGHT: Transport Control Panel & Dual Media Slots -->
-          <div class="hyperdeck-controls-panel">
-            <!-- Dual Media Slots (Slot 1 SSD & Slot 2 Cloud) -->
-            <div class="hd-media-slots">
-              <!-- SLOT 1 -->
-              <div class="hd-slot">
-                <div class="hd-slot-header">
-                  <div class="hd-slot-title">
-                    <span class="hd-slot-led" id="hd-slot1-led"></span>
-                    <span>SLOT 1 : LOCAL NVMe/SSD</span>
-                  </div>
-                  <span class="hd-slot-badge" id="hd-slot1-status">ACTIVE</span>
-                </div>
-                <div class="hd-slot-progress-bar">
-                  <div id="hd-slot1-bar" class="hd-slot-progress-fill" style="width: 14%;"></div>
-                </div>
-                <div class="hd-slot-info">
-                  <span id="hd-slot1-free">49.2 GB Free</span>
-                  <span id="hd-slot1-time">~36.8 Hours Available</span>
-                </div>
-              </div>
-
-              <!-- SLOT 2 -->
-              <div class="hd-slot">
-                <div class="hd-slot-header">
-                  <div class="hd-slot-title">
-                    <span class="hd-slot-led" id="hd-slot2-led"></span>
-                    <span>SLOT 2 : GOOGLE DRIVE CLOUD</span>
-                  </div>
-                  <span class="hd-slot-badge" id="hd-slot2-status">STANDBY</span>
-                </div>
-                <div class="hd-slot-progress-bar">
-                  <div id="hd-slot2-bar" class="hd-slot-progress-fill hd-bar-cyan" style="width: 100%;"></div>
-                </div>
-                <div class="hd-slot-info">
-                  <span id="hd-slot2-acc">Google Drive Archive</span>
-                  <span id="hd-slot2-mode">Auto-Sync</span>
-                </div>
-              </div>
+          <!-- Bottom Telemetry Status Strip -->
+          <div class="overlay-monitor-footer">
+            <div class="coord-readout-col">
+              <span class="dot-indicator dot-cyan"></span>
+              <span class="coord-title">LAYER 1 (STATION ID):</span>
+              <span class="coord-val">X: <b id="readout-x1">88.0%</b></span>
+              <span class="coord-val">Y: <b id="readout-y1">6.0%</b></span>
+              <span class="coord-val">Scale: <b id="readout-s1">14.0%</b></span>
+              <span class="coord-val">Alpha: <b id="readout-a1">95%</b></span>
             </div>
-
-            <!-- Quick Recorder Settings (Preset, Duration, Format, Bitrate, Resolution) -->
-            <div class="hd-quick-settings">
-              <div class="hd-setting-item">
-                <label>SEGMENT DURATION</label>
-                <select id="hd-cfg-duration" class="hd-mini-select">
-                  <option value="900" selected>15 Minutes</option>
-                  <option value="1800">30 Minutes</option>
-                  <option value="3600">1 Hour (60m)</option>
-                </select>
-              </div>
-
-              <div class="hd-setting-item">
-                <label>FORMAT CONTAINER</label>
-                <select id="hd-cfg-format" class="hd-mini-select" onchange="onHyperdeckFormatChange()">
-                  <option value="mp4" selected>MP4 (MPEG-4 Part 14)</option>
-                  <option value="mov">MOV (Apple QuickTime)</option>
-                </select>
-              </div>
-
-              <div class="hd-setting-item">
-                <label>CODEC / BITRATE</label>
-                <select id="hd-cfg-bitrate" class="hd-mini-select" onchange="onHyperdeckBitrateChange()">
-                  <option value="2000" selected>H.264 2.0 Mbps (~225MB)</option>
-                  <option value="3500">H.264 3.5 Mbps (~390MB)</option>
-                  <option value="5000">H.264 5.0 Mbps (~560MB)</option>
-                  <option value="8000">H.264 8.0 Mbps Broadcast</option>
-                  <option value="1200">H.264 1.2 Mbps (~135MB)</option>
-                  <option value="copy">Direct Stream Copy</option>
-                  <option value="custom">Custom Bitrate...</option>
-                </select>
-                <div id="hd-custom-bitrate-box" style="display:none; margin-top:4px;">
-                  <div style="display:flex; align-items:center; gap:5px;">
-                    <input type="number" id="hd-custom-bitrate-val" placeholder="6000" min="500" max="60000" step="100" class="hd-mini-input" style="width:75px;" value="6000" oninput="updateHyperdeckOsdFormat()">
-                    <span style="font-family:'JetBrains Mono'; font-size:10.5px; color:var(--cyan); font-weight:700;">kbps</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="hd-setting-item">
-                <label>OUTPUT RESOLUTION</label>
-                <select id="hd-cfg-resolution" class="hd-mini-select" onchange="onHyperdeckResChange()">
-                  <option value="original" selected>Source Native (Original)</option>
-                  <option value="1080p">1080p (1920&times;1080)</option>
-                  <option value="720p">720p (1280&times;720)</option>
-                  <option value="480p">480p (854&times;480)</option>
-                  <option value="4k">4K UHD (3840&times;2160)</option>
-                  <option value="custom">Custom Resolution...</option>
-                </select>
-                <div id="hd-custom-res-box" style="display:none; margin-top:4px;">
-                  <div style="display:flex; align-items:center; gap:3px;">
-                    <input type="number" id="hd-custom-w" placeholder="1920" class="hd-mini-input" style="width:58px;" value="1920" oninput="updateHyperdeckOsdFormat()">
-                    <span style="color:var(--muted); font-size:11px;">&times;</span>
-                    <input type="number" id="hd-custom-h" placeholder="1080" class="hd-mini-input" style="width:58px;" value="1080" oninput="updateHyperdeckOsdFormat()">
-                    <span style="font-size:10px; color:var(--muted);">px</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Big Tactile Hardware Buttons: RECORD & STOP -->
-            <div class="hd-transport-buttons">
-              <!-- STOP BUTTON -->
-              <button id="hd-btn-stop" class="hd-btn hd-btn-stop" onclick="hyperdeckStop()" title="Stop Recording">
-                <div class="hd-btn-cap">
-                  <div class="hd-btn-icon-stop">■</div>
-                  <span class="hd-btn-label">STOP</span>
-                </div>
-              </button>
-
-              <!-- RECORD BUTTON -->
-              <button id="hd-btn-rec" class="hd-btn hd-btn-rec" onclick="hyperdeckRecord()" title="Start Recording">
-                <div class="hd-btn-cap">
-                  <div class="hd-btn-icon-rec">●</div>
-                  <span class="hd-btn-label">RECORD</span>
-                </div>
-              </button>
-            </div>
-
-            <!-- Live Recording Status Bar -->
-            <div class="hd-status-strip">
-              <span id="hd-status-msg" style="color:#e4e4e7; font-weight:600;">Select a camera feed then press RECORD to start master ISO recording.</span>
+            <div class="coord-readout-col">
+              <span class="dot-indicator dot-amber"></span>
+              <span class="coord-title">LAYER 2 (LOWER-THIRD):</span>
+              <span class="coord-val">X: <b id="readout-x2">6.0%</b></span>
+              <span class="coord-val">Y: <b id="readout-y2">86.0%</b></span>
+              <span class="coord-val">Scale: <b id="readout-s2">18.0%</b></span>
+              <span class="coord-val">Alpha: <b id="readout-a2">100%</b></span>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Google Drive Account Connection Card -->
-      <div style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:20px; display:flex; flex-direction:column; gap:14px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div style="width:36px; height:36px; border-radius:8px; background:rgba(0,229,255,0.1); border:1px solid rgba(0,229,255,0.25); display:flex; align-items:center; justify-content:center;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cyan);"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-            </div>
-            <div>
-              <div style="font-weight:700; font-size:15px;">Google Drive Cloud Sync</div>
-              <div id="gdrive-status-desc" style="font-size:12px; color:var(--muted);">Checking connection...</div>
-            </div>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button id="btn-gdrive-connect" class="btn-primary" onclick="connectGoogleDrive()">
-              Sign In with Google
-            </button>
-            <button id="btn-gdrive-disconnect" class="btn-icon btn-danger" style="display:none;" onclick="disconnectGoogleDrive()">
-              Disconnect Account
-            </button>
-            <button class="btn-icon" onclick="toggleGdriveSettings()">
-              Settings / Custom App
-            </button>
-          </div>
-        </div>
-
-        <!-- Custom Google OAuth / Folder Settings (Expandable) -->
-        <div id="gdrive-settings-panel" style="display:none; background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:16px; margin-top:6px;">
-          <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--cyan); margin-bottom:12px;">Google Cloud Project Settings</h4>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Target Google Drive Folder</label>
-              <input type="text" id="cfg-gdrive-folder" class="form-control" value="Makasna Video Archive" placeholder="Folder Name">
-            </div>
-            <div class="form-group">
-              <label>OAuth Client ID</label>
-              <input type="text" id="cfg-gdrive-client-id" class="form-control" placeholder="xxxx.apps.googleusercontent.com">
-            </div>
-          </div>
-          <div class="form-group">
-            <label>OAuth Client Secret</label>
-            <input type="password" id="cfg-gdrive-client-secret" class="form-control" placeholder="GOCSPX-xxxx">
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:8px;">
-            <div style="display:flex; gap:14px; flex-wrap:wrap;">
-              <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer;">
-                <input type="checkbox" id="cfg-gdrive-auto-upload" checked> Auto-upload to cloud when segment completes
-              </label>
-              <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer;">
-                <input type="checkbox" id="cfg-gdrive-delete-after"> Delete local file after successful upload
-              </label>
-            </div>
-            <button type="button" class="btn-primary" onclick="saveGdriveSettings()">Save Cloud Settings</button>
-          </div>
-
-          <!-- Manual Code Paste Accordion -->
-          <div style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);">
-            <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">Manual Authorization Code (if OAuth redirect is firewalled):</div>
-            <div style="display:flex; gap:8px;">
-              <input type="text" id="gdrive-manual-code" class="form-control" placeholder="Paste Google Auth Code here">
-              <button class="btn-icon" style="white-space:nowrap;" onclick="submitManualGdriveCode()">Submit Code</button>
-            </div>
-          </div>
-
-          <!-- Service Account Integration (Recommended / No Redirect Issues) -->
-          <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <!-- RIGHT COLUMN: Overlay Control Deck & Sliders -->
+        <div class="overlay-controls-card">
+          <!-- Master Egress Activation -->
+          <div class="overlay-control-box" style="border-left:3px solid #00e5ff;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
-                <b style="color:#fff; font-size:12.5px;">Direct Method: Google Cloud Service Account (No Redirect Needed)</b>
-                <div style="font-size:11px; color:var(--muted);">Paste your Google Cloud Service Account JSON Key below:</div>
+                <div style="font-weight:700; font-size:13.5px; color:#fff;">Burn-in on YouTube / RTMP Egress</div>
+                <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">Renders graphics into live video frames via libx264 zerolatency filter complex.</div>
+              </div>
+              <label class="toggle-switch-sm">
+                <input type="checkbox" id="cfg-overlay-master" checked onchange="updateFilterCodePreview()">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- LAYER 1 CONTROLS: Station ID Logo -->
+          <div class="overlay-control-box">
+            <div class="control-box-header">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="dot-indicator dot-cyan"></span>
+                <span style="font-weight:700; font-size:13px; color:#00e5ff; letter-spacing:0.5px;">LAYER 1 : STATION ID (LOGO)</span>
+              </div>
+              <label class="toggle-switch-sm">
+                <input type="checkbox" id="cfg-ov1-enabled" checked onchange="onLayerToggle('overlay_1')">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+
+            <!-- Asset Selector & Upload -->
+            <div class="form-row-sm" style="margin-top:10px;">
+              <div style="flex:1;">
+                <label class="control-label">GRAPHIC ASSET</label>
+                <select id="cfg-ov1-file" class="form-control-sm" onchange="onOverlayAssetSelect('overlay_1')">
+                  <option value="/static/overlays/station_logo.png">Makasna Broadcast Logo (Default)</option>
+                </select>
+              </div>
+              <div style="width:auto; display:flex; align-items:flex-end;">
+                <button type="button" class="btn-mini" onclick="document.getElementById('upload-logo-1').click()" style="padding:6px 10px; font-size:11px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#e4e4e7; border-radius:4px; cursor:pointer;">
+                  📁 Upload PNG
+                </button>
+                <input type="file" id="upload-logo-1" accept="image/png,image/webp,image/jpeg" style="display:none;" onchange="uploadOverlayFile('overlay_1')">
               </div>
             </div>
-            <textarea id="gdrive-sa-json" class="form-control" rows="3" style="font-family:'JetBrains Mono'; font-size:11px; resize:vertical;" placeholder='{"type": "service_account", "project_id": "...", "private_key": "...", "client_email": "..."}'></textarea>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:8px;">
-              <span style="font-size:11px; color:var(--muted);">*Share your target Google Drive folder with the service account client_email as Editor.</span>
-              <button type="button" class="btn-primary" style="background:var(--cyan); color:#000;" onclick="submitServiceAccountJson()">Connect Service Account</button>
+
+            <!-- Quick Position Presets -->
+            <div style="margin-top:10px;">
+              <label class="control-label">QUICK POSITION PRESETS</label>
+              <div class="preset-pill-group">
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 88, 6)">Top-Right (Standard)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 6, 6)">Top-Left</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 88, 86)">Bottom-Right</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 6, 86)">Bottom-Left</button>
+              </div>
+            </div>
+
+            <!-- Sliders -->
+            <div class="sliders-grid">
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Horizontal (X-Pos)</span>
+                  <span id="txt-x1" class="slider-val-txt">88.0%</span>
+                </div>
+                <input type="range" id="rng-x1" min="0" max="95" step="0.5" value="88" class="range-slider" oninput="onSliderChange('overlay_1')">
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Vertical (Y-Pos)</span>
+                  <span id="txt-y1" class="slider-val-txt">6.0%</span>
+                </div>
+                <input type="range" id="rng-y1" min="0" max="95" step="0.5" value="6" class="range-slider" oninput="onSliderChange('overlay_1')">
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Scale / Width</span>
+                  <span id="txt-s1" class="slider-val-txt">14.0%</span>
+                </div>
+                <input type="range" id="rng-s1" min="5" max="40" step="0.5" value="14" class="range-slider" oninput="onSliderChange('overlay_1')">
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Opacity</span>
+                  <span id="txt-a1" class="slider-val-txt">95%</span>
+                </div>
+                <input type="range" id="rng-a1" min="20" max="100" step="1" value="95" class="range-slider" oninput="onSliderChange('overlay_1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- LAYER 2 CONTROLS: Lower-Third / Live Bug -->
+          <div class="overlay-control-box">
+            <div class="control-box-header">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="dot-indicator dot-amber"></span>
+                <span style="font-weight:700; font-size:13px; color:#ffb300; letter-spacing:0.5px;">LAYER 2 : LOWER-THIRD / BUG</span>
+              </div>
+              <label class="toggle-switch-sm">
+                <input type="checkbox" id="cfg-ov2-enabled" checked onchange="onLayerToggle('overlay_2')">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+
+            <!-- Asset Selector & Upload -->
+            <div class="form-row-sm" style="margin-top:10px;">
+              <div style="flex:1;">
+                <label class="control-label">GRAPHIC ASSET</label>
+                <select id="cfg-ov2-file" class="form-control-sm" onchange="onOverlayAssetSelect('overlay_2')">
+                  <option value="/static/overlays/live_badge.png">● LIVE Badge (Red Pill)</option>
+                  <option value="/static/overlays/lower_third.png">Lower-Third Program Banner</option>
+                </select>
+              </div>
+              <div style="width:auto; display:flex; align-items:flex-end;">
+                <button type="button" class="btn-mini" onclick="document.getElementById('upload-logo-2').click()" style="padding:6px 10px; font-size:11px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#e4e4e7; border-radius:4px; cursor:pointer;">
+                  📁 Upload PNG
+                </button>
+                <input type="file" id="upload-logo-2" accept="image/png,image/webp,image/jpeg" style="display:none;" onchange="uploadOverlayFile('overlay_2')">
+              </div>
+            </div>
+
+            <!-- Quick Position Presets -->
+            <div style="margin-top:10px;">
+              <label class="control-label">QUICK POSITION PRESETS</label>
+              <div class="preset-pill-group">
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 6, 86)">Bottom-Left (News)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 36, 88)">Bottom-Center (Ticker)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 6, 6)">Top-Left (Bug)</button>
+                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 76, 86)">Bottom-Right</button>
+              </div>
+            </div>
+
+            <!-- Sliders -->
+            <div class="sliders-grid">
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Horizontal (X-Pos)</span>
+                  <span id="txt-x2" class="slider-val-txt">6.0%</span>
+                </div>
+                <input type="range" id="rng-x2" min="0" max="95" step="0.5" value="6" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Vertical (Y-Pos)</span>
+                  <span id="txt-y2" class="slider-val-txt">86.0%</span>
+                </div>
+                <input type="range" id="rng-y2" min="0" max="95" step="0.5" value="86" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Scale / Width</span>
+                  <span id="txt-s2" class="slider-val-txt">18.0%</span>
+                </div>
+                <input type="range" id="rng-s2" min="5" max="50" step="0.5" value="18" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-label-row">
+                  <span>Opacity</span>
+                  <span id="txt-a2" class="slider-val-txt">100%</span>
+                </div>
+                <input type="range" id="rng-a2" min="20" max="100" step="1" value="100" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons & FFmpeg Filter String Inspection -->
+          <div style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
+            <div style="display:flex; gap:10px;">
+              <button type="button" class="btn-primary" onclick="saveOverlayConfig()" style="flex:1; padding:10px; font-weight:700; font-size:13px; display:flex; justify-content:center; align-items:center; gap:6px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span>SAVE OVERLAY CONFIGURATION</span>
+              </button>
+              <button type="button" class="btn-icon" onclick="resetOverlayDefaults()" style="padding:10px 14px; font-size:12px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#d4d4d8; border-radius:6px; cursor:pointer;">
+                Reset
+              </button>
+            </div>
+
+            <!-- FFmpeg Filter Inspector -->
+            <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border); border-radius:6px; padding:10px 12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-size:10px; font-weight:700; color:var(--cyan); letter-spacing:0.5px;">LIVE FFMPEG -VF FILTER COMPLEX:</span>
+                <span style="font-size:9.5px; color:var(--muted);">AUTO-GENERATED FOR RESTREAMING</span>
+              </div>
+              <div id="filter-cmd-preview" style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#38bdf8; word-break:break-all; line-height:1.4;">
+                movie='/srv/makasna-dashboard/static/overlays/station_logo.png',scale=268:-1,colorchannelmixer=aa=0.95[ov1];[in][ov1]overlay=W*0.88:H*0.06[out]
+              </div>
             </div>
           </div>
         </div>
-
-        <!-- Storage Bar -->
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-family:'JetBrains Mono'; padding-top:8px; border-top:1px solid var(--border);">
-          <span style="color:var(--muted);">Internal Server Disk: <b id="disk-stat-text" style="color:#fff;">-- GB Free</b></span>
-          <span style="color:var(--cyan);" id="recordings-count-text">0 segments recorded</span>
-        </div>
-      </div>
-
-      <!-- Desktop Table of Recordings -->
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>File / Segment</th>
-              <th>Route Name</th>
-              <th>File Size</th>
-              <th>Recorded Time</th>
-              <th>Cloud Sync Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="recordings-tbody">
-            <tr><td colspan="6" style="text-align:center; color:var(--muted); padding:30px;">Loading recordings...</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Smartphone Mobile Cards View -->
-      <div class="mobile-routes-list" id="mobile-recordings-container">
-        <div style="text-align:center; color:var(--muted); padding:30px;">Loading recordings...</div>
       </div>
     </div>
   </main>
@@ -2180,8 +2464,8 @@ video {
     <span>Routes</span>
   </div>
   <div class="bottom-nav-item" id="bnav-recordings" onclick="switchTab('recordings')">
-    <svg class="bottom-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-    <span>Records</span>
+    <svg class="bottom-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+    <span>Overlays</span>
   </div>
   <div class="bottom-nav-item" id="bnav-events" onclick="switchTab('events')">
     <svg class="bottom-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -4303,8 +4587,7 @@ function switchTab(tab) {
     const b = document.getElementById('bnav-recordings');
     if (b) b.classList.add('active');
     if (viewRecordings) viewRecordings.style.display = 'block';
-    fetchRecordings();
-    fetchGdriveStatus();
+    if (typeof loadOverlayStudio === 'function') loadOverlayStudio();
   } else if (tab === 'events') {
     const s = document.getElementById('side-events');
     if (s) s.classList.add('active');
@@ -5321,6 +5604,523 @@ function runHyperdeckAudioMeter() {
 
 // Start audio measurement loop
 requestAnimationFrame(runHyperdeckAudioMeter);
+
+// =========================================================================
+// STATION ID & OVERLAY STUDIO JAVASCRIPT CONTROLLER
+// =========================================================================
+let overlayConfigState = {
+  enabled: true,
+  apply_to_egress: true,
+  feed_source: "",
+  overlay_1: {
+    enabled: true,
+    file: "/static/overlays/station_logo.png",
+    x_percent: 88.0,
+    y_percent: 6.0,
+    scale_percent: 14.0,
+    opacity: 0.95
+  },
+  overlay_2: {
+    enabled: true,
+    file: "/static/overlays/live_badge.png",
+    x_percent: 6.0,
+    y_percent: 86.0,
+    scale_percent: 18.0,
+    opacity: 1.0
+  }
+};
+
+let overlayDraggablesInitialized = false;
+
+async function loadOverlayStudio() {
+  try {
+    const res = await fetch('/api/overlay/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.config) {
+        overlayConfigState = { ...overlayConfigState, ...data.config };
+      }
+      if (data.assets && Array.isArray(data.assets)) {
+        populateOverlayAssetSelects(data.assets);
+      }
+    }
+  } catch (e) {
+    console.warn("Could not load /api/overlay/config, using defaults", e);
+  }
+
+  // Populate Feed Source Select from routes
+  populateOverlayFeedSelect();
+
+  // Apply state to DOM controls
+  applyStateToOverlayDOM();
+
+  // Init Draggables
+  if (!overlayDraggablesInitialized) {
+    initOverlayDraggables();
+    overlayDraggablesInitialized = true;
+  }
+
+  updateFilterCodePreview();
+}
+
+function populateOverlayFeedSelect() {
+  const sel = document.getElementById('overlay-feed-select');
+  if (!sel) return;
+  const currentVal = sel.value || overlayConfigState.feed_source;
+  sel.innerHTML = '<option value="">-- SELECT BROADCAST FEED --</option>';
+
+  if (Array.isArray(routesData) && routesData.length > 0) {
+    routesData.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = `route_${r.id}`;
+      opt.textContent = `${r.name || 'Route ' + r.id} (${r.status || 'OFFLINE'})`;
+      if (currentVal === `route_${r.id}`) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  // Add standard MediaMTX paths if any
+  const optDefault = document.createElement('option');
+  optDefault.value = 'live/feed1';
+  optDefault.textContent = 'MediaMTX: live/feed1 (Ingest)';
+  if (currentVal === 'live/feed1') optDefault.selected = true;
+  sel.appendChild(optDefault);
+}
+
+function populateOverlayAssetSelects(assets) {
+  const sel1 = document.getElementById('cfg-ov1-file');
+  const sel2 = document.getElementById('cfg-ov2-file');
+  if (!sel1 || !sel2) return;
+
+  const current1 = overlayConfigState.overlay_1.file;
+  const current2 = overlayConfigState.overlay_2.file;
+
+  sel1.innerHTML = '';
+  sel2.innerHTML = '';
+
+  assets.forEach(a => {
+    const opt1 = document.createElement('option');
+    opt1.value = a.url;
+    opt1.textContent = a.name;
+    if (a.url === current1) opt1.selected = true;
+    sel1.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = a.url;
+    opt2.textContent = a.name;
+    if (a.url === current2) opt2.selected = true;
+    sel2.appendChild(opt2);
+  });
+}
+
+function applyStateToOverlayDOM() {
+  const masterChk = document.getElementById('cfg-overlay-master');
+  if (masterChk) masterChk.checked = overlayConfigState.enabled !== false;
+
+  // Layer 1
+  const ov1 = overlayConfigState.overlay_1 || {};
+  const chk1 = document.getElementById('cfg-ov1-enabled');
+  if (chk1) chk1.checked = ov1.enabled !== false;
+
+  const sel1 = document.getElementById('cfg-ov1-file');
+  if (sel1 && ov1.file) sel1.value = ov1.file;
+
+  const rngX1 = document.getElementById('rng-x1');
+  const rngY1 = document.getElementById('rng-y1');
+  const rngS1 = document.getElementById('rng-s1');
+  const rngA1 = document.getElementById('rng-a1');
+
+  if (rngX1) rngX1.value = ov1.x_percent ?? 88;
+  if (rngY1) rngY1.value = ov1.y_percent ?? 6;
+  if (rngS1) rngS1.value = ov1.scale_percent ?? 14;
+  if (rngA1) rngA1.value = Math.round((ov1.opacity ?? 0.95) * 100);
+
+  // Layer 2
+  const ov2 = overlayConfigState.overlay_2 || {};
+  const chk2 = document.getElementById('cfg-ov2-enabled');
+  if (chk2) chk2.checked = ov2.enabled !== false;
+
+  const sel2 = document.getElementById('cfg-ov2-file');
+  if (sel2 && ov2.file) sel2.value = ov2.file;
+
+  const rngX2 = document.getElementById('rng-x2');
+  const rngY2 = document.getElementById('rng-y2');
+  const rngS2 = document.getElementById('rng-s2');
+  const rngA2 = document.getElementById('rng-a2');
+
+  if (rngX2) rngX2.value = ov2.x_percent ?? 6;
+  if (rngY2) rngY2.value = ov2.y_percent ?? 86;
+  if (rngS2) rngS2.value = ov2.scale_percent ?? 18;
+  if (rngA2) rngA2.value = Math.round((ov2.opacity ?? 1.0) * 100);
+
+  updateDOMPositionsFromSliders();
+}
+
+function updateDOMPositionsFromSliders() {
+  // Layer 1
+  const box1 = document.getElementById('drag-box-1');
+  const chk1 = document.getElementById('cfg-ov1-enabled');
+  const x1 = parseFloat(document.getElementById('rng-x1')?.value || 88);
+  const y1 = parseFloat(document.getElementById('rng-y1')?.value || 6);
+  const s1 = parseFloat(document.getElementById('rng-s1')?.value || 14);
+  const a1 = parseInt(document.getElementById('rng-a1')?.value || 95);
+
+  if (box1) {
+    box1.style.display = (chk1 && !chk1.checked) ? 'none' : 'block';
+    box1.style.left = x1 + '%';
+    box1.style.top = y1 + '%';
+    box1.style.width = s1 + '%';
+    box1.style.opacity = (a1 / 100).toFixed(2);
+  }
+
+  const txtX1 = document.getElementById('txt-x1');
+  const txtY1 = document.getElementById('txt-y1');
+  const txtS1 = document.getElementById('txt-s1');
+  const txtA1 = document.getElementById('txt-a1');
+  const rX1 = document.getElementById('readout-x1');
+  const rY1 = document.getElementById('readout-y1');
+  const rS1 = document.getElementById('readout-s1');
+  const rA1 = document.getElementById('readout-a1');
+  const coord1 = document.getElementById('drag-coord-1');
+
+  if (txtX1) txtX1.textContent = x1.toFixed(1) + '%';
+  if (txtY1) txtY1.textContent = y1.toFixed(1) + '%';
+  if (txtS1) txtS1.textContent = s1.toFixed(1) + '%';
+  if (txtA1) txtA1.textContent = a1 + '%';
+  if (rX1) rX1.textContent = x1.toFixed(1) + '%';
+  if (rY1) rY1.textContent = y1.toFixed(1) + '%';
+  if (rS1) rS1.textContent = s1.toFixed(1) + '%';
+  if (rA1) rA1.textContent = a1 + '%';
+  if (coord1) coord1.textContent = `(${Math.round(x1)}%, ${Math.round(y1)}%)`;
+
+  // Layer 2
+  const box2 = document.getElementById('drag-box-2');
+  const chk2 = document.getElementById('cfg-ov2-enabled');
+  const x2 = parseFloat(document.getElementById('rng-x2')?.value || 6);
+  const y2 = parseFloat(document.getElementById('rng-y2')?.value || 86);
+  const s2 = parseFloat(document.getElementById('rng-s2')?.value || 18);
+  const a2 = parseInt(document.getElementById('rng-a2')?.value || 100);
+
+  if (box2) {
+    box2.style.display = (chk2 && !chk2.checked) ? 'none' : 'block';
+    box2.style.left = x2 + '%';
+    box2.style.top = y2 + '%';
+    box2.style.width = s2 + '%';
+    box2.style.opacity = (a2 / 100).toFixed(2);
+  }
+
+  const txtX2 = document.getElementById('txt-x2');
+  const txtY2 = document.getElementById('txt-y2');
+  const txtS2 = document.getElementById('txt-s2');
+  const txtA2 = document.getElementById('txt-a2');
+  const rX2 = document.getElementById('readout-x2');
+  const rY2 = document.getElementById('readout-y2');
+  const rS2 = document.getElementById('readout-s2');
+  const rA2 = document.getElementById('readout-a2');
+  const coord2 = document.getElementById('drag-coord-2');
+
+  if (txtX2) txtX2.textContent = x2.toFixed(1) + '%';
+  if (txtY2) txtY2.textContent = y2.toFixed(1) + '%';
+  if (txtS2) txtS2.textContent = s2.toFixed(1) + '%';
+  if (txtA2) txtA2.textContent = a2 + '%';
+  if (rX2) rX2.textContent = x2.toFixed(1) + '%';
+  if (rY2) rY2.textContent = y2.toFixed(1) + '%';
+  if (rS2) rS2.textContent = s2.toFixed(1) + '%';
+  if (rA2) rA2.textContent = a2 + '%';
+  if (coord2) coord2.textContent = `(${Math.round(x2)}%, ${Math.round(y2)}%)`;
+
+  updateFilterCodePreview();
+}
+
+function onSliderChange(layer) {
+  updateDOMPositionsFromSliders();
+}
+
+function onLayerToggle(layer) {
+  updateDOMPositionsFromSliders();
+}
+
+function applyPreset(layer, xPct, yPct) {
+  if (layer === 'overlay_1') {
+    const rx = document.getElementById('rng-x1');
+    const ry = document.getElementById('rng-y1');
+    if (rx) rx.value = xPct;
+    if (ry) ry.value = yPct;
+  } else {
+    const rx = document.getElementById('rng-x2');
+    const ry = document.getElementById('rng-y2');
+    if (rx) rx.value = xPct;
+    if (ry) ry.value = yPct;
+  }
+  updateDOMPositionsFromSliders();
+}
+
+function onOverlayAssetSelect(layer) {
+  if (layer === 'overlay_1') {
+    const sel = document.getElementById('cfg-ov1-file');
+    const img = document.getElementById('preview-img-1');
+    if (sel && img) img.src = sel.value;
+  } else {
+    const sel = document.getElementById('cfg-ov2-file');
+    const img = document.getElementById('preview-img-2');
+    if (sel && img) img.src = sel.value;
+  }
+  updateFilterCodePreview();
+}
+
+async function uploadOverlayFile(layer) {
+  const input = document.getElementById(layer === 'overlay_1' ? 'upload-logo-1' : 'upload-logo-2');
+  if (!input || !input.files || input.files.length === 0) return;
+
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('layer', layer);
+
+  showToast(`Uploading ${file.name}...`);
+  try {
+    const res = await fetch('/api/overlay/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`Uploaded ${file.name} successfully!`, 'success');
+      if (data.assets) populateOverlayAssetSelects(data.assets);
+      const sel = document.getElementById(layer === 'overlay_1' ? 'cfg-ov1-file' : 'cfg-ov2-file');
+      if (sel) sel.value = data.file;
+      const img = document.getElementById(layer === 'overlay_1' ? 'preview-img-1' : 'preview-img-2');
+      if (img) img.src = data.file;
+      updateFilterCodePreview();
+    } else {
+      showToast(data.error || 'Upload failed', 'error');
+    }
+  } catch (err) {
+    showToast(`Upload error: ${err.message}`, 'error');
+  }
+}
+
+function toggleOverlayGuides() {
+  const guides = document.getElementById('overlay-guidelines');
+  const btn = document.getElementById('btn-toggle-guides');
+  if (!guides) return;
+  const isHidden = guides.style.display === 'none';
+  guides.style.display = isHidden ? 'block' : 'none';
+  if (btn) btn.textContent = isHidden ? 'GUIDES: ON' : 'GUIDES: OFF';
+}
+
+function initOverlayDraggables() {
+  setupInteractiveDrag('drag-box-1', (xPct, yPct) => {
+    const rx = document.getElementById('rng-x1');
+    const ry = document.getElementById('rng-y1');
+    if (rx) rx.value = xPct;
+    if (ry) ry.value = yPct;
+    updateDOMPositionsFromSliders();
+  });
+
+  setupInteractiveDrag('drag-box-2', (xPct, yPct) => {
+    const rx = document.getElementById('rng-x2');
+    const ry = document.getElementById('rng-y2');
+    if (rx) rx.value = xPct;
+    if (ry) ry.value = yPct;
+    updateDOMPositionsFromSliders();
+  });
+}
+
+function setupInteractiveDrag(elemId, onDragUpdate) {
+  const elem = document.getElementById(elemId);
+  const canvas = document.getElementById('overlay-drag-canvas');
+  if (!elem || !canvas) return;
+
+  let startX = 0, startY = 0;
+  let elemLeft = 0, elemTop = 0;
+  let isDragging = false;
+
+  function pointerDown(e) {
+    e.preventDefault();
+    isDragging = true;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const elemRect = elem.getBoundingClientRect();
+
+    startX = clientX;
+    startY = clientY;
+    elemLeft = elemRect.left - canvasRect.left;
+    elemTop = elemRect.top - canvasRect.top;
+
+    function pointerMove(ev) {
+      if (!isDragging) return;
+      ev.preventDefault();
+      const curX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const curY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+
+      const dx = curX - startX;
+      const dy = curY - startY;
+
+      const cRect = canvas.getBoundingClientRect();
+      const eRect = elem.getBoundingClientRect();
+
+      let newLeft = elemLeft + dx;
+      let newTop = elemTop + dy;
+
+      newLeft = Math.max(0, Math.min(cRect.width - eRect.width, newLeft));
+      newTop = Math.max(0, Math.min(cRect.height - eRect.height, newTop));
+
+      const xPct = Math.round((newLeft / cRect.width) * 1000) / 10;
+      const yPct = Math.round((newTop / cRect.height) * 1000) / 10;
+
+      elem.style.left = xPct + '%';
+      elem.style.top = yPct + '%';
+
+      if (onDragUpdate) onDragUpdate(xPct, yPct);
+    }
+
+    function pointerUp() {
+      isDragging = false;
+      window.removeEventListener('mousemove', pointerMove);
+      window.removeEventListener('mouseup', pointerUp);
+      window.removeEventListener('touchmove', pointerMove);
+      window.removeEventListener('touchend', pointerUp);
+    }
+
+    window.addEventListener('mousemove', pointerMove, { passive: false });
+    window.addEventListener('mouseup', pointerUp);
+    window.addEventListener('touchmove', pointerMove, { passive: false });
+    window.addEventListener('touchend', pointerUp);
+  }
+
+  elem.addEventListener('mousedown', pointerDown);
+  elem.addEventListener('touchstart', pointerDown, { passive: false });
+}
+
+function updateFilterCodePreview() {
+  const masterOn = document.getElementById('cfg-overlay-master')?.checked;
+  const on1 = document.getElementById('cfg-ov1-enabled')?.checked;
+  const on2 = document.getElementById('cfg-ov2-enabled')?.checked;
+  const previewDiv = document.getElementById('filter-cmd-preview');
+  if (!previewDiv) return;
+
+  if (!masterOn || (!on1 && !on2)) {
+    previewDiv.textContent = "-c:v copy (Pure passthrough, overlay disabled)";
+    previewDiv.style.color = "#a1a1aa";
+    return;
+  }
+
+  previewDiv.style.color = "#38bdf8";
+
+  const x1 = (parseFloat(document.getElementById('rng-x1')?.value || 88) / 100).toFixed(2);
+  const y1 = (parseFloat(document.getElementById('rng-y1')?.value || 6) / 100).toFixed(2);
+  const s1 = parseInt((1920 * (parseFloat(document.getElementById('rng-s1')?.value || 14) / 100)));
+  const a1 = (parseInt(document.getElementById('rng-a1')?.value || 95) / 100).toFixed(2);
+
+  const x2 = (parseFloat(document.getElementById('rng-x2')?.value || 6) / 100).toFixed(2);
+  const y2 = (parseFloat(document.getElementById('rng-y2')?.value || 86) / 100).toFixed(2);
+  const s2 = parseInt((1920 * (parseFloat(document.getElementById('rng-s2')?.value || 18) / 100)));
+  const a2 = (parseInt(document.getElementById('rng-a2')?.value || 100) / 100).toFixed(2);
+
+  const parts = [];
+  let lastIn = "in";
+
+  if (on1) {
+    parts.push(`movie='station_logo.png',scale=${s1}:-1,format=rgba,colorchannelmixer=aa=${a1}[ov1]`);
+    const nextLabel = on2 ? "tmp_ov" : "out";
+    parts.push(`[${lastIn}][ov1]overlay=W*${x1}:H*${y1}[${nextLabel}]`);
+    lastIn = nextLabel;
+  }
+
+  if (on2) {
+    parts.push(`movie='live_badge.png',scale=${s2}:-1,format=rgba,colorchannelmixer=aa=${a2}[ov2]`);
+    parts.push(`[${lastIn}][ov2]overlay=W*${x2}:H*${y2}[out]`);
+  }
+
+  previewDiv.textContent = `-vf "${parts.join(';')}"`;
+}
+
+async function saveOverlayConfig() {
+  const masterOn = document.getElementById('cfg-overlay-master')?.checked;
+  const feedSource = document.getElementById('overlay-feed-select')?.value || "";
+
+  const payload = {
+    enabled: masterOn,
+    apply_to_egress: true,
+    feed_source: feedSource,
+    overlay_1: {
+      enabled: document.getElementById('cfg-ov1-enabled')?.checked,
+      file: document.getElementById('cfg-ov1-file')?.value,
+      x_percent: parseFloat(document.getElementById('rng-x1')?.value || 88),
+      y_percent: parseFloat(document.getElementById('rng-y1')?.value || 6),
+      scale_percent: parseFloat(document.getElementById('rng-s1')?.value || 14),
+      opacity: parseInt(document.getElementById('rng-a1')?.value || 95) / 100.0
+    },
+    overlay_2: {
+      enabled: document.getElementById('cfg-ov2-enabled')?.checked,
+      file: document.getElementById('cfg-ov2-file')?.value,
+      x_percent: parseFloat(document.getElementById('rng-x2')?.value || 6),
+      y_percent: parseFloat(document.getElementById('rng-y2')?.value || 86),
+      scale_percent: parseFloat(document.getElementById('rng-s2')?.value || 18),
+      opacity: parseInt(document.getElementById('rng-a2')?.value || 100) / 100.0
+    }
+  };
+
+  showToast("Saving overlay configuration to server...");
+  try {
+    const res = await fetch('/api/overlay/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast("Overlay configuration saved! YouTube egress will render with updated coordinates.", "success");
+      overlayConfigState = { ...overlayConfigState, ...payload };
+    } else {
+      showToast(data.error || "Failed to save overlay configuration", "error");
+    }
+  } catch (err) {
+    showToast(`Network error saving overlay: ${err.message}`, "error");
+  }
+}
+
+function resetOverlayDefaults() {
+  applyPreset('overlay_1', 88, 6);
+  applyPreset('overlay_2', 6, 86);
+  const s1 = document.getElementById('rng-s1');
+  const a1 = document.getElementById('rng-a1');
+  const s2 = document.getElementById('rng-s2');
+  const a2 = document.getElementById('rng-a2');
+  if (s1) s1.value = 14;
+  if (a1) a1.value = 95;
+  if (s2) s2.value = 18;
+  if (a2) a2.value = 100;
+  updateDOMPositionsFromSliders();
+  showToast("Reset to broadcast standards (Top-Right Logo, Bottom-Left Bug).");
+}
+
+function onOverlayFeedChange() {
+  const sel = document.getElementById('overlay-feed-select');
+  const noSignal = document.getElementById('overlay-no-signal');
+  const video = document.getElementById('overlay-preview-video');
+  if (!sel || !video || !noSignal) return;
+
+  const val = sel.value;
+  if (!val) {
+    video.src = "";
+    noSignal.style.display = "flex";
+    return;
+  }
+
+  // Connect to WebRTC or HLS preview
+  let streamPath = val;
+  if (val.startsWith("route_")) {
+    streamPath = val;
+  }
+  const webrtcUrl = `http://${window.location.hostname}:8889/${streamPath}`;
+  // For WebRTC preview if available
+  noSignal.style.display = "none";
+}
+
 </script>
 </body>
 </html>
