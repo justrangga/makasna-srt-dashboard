@@ -753,103 +753,256 @@ video {
 .event-msg { flex: 1; margin-left: 12px; color: var(--text); }
 
 /* =========================================================================
-   MOBILE RESPONSIVENESS OVERHAUL
+   MOBILE & TABLET RESPONSIVENESS OVERHAUL (Android Phones & Tablets)
    ========================================================================= */
 
-@media (max-width: 900px) {
-  .system-telemetry { display: none; }
+/* Prevent any horizontal page blowout */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
-@media (max-width: 768px) {
-  .workspace {
-    padding: 16px 14px 75px 14px; /* Clearance for bottom nav */
+*, *:before, *:after {
+  box-sizing: border-box;
+}
+
+/* Base button text protection */
+.btn-icon, .btn-primary, .btn-logout, .preset-pill, .srt-subtab {
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+/* Tablet & Mobile Breakpoint (<= 1024px): iPad, Android Tablets, Foldables, Phones */
+@media (max-width: 1024px) {
+  .system-telemetry {
+    display: none !important;
   }
   .sidebar {
-    display: none;
+    display: none !important;
   }
   .bottom-nav {
-    display: flex;
+    display: flex !important;
+  }
+  .workspace {
+    padding: 16px 14px 85px 14px !important; /* Ample clearance so bottom nav never cuts off buttons */
+    max-width: 100% !important;
   }
 
-  /* Table / Card toggle */
+  /* Top Navigation Bar: Auto height, wrap gracefully without clipping */
+  .top-nav {
+    height: auto !important;
+    min-height: 52px !important;
+    padding: 8px 14px !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+  .user-actions {
+    margin-left: auto;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .user-actions .btn-icon, .btn-logout {
+    padding: 6px 10px !important;
+    font-size: 11.5px !important;
+    min-height: 34px !important;
+  }
+
+  /* Table / Card toggle: Show clean cards on tablet & phone */
   .table-container {
-    display: none;
+    display: none !important;
   }
   .mobile-routes-list {
-    display: flex;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
   }
 
   /* Filter bar stacking */
   .filter-bar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
   }
-  .filter-select {
-    width: 100%;
+  .filter-select, .search-input {
+    width: 100% !important;
   }
 
-  /* Fullscreen Modal Experience on Smartphone */
+  /* Overlay Studio Grid: Stack monitor & controls */
+  .overlay-studio-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  /* Modals: Adaptive Full-View Sheets */
   .modal {
-    padding: 0;
+    padding: 0 !important;
   }
   .modal-card {
-    width: 100%;
-    height: 100vh;
-    max-height: 100vh;
-    border-radius: 0;
-    border: none;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .modal-card form {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    width: 100% !important;
+  }
+  .modal-body {
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 16px 14px 24px 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   .modal-footer {
-    padding: 12px 16px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    padding: 12px 16px !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    flex-shrink: 0 !important;
   }
   .modal-footer button {
-    width: 100%;
-    justify-content: center;
-    min-height: 42px;
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 42px !important;
   }
 
   .telemetry-preview-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
   .telemetry-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
   .telemetry-metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 
   .form-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
   }
   .dest-card-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
   }
   .dest-label-input {
     max-width: 100% !important;
     width: 100% !important;
   }
   .dest-fields-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
   }
   .dest-proc-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
   }
 
   .event-entry {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-    font-size: 11px;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 5px !important;
+    font-size: 11px !important;
   }
   .event-msg {
-    margin-left: 0;
+    margin-left: 0 !important;
+  }
+}
+
+/* Smartphone Specific Enhancements (<= 640px) */
+@media (max-width: 640px) {
+  .d-none-mobile {
+    display: none !important;
+  }
+  .brand {
+    gap: 6px !important;
+  }
+  .brand-name {
+    font-size: 13.5px !important;
+  }
+  .brand-pill {
+    display: none !important;
+  }
+  .page-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+  .page-header .btn-primary {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+  .overlay-header-actions {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .overlay-header-actions > * {
+    width: 100% !important;
+  }
+  .overlay-monitor-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  .overlay-monitor-header > div:last-child {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+  }
+  .sliders-grid {
+    grid-template-columns: 1fr !important; /* Full width sliders on mobile so text never squishes */
+    gap: 12px !important;
+  }
+  .srt-subtabs-bar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+  .srt-subtab {
+    width: 100% !important;
+    padding: 8px 6px !important;
+    font-size: 10px !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+  .modal-tab-group {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+  .modal-tab-group button {
+    width: 100% !important;
+    padding: 8px 4px !important;
+    font-size: 11px !important;
+    justify-content: center !important;
+  }
+  .route-card-actions {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  .route-card-actions button {
+    min-height: 42px !important;
+    font-size: 11.5px !important;
+    padding: 6px 8px !important;
+  }
+  .route-card-actions .btn-danger {
+    grid-column: 1 / -1 !important;
   }
 }
 
@@ -1641,12 +1794,12 @@ video {
   <div class="user-actions">
     <a href="/download/apk" target="_blank" title="Download Installer Android Remote Controller (APK)">
       <button type="button" class="btn-icon" style="color:#10B981; border-color:rgba(16,185,129,0.4); font-weight:600; background:rgba(16,185,129,0.08);">
-        📱 Android APK
+        📱 <span class="d-none-mobile">Android </span>APK
       </button>
     </a>
     <a href="/download/booklet" target="_blank">
       <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;">
-        PDF Booklet
+        <span class="d-none-mobile">PDF </span>Booklet
       </button>
     </a>
     <a href="/logout"><button type="button" class="btn-logout">Logout</button></a>
@@ -1750,7 +1903,7 @@ video {
           <div id="readers-empty-notice" style="background:var(--panel-elevated); border:1px dashed var(--border); border-radius:8px; padding:12px 14px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <div>
               <span>No downstream client listeners (such as vMix, OBS, or VLC) are currently pulling stream feeds from this gateway.</span>
-              <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Listener Pull URL: srt://139.190.97.109:8890?streamid=read:STREAM_NAME</a>
+              <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Listener Pull URL: srt://103.89.5.211:8890?streamid=read:STREAM_NAME</a>
             </div>
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
@@ -2157,16 +2310,16 @@ video {
             </div>
           </div>
         </div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <div style="display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--border); padding:5px 12px; border-radius:8px;">
-            <span style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px;">PREVIEW FEED:</span>
-            <select id="overlay-feed-select" class="hd-select" style="min-width:160px; padding:4px 8px; font-size:12px;" onchange="onOverlayFeedChange()">
+        <div class="overlay-header-actions" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--border); padding:6px 12px; border-radius:8px; flex:1; min-width:200px;">
+            <span style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">PREVIEW FEED:</span>
+            <select id="overlay-feed-select" class="hd-select" style="width:100%; min-width:0; padding:4px 8px; font-size:12px;" onchange="onOverlayFeedChange()">
               <option value="">-- SELECT BROADCAST FEED --</option>
             </select>
           </div>
-          <button class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; gap:6px; font-size:12.5px; padding:8px 16px;">
+          <button class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:12.5px; padding:8px 16px; min-height:40px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            <span>Save Overlay Configuration</span>
+            <span>Save Configuration</span>
           </button>
         </div>
       </div>
@@ -2178,7 +2331,7 @@ video {
           <div class="overlay-monitor-header">
             <div style="display:flex; align-items:center; gap:8px;">
               <span class="pulse-indicator" style="background:#00e5ff; width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px #00e5ff;"></span>
-              <span style="font-size:11px; font-weight:800; letter-spacing:1px; color:#e4e4e7;">16:9 CONFIDENCE MONITOR (DRAGGABLE OVERLAYS)</span>
+              <span style="font-size:11px; font-weight:800; letter-spacing:0.5px; color:#e4e4e7;">16:9 CONFIDENCE MONITOR</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
               <button type="button" id="btn-toggle-guides" class="btn-mini" onclick="toggleOverlayGuides()" style="font-size:10.5px; padding:3px 8px; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#a1a1aa; border-radius:4px; cursor:pointer;">
@@ -2910,7 +3063,7 @@ video {
         <div style="display:flex; flex-direction:column; gap:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <label style="color:var(--cyan); margin:0; font-size:12px; font-weight:700;">Target Stream ID / Name</label>
-            <span style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono';">Server IP: <b style="color:#fff;">139.190.97.109</b> · Port: <b style="color:#fff;">8890</b></span>
+            <span style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono';">Server IP: <b style="color:#fff;">103.89.5.211</b> · Port: <b style="color:#fff;">8890</b></span>
           </div>
           <div style="display:flex; gap:10px; align-items:center;">
             <input type="text" id="ep-stream-name" class="form-control" style="max-width:320px; font-family:'JetBrains Mono'; font-weight:700;" value="MAKASNA" placeholder="e.g. MAKASNA" oninput="refreshEndpointUrls(this.value)">
@@ -2920,12 +3073,12 @@ video {
       </div>
 
       <!-- Tab Buttons: Pengirim vs Penerima -->
-      <div style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px;">
-        <button type="button" id="btn-tab-sender" class="btn-primary" style="font-size:12.5px;" onclick="switchEndpointTab('sender')">
-          1. For Ingest / Sender (OBS / vMix / Hardware Encoder)
+      <div class="modal-tab-group" style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px; flex-wrap:wrap;">
+        <button type="button" id="btn-tab-sender" class="btn-primary" style="font-size:12px; flex:1; min-width:180px; justify-content:center; padding:8px 12px;" onclick="switchEndpointTab('sender')">
+          1. Ingest / Sender (OBS / vMix)
         </button>
-        <button type="button" id="btn-tab-receiver" class="btn-icon" style="font-size:12.5px;" onclick="switchEndpointTab('receiver')">
-          2. For Downstream Receiver (vMix / VLC / Downstream Studio)
+        <button type="button" id="btn-tab-receiver" class="btn-icon" style="font-size:12px; flex:1; min-width:180px; justify-content:center; padding:8px 12px;" onclick="switchEndpointTab('receiver')">
+          2. Receiver (vMix / VLC)
         </button>
       </div>
 
@@ -2956,7 +3109,7 @@ video {
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Mode: <b style="color:#fff;">Caller</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">IP: <b id="ep-ip-text" style="color:var(--cyan);">139.190.97.109</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">IP: <b id="ep-ip-text" style="color:var(--cyan);">103.89.5.211</b></div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Port: <b id="ep-port-text" style="color:#fff;">8890</b></div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">StreamID: <b id="ep-sid-send-text" style="color:var(--green);">publish:MAKASNA</b></div>
           </div>
@@ -2985,7 +3138,7 @@ video {
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Type: <b style="color:#fff;">Caller</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Hostname: <b id="ep-ip-recv-text" style="color:var(--cyan);">139.190.97.109</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Hostname: <b id="ep-ip-recv-text" style="color:var(--cyan);">103.89.5.211</b></div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Port: <b id="ep-port-recv-text" style="color:#fff;">8890</b></div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Stream ID: <b id="ep-sid-recv-text" style="color:#60a5fa;">read:MAKASNA</b></div>
           </div>
@@ -3111,7 +3264,7 @@ pollSystemStats();
 
 // Inbound SRT Ingest & Listeners Poller
 let latestSrtPort = 8890;
-const SERVER_PUBLIC_IP = '139.190.97.109';
+const SERVER_PUBLIC_IP = '103.89.5.211';
 let serverHostName = SERVER_PUBLIC_IP;
 let latestInboundPublishers = [];
 let latestInboundReaders = [];
@@ -3642,7 +3795,7 @@ function renderRoutes() {
           <button class="btn-icon" onclick="inspectRoute('${r.id}')">Inspect</button>
           <button class="btn-icon" onclick="editRoute('${r.id}')">Edit</button>
           <button class="btn-icon" onclick="cloneRoute('${r.id}')">Clone</button>
-          <button class="btn-icon" onclick="deleteRoute('${r.id}')">Delete Route</button>
+          <button class="btn-icon btn-danger" onclick="deleteRoute('${r.id}')">Delete Route</button>
         </div>
       </div>
     `;
