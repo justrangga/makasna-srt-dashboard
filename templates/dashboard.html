@@ -1303,13 +1303,16 @@ html, body {
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   font-size: 11px;
-  letter-spacing: 0.1em;
-  padding: 6px 16px;
+  letter-spacing: 0.05em;
+  padding: 6px 14px;
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
   text-align: center;
-  white-space: nowrap;
+  max-width: 88%;
+  box-sizing: border-box;
+  white-space: normal;
+  word-break: break-word;
   z-index: 3;
 }
 
@@ -1860,12 +1863,12 @@ html, body {
         <div class="srt-subtabs-bar">
           <button type="button" id="tab-srt-publishers" class="srt-subtab active-pub" onclick="setSrtTrafficTab('publishers')">
             <span class="dot dot-green" id="srt-pub-tab-dot"></span>
-            <span>Ingest Publishers (Video Sources)</span>
+            <span><span class="d-none-mobile">Ingest </span>Publishers<span class="d-none-mobile"> (Sources)</span></span>
             <span id="srt-pub-count-pill" class="badge-count">0</span>
           </button>
           <button type="button" id="tab-srt-readers" class="srt-subtab" onclick="setSrtTrafficTab('readers')">
             <span class="dot dot-gray" id="srt-read-tab-dot"></span>
-            <span>Active Listeners (Receivers)</span>
+            <span><span class="d-none-mobile">Active </span>Listeners<span class="d-none-mobile"> (Receivers)</span></span>
             <span id="srt-read-count-pill" class="badge-count">0</span>
           </button>
         </div>
@@ -2369,8 +2372,8 @@ html, body {
                 <!-- Draggable Box 1: Station ID Logo -->
                 <div id="drag-box-1" class="overlay-drag-item drag-cyan" style="left:88%; top:6%; width:14%;">
                   <div class="drag-header">
-                    <span>⠿ L1: STATION ID</span>
-                    <span id="drag-coord-1" style="color:#00e5ff; font-family:monospace;">(88%, 6%)</span>
+                    <span>L1</span>
+                    <span id="drag-coord-1" style="color:#00e5ff; font-family:monospace;">88,6</span>
                   </div>
                   <div class="drag-content">
                     <img id="preview-img-1" src="/static/overlays/station_logo.png" alt="Station ID Logo" />
@@ -2380,8 +2383,8 @@ html, body {
                 <!-- Draggable Box 2: Lower-Third / Live Bug -->
                 <div id="drag-box-2" class="overlay-drag-item drag-amber" style="left:6%; top:86%; width:18%;">
                   <div class="drag-header">
-                    <span>⠿ L2: LOWER-THIRD</span>
-                    <span id="drag-coord-2" style="color:#ffb300; font-family:monospace;">(6%, 86%)</span>
+                    <span>L2</span>
+                    <span id="drag-coord-2" style="color:#ffb300; font-family:monospace;">6,86</span>
                   </div>
                   <div class="drag-content">
                     <img id="preview-img-2" src="/static/overlays/live_badge.png" alt="Lower Third" />
@@ -5944,7 +5947,7 @@ function updateDOMPositionsFromSliders() {
   if (rY1) rY1.textContent = y1.toFixed(1) + '%';
   if (rS1) rS1.textContent = s1.toFixed(1) + '%';
   if (rA1) rA1.textContent = a1 + '%';
-  if (coord1) coord1.textContent = `(${Math.round(x1)}%, ${Math.round(y1)}%)`;
+  if (coord1) coord1.textContent = `${Math.round(x1)},${Math.round(y1)}`;
 
   // Layer 2
   const box2 = document.getElementById('drag-box-2');
@@ -5980,7 +5983,7 @@ function updateDOMPositionsFromSliders() {
   if (rY2) rY2.textContent = y2.toFixed(1) + '%';
   if (rS2) rS2.textContent = s2.toFixed(1) + '%';
   if (rA2) rA2.textContent = a2 + '%';
-  if (coord2) coord2.textContent = `(${Math.round(x2)}%, ${Math.round(y2)}%)`;
+  if (coord2) coord2.textContent = `${Math.round(x2)},${Math.round(y2)}`;
 
   updateFilterCodePreview();
 }
