@@ -1681,11 +1681,20 @@ def api_route_telemetry(route_id):
 @app.route("/hls/<path:subpath>", methods=["GET"])
 def proxy_hls(subpath):
     target_url = f"http://127.0.0.1:8888/{subpath}"
+    if request.query_string:
+        target_url = f"{target_url}?{request.query_string.decode('utf-8', errors='ignore')}"
+
+    req_headers = {}
+    for h in ["Range", "Cookie", "User-Agent", "Accept"]:
+        if h in request.headers:
+            req_headers[h] = request.headers[h]
+
     try:
-        r = requests.get(target_url, stream=True, timeout=8)
+        r = requests.get(target_url, headers=req_headers, stream=True, timeout=8)
         excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
         headers = [(name, value) for (name, value) in r.headers.items() if name.lower() not in excluded_headers]
         headers.append(('Access-Control-Allow-Origin', '*'))
+        headers.append(('Access-Control-Allow-Headers', '*'))
         return Response(r.raw.read(), r.status_code, headers)
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 502
@@ -1701,6 +1710,13 @@ def api_route_preview(route_id):
         "hls_direct_url": f"http://{host}:8888/route_{route_id}/index.m3u8",
         "webrtc_url": f"http://{host}:8889/route_{route_id}"
     })
+
+
+@app.route("/preview/<path:stream_name>", methods=["GET"])
+@login_required
+def view_stream_preview(stream_name):
+    safe_name = os.path.basename(stream_name).strip()
+    return render_template("preview.html", stream_name=safe_name)
 
 
 @app.route("/api/probe", methods=["POST"])

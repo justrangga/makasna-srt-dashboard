@@ -322,6 +322,63 @@ tr:hover td { background: rgba(255,255,255,0.015); }
   flex-direction: column;
   gap: 14px;
 }
+.mobile-traffic-cards {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.traffic-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+}
+.traffic-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.traffic-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  font-size: 11.5px;
+  background: rgba(0,0,0,0.3);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.traffic-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 2px;
+}
+.btn-preview-lg {
+  background: rgba(0, 229, 255, 0.15) !important;
+  border: 1px solid #00e5ff !important;
+  color: #00e5ff !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  min-height: 42px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  text-decoration: none !important;
+}
+.btn-preview-lg:active {
+  background: rgba(0, 229, 255, 0.3) !important;
+}
 .route-card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -809,8 +866,18 @@ html, body {
   }
 
   /* Table / Card toggle: Show clean cards on tablet & phone */
-  .table-container {
+  #routes-table-container {
     display: none !important;
+  }
+  #inbound-table-container,
+  #readers-table-container {
+    display: none !important;
+  }
+  .mobile-traffic-cards {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
   }
   .mobile-routes-list {
     display: flex !important;
@@ -1899,6 +1966,8 @@ html, body {
               <tbody id="inbound-tbody"></tbody>
             </table>
           </div>
+          <!-- Mobile Cards View for Publishers (Ingest) -->
+          <div id="inbound-mobile-cards" class="mobile-traffic-cards" style="display:none; margin-top:8px;"></div>
         </div>
 
         <!-- VIEW 2: READERS (LISTENERS / CLIENTS PULLING STREAM) -->
@@ -1927,6 +1996,8 @@ html, body {
               <tbody id="readers-tbody"></tbody>
             </table>
           </div>
+          <!-- Mobile Cards View for Readers (Listeners) -->
+          <div id="readers-mobile-cards" class="mobile-traffic-cards" style="display:none; margin-top:8px;"></div>
         </div>
       </div>
 
@@ -2093,6 +2164,7 @@ html, body {
           z-index: 10;
           user-select: none;
           touch-action: none;
+          pointer-events: none;
         }
         .overlay-drag-item {
           position: absolute;
@@ -2100,6 +2172,7 @@ html, body {
           border-radius: 6px;
           box-sizing: border-box;
           touch-action: none;
+          pointer-events: auto;
         }
         .overlay-drag-item:active {
           cursor: grabbing;
@@ -2648,8 +2721,11 @@ html, body {
       <!-- Live Video & Failover Section -->
       <div class="telemetry-preview-row">
         <div>
-          <div style="position:relative; background:#000; border-radius:6px; overflow:hidden; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; border:1px solid var(--border);">
-            <video id="telem-video" controls autoplay playsinline muted style="width:100%; height:100%; object-fit:contain; background:#000;"></video>
+          <div id="telem-video-container" style="position:relative; background:#000; border-radius:6px; overflow:hidden; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); cursor:pointer;" onclick="toggleTelemVideoPlayback()">
+            <video id="telem-video" controls autoplay playsinline webkit-playsinline muted style="width:100%; height:100%; object-fit:contain; background:#000;"></video>
+            <div id="telem-play-btn" style="display:none; position:absolute; z-index:5; background:rgba(0,0,0,0.65); border:2px solid var(--cyan); border-radius:50%; width:60px; height:60px; color:var(--cyan); font-size:22px; cursor:pointer; align-items:center; justify-content:center; box-shadow:0 0 20px rgba(0,229,255,0.4); pointer-events:none;">
+              ▶
+            </div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px;">
             <div style="display:flex; align-items:center; gap:8px;">
@@ -3342,18 +3418,21 @@ async function pollInboundSrt() {
     if (pubTabDot) pubTabDot.className = publishers.length ? 'dot dot-green' : 'dot dot-gray';
     if (readTabDot) readTabDot.className = readers.length ? 'dot dot-blue' : 'dot dot-gray';
 
-    // 1. Render Publishers Table
+    // 1. Render Publishers Table & Mobile Cards
     const pubEmptyNotice = document.getElementById('inbound-empty-notice');
     const pubTableContainer = document.getElementById('inbound-table-container');
+    const pubMobileCards = document.getElementById('inbound-mobile-cards');
     const pubTbody = document.getElementById('inbound-tbody');
 
     if (pubTbody) {
       if (!publishers.length) {
         if (pubEmptyNotice) pubEmptyNotice.style.display = 'flex';
         if (pubTableContainer) pubTableContainer.style.display = 'none';
+        if (pubMobileCards) pubMobileCards.style.display = 'none';
       } else {
         if (pubEmptyNotice) pubEmptyNotice.style.display = 'none';
         if (pubTableContainer) pubTableContainer.style.display = 'block';
+        if (pubMobileCards) pubMobileCards.style.display = 'flex';
 
         pubTbody.innerHTML = publishers.map(pub => {
           const dotClass = pub.health === 'Healthy' ? 'dot-green' : pub.health === 'Degraded' ? 'dot-amber' : 'dot-red';
@@ -3401,21 +3480,64 @@ async function pollInboundSrt() {
             </tr>
           `;
         }).join('');
+
+        if (pubMobileCards) {
+          pubMobileCards.innerHTML = publishers.map(pub => {
+            const dotClass = pub.health === 'Healthy' ? 'dot-green' : pub.health === 'Degraded' ? 'dot-amber' : 'dot-red';
+            const durationFormatted = formatSeconds(pub.duration_seconds);
+
+            return `
+              <div class="traffic-card">
+                <div class="traffic-card-header">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="tag tag-input" style="font-weight:700; font-size:12.5px;">publish:${escapeHtml(pub.stream_id)}</span>
+                    <span class="dot ${dotClass}"></span>
+                    <span style="font-size:11px; font-weight:600; color:#fff;">${pub.health}</span>
+                  </div>
+                  <span style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</span>
+                </div>
+                <div class="traffic-card-grid">
+                  <div>
+                    <div style="color:var(--text-dim); font-size:10px;">BITRATE &amp; LOSS</div>
+                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">↓ ${pub.mbps_rx} Mbps</div>
+                    <div style="font-size:10.5px; color:${pub.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${pub.loss_pct}% loss</div>
+                  </div>
+                  <div>
+                    <div style="color:var(--text-dim); font-size:10px;">LATENCY &amp; CLIENT</div>
+                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">${pub.rtt_ms} ms RTT</div>
+                    <div style="font-size:10px; color:var(--muted);">${escapeHtml(pub.remote_addr)}</div>
+                  </div>
+                </div>
+                <div class="traffic-card-actions">
+                  <button type="button" class="btn-preview-lg" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">
+                    ▶ PREVIEW FEED
+                  </button>
+                  <a href="/preview/${encodeURIComponent(pub.stream_id)}" target="_blank" class="btn-icon" style="text-decoration:none; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:11px; min-height:42px; border-radius:6px; color:#fff; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); touch-action:manipulation;">
+                    ⛶ Full Player
+                  </a>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
       }
     }
 
-    // 2. Render Readers / Listeners Table
+    // 2. Render Readers / Listeners Table & Mobile Cards
     const rdrEmptyNotice = document.getElementById('readers-empty-notice');
     const rdrTableContainer = document.getElementById('readers-table-container');
+    const rdrMobileCards = document.getElementById('readers-mobile-cards');
     const rdrTbody = document.getElementById('readers-tbody');
 
     if (rdrTbody) {
       if (!readers.length) {
         if (rdrEmptyNotice) rdrEmptyNotice.style.display = 'flex';
         if (rdrTableContainer) rdrTableContainer.style.display = 'none';
+        if (rdrMobileCards) rdrMobileCards.style.display = 'none';
       } else {
         if (rdrEmptyNotice) rdrEmptyNotice.style.display = 'none';
         if (rdrTableContainer) rdrTableContainer.style.display = 'block';
+        if (rdrMobileCards) rdrMobileCards.style.display = 'flex';
 
         rdrTbody.innerHTML = readers.map(rdr => {
           const dotClass = rdr.health === 'Healthy' ? 'dot-green' : rdr.health === 'Degraded' ? 'dot-amber' : 'dot-red';
@@ -3456,13 +3578,54 @@ async function pollInboundSrt() {
               </td>
               <td style="text-align:right;">
                 <div class="action-group" style="justify-content:flex-end;">
-                  <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyTextDirect('${escapeHtml(readUrl)}', 'SRT Read URL')" title="Copy Listener URL">Copy URL</button>
                   <button class="btn-icon" style="color:#60a5fa; font-weight:600;" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">Preview</button>
+                  <button class="btn-icon" onclick="copyToClipboard('${readUrl}')" title="Copy SRT Pull URL">Copy</button>
                 </div>
               </td>
             </tr>
           `;
         }).join('');
+
+        if (rdrMobileCards) {
+          rdrMobileCards.innerHTML = readers.map(rdr => {
+            const dotClass = rdr.health === 'Healthy' ? 'dot-green' : rdr.health === 'Degraded' ? 'dot-amber' : 'dot-red';
+            const durationFormatted = formatSeconds(rdr.duration_seconds);
+            const readUrl = `srt://${SERVER_PUBLIC_IP}:${latestSrtPort}?streamid=read:${encodeURIComponent(rdr.stream_id)}`;
+
+            return `
+              <div class="traffic-card" style="border-color:rgba(59,130,246,0.3);">
+                <div class="traffic-card-header">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="tag tag-reader" style="font-weight:700; font-size:12.5px;">read:${escapeHtml(rdr.stream_id)}</span>
+                    <span class="dot ${dotClass}"></span>
+                    <span style="font-size:11px; font-weight:600; color:#fff;">${rdr.health}</span>
+                  </div>
+                  <span style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</span>
+                </div>
+                <div class="traffic-card-grid">
+                  <div>
+                    <div style="color:var(--text-dim); font-size:10px;">EGRESS BITRATE</div>
+                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#60a5fa;">↑ ${rdr.mbps_tx} Mbps</div>
+                    <div style="font-size:10.5px; color:${rdr.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${rdr.loss_pct}% loss</div>
+                  </div>
+                  <div>
+                    <div style="color:var(--text-dim); font-size:10px;">RECEIVER CLIENT</div>
+                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">${rdr.rtt_ms} ms RTT</div>
+                    <div style="font-size:10px; color:var(--muted);">${escapeHtml(rdr.remote_addr)}</div>
+                  </div>
+                </div>
+                <div class="traffic-card-actions">
+                  <button type="button" class="btn-preview-lg" style="border-color:#3b82f6; color:#60a5fa; background:rgba(59,130,246,0.15);" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">
+                    ▶ PREVIEW FEED
+                  </button>
+                  <button type="button" class="btn-icon" style="font-weight:600; font-size:11px; min-height:42px; border-radius:6px; color:#fff; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15);" onclick="copyToClipboard('${readUrl}')">
+                    📋 Copy SRT URL
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
       }
     }
 
@@ -4158,10 +4321,38 @@ function initHlsPlayer(video, streamUrl) {
     });
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = streamUrl;
-    video.play().catch(() => {});
-    if (previewState) {
-      previewState.innerHTML = '<span style="color:var(--green); font-weight:600;">● LIVE (Native)</span>';
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    const p = video.play();
+    if (p !== undefined) {
+      p.then(() => {
+        const btn = document.getElementById('telem-play-btn');
+        if (btn) btn.style.display = 'none';
+      }).catch(() => {
+        const btn = document.getElementById('telem-play-btn');
+        if (btn) btn.style.display = 'flex';
+      });
     }
+    if (previewState) {
+      previewState.innerHTML = '<span style="color:var(--green); font-weight:600;">● LIVE (Native AVPlayer)</span>';
+    }
+  }
+}
+
+function toggleTelemVideoPlayback() {
+  const v = document.getElementById('telem-video');
+  const btn = document.getElementById('telem-play-btn');
+  if (!v) return;
+  if (v.paused) {
+    v.muted = true;
+    v.play().then(() => {
+      if (btn) btn.style.display = 'none';
+    }).catch(() => {});
+  } else {
+    v.pause();
+    if (btn) btn.style.display = 'flex';
   }
 }
 
@@ -4189,9 +4380,7 @@ function reloadPreview() {
 
 function openWebRTCViewer() {
   const streamName = currentPreviewStreamName || (activeTelemetryRouteId ? `route_${activeTelemetryRouteId}` : 'MAKASNA');
-  const host = window.location.hostname;
-  const webrtcUrl = `http://${host}:8889/${streamName}/`;
-  window.open(webrtcUrl, '_blank', 'width=840,height=520,resizable=yes');
+  window.open(`/preview/${encodeURIComponent(streamName)}`, '_blank');
 }
 
 // Add / Edit Route Form
@@ -5825,20 +6014,39 @@ function populateOverlayFeedSelect() {
   const currentVal = sel.value || overlayConfigState.feed_source;
   sel.innerHTML = '<option value="">-- SELECT BROADCAST FEED --</option>';
 
-  if (Array.isArray(routesData) && routesData.length > 0) {
-    routesData.forEach(r => {
+  // 1. Inbound Publishers (e.g. JSM)
+  if (Array.isArray(latestInboundPublishers) && latestInboundPublishers.length > 0) {
+    const grp = document.createElement('optgroup');
+    grp.label = "Inbound SRT Publishers";
+    latestInboundPublishers.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.stream_id;
+      opt.textContent = `SRT Ingest: ${p.stream_id} (${p.mbps_rx || 0} Mbps)`;
+      if (currentVal === p.stream_id) opt.selected = true;
+      grp.appendChild(opt);
+    });
+    sel.appendChild(grp);
+  }
+
+  // 2. Gateway Routes
+  const routesList = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes)) ? currentRoutes : [];
+  if (routesList.length > 0) {
+    const grp = document.createElement('optgroup');
+    grp.label = "Gateway Routes";
+    routesList.forEach(r => {
       const opt = document.createElement('option');
       opt.value = `route_${r.id}`;
       opt.textContent = `${r.name || 'Route ' + r.id} (${r.status || 'OFFLINE'})`;
       if (currentVal === `route_${r.id}`) opt.selected = true;
-      sel.appendChild(opt);
+      grp.appendChild(opt);
     });
+    sel.appendChild(grp);
   }
 
   // Add standard MediaMTX paths if any
   const optDefault = document.createElement('option');
   optDefault.value = 'live/feed1';
-  optDefault.textContent = 'MediaMTX: live/feed1 (Ingest)';
+  optDefault.textContent = 'MediaMTX: live/feed1 (Default)';
   if (currentVal === 'live/feed1') optDefault.selected = true;
   sel.appendChild(optDefault);
 }
@@ -6267,14 +6475,9 @@ function onOverlayFeedChange() {
     return;
   }
 
-  // Connect to WebRTC or HLS preview
-  let streamPath = val;
-  if (val.startsWith("route_")) {
-    streamPath = val;
-  }
-  const webrtcUrl = `http://${window.location.hostname}:8889/${streamPath}`;
-  // For WebRTC preview if available
   noSignal.style.display = "none";
+  const streamUrl = `/hls/${encodeURIComponent(val)}/index.m3u8`;
+  initHlsPlayer(video, streamUrl);
 }
 
 </script>
