@@ -45,7 +45,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Top Header Bar */
 .top-nav {
-  height: 56px;
+  height: 60px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -89,20 +89,44 @@ a { color: inherit; text-decoration: none; }
 .system-telemetry {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
 }
 .stat-pill {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  text-align: center;
   background: var(--panel-elevated);
   border: 1px solid var(--border);
-  padding: 4px 9px;
+  padding: 4px 10px;
   border-radius: 6px;
-  font-size: 12px;
+  width: 170px;
+  min-width: 170px;
+  height: 44px;
+  box-sizing: border-box;
 }
-.stat-label { color: var(--text-dim); text-transform: uppercase; font-size: 9.5px; font-weight: 600; }
-.stat-value { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.stat-label {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+  text-align: center;
+  line-height: 1;
+}
+.stat-value {
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1.2;
+  color: #fff;
+}
 
 .user-actions {
   display: flex;
@@ -291,16 +315,23 @@ table {
 }
 .inbound-table {
   width: 100% !important;
-  min-width: 760px !important;
+  min-width: 1000px !important;
   table-layout: fixed !important;
   border-collapse: collapse;
 }
 .inbound-table th, .inbound-table td {
   padding: 10px 12px !important;
   white-space: nowrap;
+}
+.inbound-table th:not(:last-child), .inbound-table td:not(:last-child) {
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
+}
+.inbound-table th:last-child, .inbound-table td:last-child {
+  overflow: visible !important;
+  text-align: right;
+  white-space: nowrap;
 }
 th {
   text-align: left;
@@ -835,6 +866,18 @@ html, body {
   touch-action: manipulation;
 }
 
+/* Tablet & Laptop Scaling for Top Bar Metrics */
+@media (max-width: 1250px) and (min-width: 1025px) {
+  .stat-pill {
+    width: 142px !important;
+    min-width: 142px !important;
+    padding: 3px 6px !important;
+  }
+  .stat-value {
+    font-size: 10.5px !important;
+  }
+}
+
 /* Tablet & Mobile Breakpoint (<= 1024px): iPad, Android Tablets, Foldables, Phones */
 @media (max-width: 1024px) {
   .system-telemetry {
@@ -876,7 +919,9 @@ html, body {
   }
   #inbound-table-container,
   #readers-table-container {
-    display: none !important;
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
   .mobile-traffic-cards {
     display: flex !important;
@@ -1966,16 +2011,16 @@ html, body {
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
 
-          <div id="inbound-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(0,229,255,0.25);">
-            <table class="inbound-table" style="table-layout:fixed; width:100%;">
+          <div id="inbound-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(0,229,255,0.25); overflow-x:auto;">
+            <table class="inbound-table" style="table-layout:fixed; width:100%; min-width:1000px;">
               <colgroup>
-                <col style="width:22%;">
-                <col style="width:17%;">
-                <col style="width:15%;">
-                <col style="width:11%;">
-                <col style="width:14%;">
-                <col style="width:9%;">
-                <col style="width:12%;">
+                <col style="width:17%; min-width:150px;">
+                <col style="width:15%; min-width:130px;">
+                <col style="width:14%; min-width:120px;">
+                <col style="width:9%; min-width:80px;">
+                <col style="width:13%; min-width:110px;">
+                <col style="width:8%; min-width:75px;">
+                <col style="width:24%; min-width:250px;">
               </colgroup>
               <thead>
                 <tr>
@@ -2003,16 +2048,16 @@ html, body {
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
 
-          <div id="readers-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(59,130,246,0.3);">
-            <table class="inbound-table" style="table-layout:fixed; width:100%;">
+          <div id="readers-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(59,130,246,0.3); overflow-x:auto;">
+            <table class="inbound-table" style="table-layout:fixed; width:100%; min-width:1000px;">
               <colgroup>
-                <col style="width:22%;">
-                <col style="width:17%;">
-                <col style="width:15%;">
-                <col style="width:11%;">
-                <col style="width:14%;">
-                <col style="width:9%;">
-                <col style="width:12%;">
+                <col style="width:17%; min-width:150px;">
+                <col style="width:15%; min-width:130px;">
+                <col style="width:14%; min-width:120px;">
+                <col style="width:9%; min-width:80px;">
+                <col style="width:13%; min-width:110px;">
+                <col style="width:8%; min-width:75px;">
+                <col style="width:24%; min-width:250px;">
               </colgroup>
               <thead>
                 <tr>
@@ -2825,7 +2870,7 @@ html, body {
           <div id="telem-video-container" style="position:relative; background:#000; border-radius:6px; overflow:hidden; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); cursor:pointer;" onclick="toggleTelemVideoPlayback()">
             <video id="telem-video" controls autoplay playsinline webkit-playsinline muted style="width:100%; height:100%; object-fit:contain; background:#000;"></video>
             <div id="telem-play-btn" style="display:none; position:absolute; z-index:5; background:rgba(0,0,0,0.65); border:2px solid var(--cyan); border-radius:50%; width:60px; height:60px; color:var(--cyan); font-size:22px; cursor:pointer; align-items:center; justify-content:center; box-shadow:0 0 20px rgba(0,229,255,0.4); pointer-events:none;">
-              ▶
+              &#9658;
             </div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px;">
@@ -3474,13 +3519,13 @@ async function pollInboundSrt() {
                   <span>${pub.health}</span>
                 </div>
               </td>
-              <td style="text-align:right;">
-                <div class="action-group" style="justify-content:flex-end; gap:6px;">
-                  <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">Preview</button>
-                  <a href="/preview/${encodeURIComponent(pub.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center;">Full Player</a>
+              <td style="text-align:right; overflow:visible !important; white-space:nowrap !important;">
+                <div class="action-group" style="display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:nowrap;">
+                  <button class="btn-icon" style="color:var(--cyan); font-weight:600; padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">Preview</button>
+                  <a href="/preview/${encodeURIComponent(pub.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; flex-shrink:0; white-space:nowrap;">Full Player</a>
                   ${pub.routed
-                    ? `<span class="tag tag-active-src" title="Active on route: ${escapeHtml(pub.route_name)}">Routed</span>`
-                    : `<button class="btn-icon" style="color:var(--amber); font-weight:600;" onclick="adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">+ Route</button>`
+                    ? `<span class="tag tag-active-src" style="flex-shrink:0; padding:6px 10px; white-space:nowrap;" title="Active on route: ${escapeHtml(pub.route_name)}">Routed</span>`
+                    : `<button class="btn-icon" style="color:var(--amber); font-weight:600; padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">+ Route</button>`
                   }
                 </div>
               </td>
@@ -3540,11 +3585,11 @@ async function pollInboundSrt() {
                   <span>${rdr.health}</span>
                 </div>
               </td>
-              <td style="text-align:right;">
-                <div class="action-group" style="justify-content:flex-end; gap:6px;">
-                  <button class="btn-icon" style="color:#60a5fa; font-weight:600;" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">Preview</button>
-                  <a href="/preview/${encodeURIComponent(rdr.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center;">Full Player</a>
-                  <button class="btn-icon" onclick="copyToClipboard('${readUrl}')" title="Copy SRT Pull URL">Copy</button>
+              <td style="text-align:right; overflow:visible !important; white-space:nowrap !important;">
+                <div class="action-group" style="display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:nowrap;">
+                  <button class="btn-icon" style="color:#60a5fa; font-weight:600; padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">Preview</button>
+                  <a href="/preview/${encodeURIComponent(rdr.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; flex-shrink:0; white-space:nowrap;">Full Player</a>
+                  <button class="btn-icon" style="padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="copyToClipboard('${readUrl}')" title="Copy SRT Pull URL">Copy</button>
                 </div>
               </td>
             </tr>
