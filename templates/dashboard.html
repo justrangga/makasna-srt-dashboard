@@ -3006,12 +3006,9 @@ html, body {
             <div class="form-group" style="flex:1;">
               <label>Protocol / Mode</label>
               <select id="rf-p-type" class="form-control" onchange="handleSourceTypeChange(this.value)">
-                <option value="srt_caller">1. SRT Caller (Pull from remote server)</option>
-                <option value="direct_url">2. Direct Stream (Web / YouTube / HLS URL)</option>
-                <option value="rtmp_server">3. Server RTMP (Push from client with Stream Key)</option>
-                <option value="srt_listener">4. SRT Listener (Wait for push)</option>
-                <option value="local_stream">5. Local MediaMTX Path</option>
-                <option value="udp">6. UDP Ingest</option>
+                <option value="srt_caller">1. SRT Caller</option>
+                <option value="direct_url">2. Direct Stream</option>
+                <option value="rtmp_server">3. Server RTMP</option>
               </select>
             </div>
             <div class="form-group" id="rf-p-port-group" style="width:160px; flex:none;">
@@ -3093,12 +3090,9 @@ html, body {
               <div class="form-group" style="flex:1;">
                 <label>Protocol / Mode</label>
                 <select id="rf-s-type" class="form-control" onchange="handleSecondarySourceTypeChange(this.value)">
-                  <option value="srt_caller">1. SRT Caller (Pull from remote server)</option>
-                  <option value="direct_url">2. Direct Stream (Web / YouTube / HLS URL)</option>
-                  <option value="rtmp_server">3. Server RTMP (Push from client with Stream Key)</option>
-                  <option value="srt_listener">4. SRT Listener (Wait for push)</option>
-                  <option value="local_stream">5. Local MediaMTX Path</option>
-                  <option value="udp">6. UDP Ingest</option>
+                  <option value="srt_caller">1. SRT Caller</option>
+                  <option value="direct_url">2. Direct Stream</option>
+                  <option value="rtmp_server">3. Server RTMP</option>
                 </select>
               </div>
               <div class="form-group" id="rf-s-port-group" style="width:160px; flex:none;">
@@ -4588,22 +4582,6 @@ function handleSourceTypeChange(type) {
     detailsRow.style.display = 'none';
     if (passGroup) passGroup.style.display = 'none';
     updateRtmpDisplay('p');
-  } else if (type === 'srt_listener') {
-    addrGroup.style.display = 'none';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = 'block';
-    portLabel.textContent = 'Listen Port';
-    detailsRow.style.display = 'grid';
-    if (passGroup) passGroup.style.display = 'block';
-  } else {
-    addrGroup.style.display = (type === 'udp') ? 'block' : 'none';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = (type === 'local_stream') ? 'none' : 'block';
-    portLabel.textContent = 'Port';
-    detailsRow.style.display = (type === 'local_stream') ? 'grid' : 'none';
-    if (passGroup) passGroup.style.display = 'none';
   }
 }
 
@@ -4639,22 +4617,6 @@ function handleSecondarySourceTypeChange(type) {
     detailsRow.style.display = 'none';
     if (passGroup) passGroup.style.display = 'none';
     updateRtmpDisplay('s');
-  } else if (type === 'srt_listener') {
-    addrGroup.style.display = 'none';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = 'block';
-    portLabel.textContent = 'Listen Port';
-    detailsRow.style.display = 'grid';
-    if (passGroup) passGroup.style.display = 'block';
-  } else {
-    addrGroup.style.display = (type === 'udp') ? 'block' : 'none';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = (type === 'local_stream') ? 'none' : 'block';
-    portLabel.textContent = 'Port';
-    detailsRow.style.display = (type === 'local_stream') ? 'grid' : 'none';
-    if (passGroup) passGroup.style.display = 'none';
   }
 }
 
@@ -4766,25 +4728,9 @@ function handleDestTypeChange(selectEl, id) {
   const type = selectEl.value;
   const srtBox = document.getElementById(`dest-fields-srt-caller-${id}`);
   const rtmpBox = document.getElementById(`dest-fields-rtmp-${id}`);
-  const rawBox = document.getElementById(`dest-fields-raw-${id}`);
 
   if (srtBox) srtBox.style.display = (type === 'srt_caller') ? 'flex' : 'none';
   if (rtmpBox) rtmpBox.style.display = (type === 'rtmp') ? 'flex' : 'none';
-  if (rawBox) rawBox.style.display = (type === 'srt_listener' || type === 'udp') ? 'block' : 'none';
-}
-
-function applyRtmpPreset(id, preset) {
-  const urlInput = document.getElementById(`dest-rtmp-url-${id}`);
-  if (!urlInput) return;
-  if (preset === 'youtube') {
-    urlInput.value = 'rtmp://a.rtmp.youtube.com/live2';
-  } else if (preset === 'facebook') {
-    urlInput.value = 'rtmps://live-api-s.facebook.com:443/rtmp/';
-  } else if (preset === 'tiktok') {
-    urlInput.value = 'rtmp://live-push.tiktok.com/live/';
-  } else if (preset === 'twitch') {
-    urlInput.value = 'rtmp://live.twitch.tv/app/';
-  }
 }
 
 function toggleVBitrate(selectEl, id) {
@@ -4817,9 +4763,6 @@ function addDestinationRow(data = {}) {
   const amode = data.audio_mode || (data.audio_codec === 'copy' ? 'copy' : 'aac');
   const abitrate = data.audio_bitrate || 192;
   const achannels = data.audio_channel_map || 'all';
-  const scale = data.scale || 'original';
-  const fps = data.fps || 'original';
-  const deint = Boolean(data.deinterlace);
 
   let srtAddr = data.address || '';
   let srtPort = data.port || 9000;
@@ -4856,7 +4799,7 @@ function addDestinationRow(data = {}) {
     <div class="dest-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border);">
       <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:200px;">
         <span class="tag tag-output" style="font-weight:700; background:rgba(0,229,255,0.15); color:var(--cyan); padding:4px 8px; border-radius:4px;">OUTPUT #${destinationCount}</span>
-        <input type="text" class="form-control dest-label-input" name="dest_label" placeholder="Output Label (e.g. Router Push, YouTube Live)" value="${escapeHtml(data.label || `Output ${destinationCount}`)}" style="font-weight:600;">
+        <input type="text" class="form-control dest-label-input" name="dest_label" placeholder="Output Label (e.g. Client Router, YouTube Live)" value="${escapeHtml(data.label || `Output ${destinationCount}`)}" style="font-weight:600;">
       </div>
       <button type="button" class="btn-icon btn-danger" style="padding:6px 12px; min-height:32px;" onclick="this.closest('.dest-card').remove()" title="Remove Output">Remove Output</button>
     </div>
@@ -4864,40 +4807,37 @@ function addDestinationRow(data = {}) {
     <!-- Protocol Selector -->
     <div class="form-row" style="margin-bottom:12px;">
       <div class="form-group" style="flex:1;">
-        <label style="font-weight:700; color:var(--text-bright);">Protocol / Destination Gateway Mode</label>
+        <label style="font-weight:700; color:var(--text-bright);">Protocol</label>
         <select class="form-control" name="dest_type" onchange="handleDestTypeChange(this, ${destinationCount})" style="font-weight:600;">
-          <option value="srt_caller" ${type==='srt_caller'?'selected':''}>1. SRT Caller (Push to Remote Client IP / Router)</option>
-          <option value="rtmp" ${type==='rtmp'?'selected':''}>2. RTMP Push (YouTube / Facebook / TikTok / Twitch / CDN)</option>
-          <option value="srt_listener" ${type==='srt_listener'?'selected':''}>3. SRT Listener (Serve to Downstream Clients)</option>
-          <option value="udp" ${type==='udp'?'selected':''}>4. UDP Push (Direct Unicast/Multicast)</option>
+          <option value="srt_caller" ${type==='srt_caller'?'selected':''}>1. SRT Caller</option>
+          <option value="rtmp" ${type==='rtmp'?'selected':''}>2. RTMP Push</option>
         </select>
       </div>
     </div>
 
     <!-- 1. SRT Caller Parameters -->
     <div id="dest-fields-srt-caller-${destinationCount}" class="dest-proto-fields" style="display:${type==='srt_caller'?'flex':'none'}; flex-direction:column; gap:10px; background:rgba(0,229,255,0.03); border:1px solid rgba(0,229,255,0.15); border-radius:6px; padding:12px; margin-bottom:12px;">
-      <div style="font-size:11px; font-weight:700; color:var(--cyan); text-transform:uppercase; letter-spacing:0.05em;">SRT Caller Push Gateway Settings</div>
       <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">
         <div class="form-group" style="margin:0;">
-          <label>Remote Client Server Address (Public IP / Domain)</label>
-          <input type="text" class="form-control" name="dest_srt_addr" placeholder="e.g. 103.120.45.10 or client.broadcaster.com" value="${escapeHtml(srtAddr)}">
+          <label>Server Address (IP / Domain)</label>
+          <input type="text" class="form-control" name="dest_srt_addr" placeholder="e.g. 103.120.45.10" value="${escapeHtml(srtAddr)}">
         </div>
         <div class="form-group" style="margin:0;">
-          <label>Remote Port</label>
+          <label>Port</label>
           <input type="number" class="form-control" name="dest_srt_port" placeholder="9000" value="${srtPort}">
         </div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
         <div class="form-group" style="margin:0;">
-          <label>Stream ID (Optional)</label>
+          <label>Stream ID</label>
           <input type="text" class="form-control" name="dest_srt_streamid" placeholder="publish:client_feed" value="${escapeHtml(srtSid)}">
         </div>
         <div class="form-group" style="margin:0;">
-          <label>Latency Buffer (ms)</label>
+          <label>Latency (ms)</label>
           <input type="number" class="form-control" name="dest_srt_latency" value="${srtLat}">
         </div>
         <div class="form-group" style="margin:0;">
-          <label>Passphrase (Optional AES)</label>
+          <label>Passphrase (AES)</label>
           <input type="password" class="form-control" name="dest_srt_passphrase" placeholder="AES Passphrase" value="${escapeHtml(srtPass)}">
         </div>
       </div>
@@ -4905,60 +4845,39 @@ function addDestinationRow(data = {}) {
 
     <!-- 2. RTMP Push Parameters -->
     <div id="dest-fields-rtmp-${destinationCount}" class="dest-proto-fields" style="display:${type==='rtmp'?'flex':'none'}; flex-direction:column; gap:10px; background:rgba(239,68,68,0.04); border:1px solid rgba(239,68,68,0.2); border-radius:6px; padding:12px; margin-bottom:12px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-        <div style="font-size:11px; font-weight:700; color:#f87171; text-transform:uppercase; letter-spacing:0.05em;">RTMP Broadcast Push (Live &amp; Social Platforms)</div>
-        <div style="display:flex; align-items:center; gap:6px;">
-          <span style="font-size:10.5px; color:var(--text-dim);">Platform Presets:</span>
-          <button type="button" class="btn-icon" style="font-size:10px; padding:2px 6px;" onclick="applyRtmpPreset(${destinationCount}, 'youtube')">YouTube</button>
-          <button type="button" class="btn-icon" style="font-size:10px; padding:2px 6px;" onclick="applyRtmpPreset(${destinationCount}, 'facebook')">Facebook</button>
-          <button type="button" class="btn-icon" style="font-size:10px; padding:2px 6px;" onclick="applyRtmpPreset(${destinationCount}, 'tiktok')">TikTok</button>
-          <button type="button" class="btn-icon" style="font-size:10px; padding:2px 6px;" onclick="applyRtmpPreset(${destinationCount}, 'twitch')">Twitch</button>
-        </div>
-      </div>
       <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:10px;">
         <div class="form-group" style="margin:0;">
           <label>RTMP Target Server URL</label>
-          <input type="text" class="form-control" name="dest_rtmp_url" id="dest-rtmp-url-${destinationCount}" placeholder="rtmp://a.rtmp.youtube.com/live2" value="${escapeHtml(rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2')}">
+          <input type="text" class="form-control" name="dest_rtmp_url" id="dest-rtmp-url-${destinationCount}" placeholder="rtmp://a.rtmp.youtube.com/live2" value="${escapeHtml(rtmpUrl)}">
         </div>
         <div class="form-group" style="margin:0;">
-          <label>Stream Key (Secret)</label>
+          <label>Stream Key</label>
           <div style="display:flex; gap:6px;">
-            <input type="password" class="form-control" name="dest_stream_key" id="dest-stream-key-${destinationCount}" placeholder="xxxx-xxxx-xxxx-xxxx" value="${escapeHtml(rtmpKey)}" style="font-family:'JetBrains Mono';">
+            <input type="password" class="form-control" name="dest_stream_key" id="dest-stream-key-${destinationCount}" placeholder="Stream key" value="${escapeHtml(rtmpKey)}" style="font-family:'JetBrains Mono';">
             <button type="button" class="btn-icon" style="white-space:nowrap; padding:4px 8px;" onclick="togglePasswordVisibility('dest-stream-key-${destinationCount}')">Show</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 3. Direct / Custom URL (for SRT Listener, UDP, or Custom Raw) -->
-    <div id="dest-fields-raw-${destinationCount}" class="dest-proto-fields" style="display:${(type==='srt_listener'||type==='udp')?'block':'none'}; margin-bottom:12px;">
-      <div class="form-group" style="margin:0;">
-        <label>Direct Target Endpoint URL</label>
-        <input type="text" class="form-control" name="dest_url" id="dest-raw-url-${destinationCount}" placeholder="srt://0.0.0.0:12102?mode=listener or udp://239.0.0.1:5000" value="${escapeHtml(data.url || '')}">
-      </div>
-    </div>
-
-    <!-- Video Bitrate, Audio Bitrate & Multi-Channel Mapping Section -->
+    <!-- Bitrate (Video & Audio) & Audio Channel Selection -->
     <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:8px;">
-      <div style="font-size:11px; font-weight:700; color:var(--text-bright); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;">
-        Signal Processing &amp; Audio Channel Routing
-      </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
         
         <!-- Video Mode & Bitrate -->
         <div class="form-group" style="margin:0;">
-          <label style="color:var(--cyan); font-weight:700;">Video Mode &amp; Bitrate</label>
+          <label style="color:var(--cyan); font-weight:700;">Video Bitrate</label>
           <select class="form-control" name="dest_vmode" onchange="toggleVBitrate(this, ${destinationCount})" style="margin-bottom:6px;">
-            <option value="copy" ${mode==='copy'?'selected':''}>Direct Copy (Passthrough / 0% CPU)</option>
-            <option value="transcode" ${mode==='transcode'?'selected':''}>Transcode H.264 (Custom Bitrate)</option>
+            <option value="copy" ${mode==='copy'?'selected':''}>Direct Copy (Original Bitrate)</option>
+            <option value="transcode" ${mode==='transcode'?'selected':''}>Custom Video Bitrate</option>
           </select>
           <div id="dest-vbitrate-group-${destinationCount}" style="display:${mode==='transcode'?'flex':'none'}; align-items:center; gap:6px;">
             <select class="form-control" onchange="this.nextElementSibling.value=this.value" style="width:140px;">
               <option value="12000" ${vbitrate==12000?'selected':''}>12 Mbps</option>
               <option value="8000" ${vbitrate==8000?'selected':''}>8 Mbps</option>
               <option value="6000" ${vbitrate==6000?'selected':''}>6 Mbps</option>
-              <option value="4500" ${vbitrate==4500?'selected':''}>4.5 Mbps (1080p)</option>
-              <option value="3000" ${vbitrate==3000?'selected':''}>3 Mbps (720p)</option>
+              <option value="4500" ${vbitrate==4500?'selected':''}>4.5 Mbps</option>
+              <option value="3000" ${vbitrate==3000?'selected':''}>3 Mbps</option>
               <option value="2000" ${vbitrate==2000?'selected':''}>2 Mbps</option>
               <option value="1500" ${vbitrate==1500?'selected':''}>1.5 Mbps</option>
             </select>
@@ -4969,80 +4888,41 @@ function addDestinationRow(data = {}) {
 
         <!-- Audio Mode & Bitrate -->
         <div class="form-group" style="margin:0;">
-          <label style="color:var(--amber); font-weight:700;">Audio Mode &amp; Bitrate</label>
+          <label style="color:var(--amber); font-weight:700;">Audio Bitrate</label>
           <select class="form-control" name="dest_amode" onchange="toggleABitrate(this, ${destinationCount})" style="margin-bottom:6px;">
-            <option value="copy" ${amode==='copy'?'selected':''}>Direct Copy (Keep Original)</option>
-            <option value="aac" ${amode==='aac'?'selected':''}>Encode AAC (Standard Broadcast)</option>
+            <option value="copy" ${amode==='copy'?'selected':''}>Direct Copy (Original Bitrate)</option>
+            <option value="aac" ${amode==='aac'?'selected':''}>Custom Audio Bitrate</option>
           </select>
           <div id="dest-abitrate-group-${destinationCount}" style="display:${amode==='aac'?'flex':'none'}; align-items:center; gap:6px;">
             <select class="form-control" name="dest_abitrate" style="flex:1;">
-              <option value="320" ${abitrate==320?'selected':''}>320 kbps (Master)</option>
-              <option value="256" ${abitrate==256?'selected':''}>256 kbps (High Fidelity)</option>
-              <option value="192" ${abitrate==192?'selected':''}>192 kbps (Broadcast Standard)</option>
-              <option value="160" ${abitrate==160?'selected':''}>160 kbps (Standard)</option>
-              <option value="128" ${abitrate==128?'selected':''}>128 kbps (Web / Mobile)</option>
-              <option value="96" ${abitrate==96?'selected':''}>96 kbps (Low)</option>
-              <option value="64" ${abitrate==64?'selected':''}>64 kbps (Voice / Intercom)</option>
+              <option value="320" ${abitrate==320?'selected':''}>320 kbps</option>
+              <option value="256" ${abitrate==256?'selected':''}>256 kbps</option>
+              <option value="192" ${abitrate==192?'selected':''}>192 kbps</option>
+              <option value="160" ${abitrate==160?'selected':''}>160 kbps</option>
+              <option value="128" ${abitrate==128?'selected':''}>128 kbps</option>
+              <option value="96" ${abitrate==96?'selected':''}>96 kbps</option>
+              <option value="64" ${abitrate==64?'selected':''}>64 kbps</option>
             </select>
           </div>
         </div>
 
         <!-- Audio Channel Selection & Mapping -->
         <div class="form-group" style="margin:0;">
-          <label style="color:#a78bfa; font-weight:700;">Audio Channel Routing (Multi-Channel)</label>
-          <select class="form-control" name="dest_achannel_map" title="Select audio channel routing for streams with 2 or more audio channels">
-            <option value="all" ${achannels==='all'?'selected':''}>All Channels (Passthrough Original)</option>
-            <option value="ch1_ch2" ${achannels==='ch1_ch2'?'selected':''}>Channel 1 &amp; 2 (Stereo Main / PGM)</option>
-            <option value="ch3_ch4" ${achannels==='ch3_ch4'?'selected':''}>Channel 3 &amp; 4 (Stereo Clean Feed / Aux)</option>
-            <option value="ch5_ch6" ${achannels==='ch5_ch6'?'selected':''}>Channel 5 &amp; 6 (Stereo Commentary / Alt)</option>
-            <option value="ch7_ch8" ${achannels==='ch7_ch8'?'selected':''}>Channel 7 &amp; 8 (Stereo Translation)</option>
-            <option value="ch1_mono" ${achannels==='ch1_mono'?'selected':''}>Channel 1 Only (Mono Left -> Stereo L+R)</option>
-            <option value="ch2_mono" ${achannels==='ch2_mono'?'selected':''}>Channel 2 Only (Mono Right -> Stereo L+R)</option>
-            <option value="ch3_mono" ${achannels==='ch3_mono'?'selected':''}>Channel 3 Only (Mono Aux -> Stereo L+R)</option>
-            <option value="ch4_mono" ${achannels==='ch4_mono'?'selected':''}>Channel 4 Only (Mono Aux -> Stereo L+R)</option>
-            <option value="track_2" ${achannels==='track_2'?'selected':''}>Track 2 (Secondary Audio Stream)</option>
-            <option value="track_3" ${achannels==='track_3'?'selected':''}>Track 3 (Third Audio Stream)</option>
+          <label style="color:#a78bfa; font-weight:700;">Audio Channel Selection</label>
+          <select class="form-control" name="dest_achannel_map">
+            <option value="all" ${achannels==='all'?'selected':''}>All Channels (Passthrough)</option>
+            <option value="ch1_ch2" ${achannels==='ch1_ch2'?'selected':''}>Channel 1 &amp; 2</option>
+            <option value="ch3_ch4" ${achannels==='ch3_ch4'?'selected':''}>Channel 3 &amp; 4</option>
+            <option value="ch5_ch6" ${achannels==='ch5_ch6'?'selected':''}>Channel 5 &amp; 6</option>
+            <option value="ch7_ch8" ${achannels==='ch7_ch8'?'selected':''}>Channel 7 &amp; 8</option>
+            <option value="ch1_mono" ${achannels==='ch1_mono'?'selected':''}>Channel 1 Only</option>
+            <option value="ch2_mono" ${achannels==='ch2_mono'?'selected':''}>Channel 2 Only</option>
+            <option value="ch3_mono" ${achannels==='ch3_mono'?'selected':''}>Channel 3 Only</option>
+            <option value="ch4_mono" ${achannels==='ch4_mono'?'selected':''}>Channel 4 Only</option>
           </select>
-          <span style="font-size:10.5px; color:var(--text-dim); margin-top:3px;">
-            Enables routing specific channels from 4ch/8ch SDI &amp; SRT streams.
-          </span>
         </div>
 
       </div>
-
-      <!-- Advanced Video Filters Toggle -->
-      <details style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);">
-        <summary style="font-size:11px; color:var(--text-dim); cursor:pointer; font-weight:600;">Advanced Video Filtering (Scaling, Framerate, Deinterlace)</summary>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; margin-top:8px;">
-          <div class="form-group" style="margin:0;">
-            <label>Scale</label>
-            <select class="form-control" name="dest_scale">
-              <option value="original" ${scale==='original'?'selected':''}>Original</option>
-              <option value="1080p" ${scale==='1080p'?'selected':''}>1080p (1920x1080)</option>
-              <option value="720p" ${scale==='720p'?'selected':''}>720p (1280x720)</option>
-              <option value="576p" ${scale==='576p'?'selected':''}>576p (PAL SD)</option>
-              <option value="480p" ${scale==='480p'?'selected':''}>480p (SD)</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Framerate</label>
-            <select class="form-control" name="dest_fps">
-              <option value="original" ${fps==='original'?'selected':''}>Original</option>
-              <option value="50" ${fps==='50'?'selected':''}>50 fps (PAL)</option>
-              <option value="60" ${fps==='60'?'selected':''}>60 fps (NTSC)</option>
-              <option value="25" ${fps==='25'?'selected':''}>25 fps</option>
-              <option value="30" ${fps==='30'?'selected':''}>30 fps</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin:0; justify-content:center;">
-            <label style="opacity:0; pointer-events:none; font-size:10px;">Deinterlace</label>
-            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:11.5px; color:var(--text); text-transform:none;">
-              <input type="checkbox" name="dest_deint" ${deint?'checked':''}>
-              <span>Deinterlace (1080i)</span>
-            </label>
-          </div>
-        </div>
-      </details>
     </div>
   `;
   container.appendChild(div);
@@ -5092,8 +4972,6 @@ async function handleRouteFormSubmit(e) {
       } else if (rtmpUrl) {
         url = rtmpUrl;
       }
-    } else {
-      url = (row.querySelector('[name="dest_url"]') ? row.querySelector('[name="dest_url"]').value : '').trim();
     }
 
     const vmode = row.querySelector('[name="dest_vmode"]') ? row.querySelector('[name="dest_vmode"]').value : 'copy';
@@ -5101,10 +4979,6 @@ async function handleRouteFormSubmit(e) {
     const amode = row.querySelector('[name="dest_amode"]') ? row.querySelector('[name="dest_amode"]').value : 'copy';
     const abitrate = row.querySelector('[name="dest_abitrate"]') ? parseInt(row.querySelector('[name="dest_abitrate"]').value) || 192 : 192;
     const achannelMap = row.querySelector('[name="dest_achannel_map"]') ? row.querySelector('[name="dest_achannel_map"]').value : 'all';
-
-    const scale = row.querySelector('[name="dest_scale"]') ? row.querySelector('[name="dest_scale"]').value : 'original';
-    const fps = row.querySelector('[name="dest_fps"]') ? row.querySelector('[name="dest_fps"]').value : 'original';
-    const deint = row.querySelector('[name="dest_deint"]') ? row.querySelector('[name="dest_deint"]').checked : false;
 
     if (url) {
       destinations.push({
@@ -5124,10 +4998,7 @@ async function handleRouteFormSubmit(e) {
         audio_mode: amode,
         audio_codec: amode,
         audio_bitrate: abitrate,
-        audio_channel_map: achannelMap,
-        scale,
-        fps,
-        deinterlace: deint
+        audio_channel_map: achannelMap
       });
     }
   });
