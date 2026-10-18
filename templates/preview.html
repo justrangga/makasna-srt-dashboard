@@ -259,10 +259,10 @@
     <!-- Engine Switcher -->
     <div class="engine-switcher">
       <button id="btn-engine-webrtc" class="btn-engine" onclick="switchEngine('webrtc')">
-        ⚡ WebRTC (&lt;0.3s)
+        WebRTC (&lt;0.3s)
       </button>
       <button id="btn-engine-hls" class="btn-engine" onclick="switchEngine('hls')">
-        📺 LL-HLS
+        LL-HLS
       </button>
     </div>
 
@@ -290,9 +290,9 @@
 
     <!-- Tap to Play Overlay (iPhone Safari compliance) -->
     <div id="tap-overlay" class="tap-overlay" onclick="startPlaybackManual(event)">
-      <div class="tap-btn-circle">▶</div>
-      <div class="tap-title">KLIK / TAP UNTUK MEMUTAR</div>
-      <div class="tap-sub">Tekan di mana saja untuk mengaktifkan video preview</div>
+      <div class="tap-btn-circle">&#9658;</div>
+      <div class="tap-title">CLICK OR TAP TO PLAY</div>
+      <div class="tap-sub">Select anywhere to initiate live video playout</div>
     </div>
   </div>
 
@@ -303,13 +303,13 @@
     </div>
     <div class="control-cluster">
       <button id="btn-audio" class="btn-action" onclick="toggleAudio(event)">
-        🔇 Unmute
+        Unmute
       </button>
       <button class="btn-action" onclick="reloadStream(event)">
-        ↻ Reload
+        Reload
       </button>
       <button class="btn-action" onclick="toggleFullscreen(event)">
-        ⛶ Full
+        Fullscreen
       </button>
     </div>
   </div>
@@ -641,11 +641,11 @@
       if (e) e.stopPropagation();
       video.muted = !video.muted;
       if (video.muted) {
-        btnAudio.innerHTML = "🔇 Unmute";
+        btnAudio.innerHTML = "Unmute";
         btnAudio.style.borderColor = "rgba(255,255,255,0.15)";
         btnAudio.style.color = "#fff";
       } else {
-        btnAudio.innerHTML = "🔊 Mute";
+        btnAudio.innerHTML = "Mute";
         btnAudio.style.borderColor = "var(--cyan, #00e5ff)";
         btnAudio.style.color = "#00e5ff";
       }

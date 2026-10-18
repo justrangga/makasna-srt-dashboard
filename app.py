@@ -2120,17 +2120,28 @@ def api_srt_inbound():
             bytes_mb = round(bytes_count / (1024 * 1024), 2)
             total_rx_rate += rx_rate
 
+        path_info = paths_map.get(path_name, {})
         created_str = c.get("created", "")
         duration_sec = 0
         if created_str:
             try:
-                dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                clean_str = re.sub(r'(\.\d{6})\d+', r'\1', created_str.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(clean_str)
                 duration_sec = int(now - dt.timestamp())
             except Exception:
                 pass
 
+        if duration_sec <= 0 and path_info:
+            ready_str = path_info.get("readyTime") or path_info.get("onlineTime") or ""
+            if ready_str:
+                try:
+                    clean_ready = re.sub(r'(\.\d{6})\d+', r'\1', ready_str.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(clean_ready)
+                    duration_sec = int(now - dt.timestamp())
+                except Exception:
+                    pass
+
         health = classify_health(rtt, loss_pct, drops)
-        path_info = paths_map.get(path_name, {})
         tracks = path_info.get("tracks", [])
         matched_route = routes_map.get(path_name)
 
@@ -2179,6 +2190,15 @@ def api_srt_inbound():
             tracks = p.get("tracks", [])
             bytes_count = int(p.get("bytesReceived", 0))
             bytes_mb = round(bytes_count / (1024 * 1024), 2)
+            ready_str = p.get("readyTime") or p.get("onlineTime") or ""
+            rtmp_duration = 0
+            if ready_str:
+                try:
+                    clean_ready = re.sub(r'(\.\d{6})\d+', r'\1', ready_str.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(clean_ready)
+                    rtmp_duration = max(0, int(now - dt.timestamp()))
+                except Exception:
+                    pass
             publishers.append({
                 "id": source.get("id", p_name),
                 "stream_id": p_name,
@@ -2196,7 +2216,7 @@ def api_srt_inbound():
                 "buffer_current_ms": 0,
                 "bytes_received_mb": bytes_mb,
                 "bytes_sent_mb": 0.0,
-                "duration_seconds": 0,
+                "duration_seconds": rtmp_duration,
                 "health": "Healthy",
                 "tracks": tracks if tracks else ["Camera Broadcaster"],
                 "routed": bool(matched_route),

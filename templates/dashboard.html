@@ -291,11 +291,16 @@ table {
 }
 .inbound-table {
   width: 100% !important;
-  min-width: 640px !important;
+  min-width: 760px !important;
+  table-layout: fixed !important;
+  border-collapse: collapse;
 }
 .inbound-table th, .inbound-table td {
-  padding: 10px 10px !important;
+  padding: 10px 12px !important;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 th {
   text-align: left;
@@ -1875,15 +1880,15 @@ html, body {
   <div class="user-actions">
     <a href="/download/apk" target="_blank" title="Download Installer Android Remote Controller (APK)">
       <button type="button" class="btn-icon" style="color:#10B981; border-color:rgba(16,185,129,0.4); font-weight:600; background:rgba(16,185,129,0.08);">
-        📱 <span class="d-none-mobile">Android </span>APK
+        <span class="d-none-mobile">Android </span>APK
       </button>
     </a>
-    <a href="/download/sop" target="_blank" title="Unduh Standar Operasional Prosedur (SOP) Penyiaran 1 Lembar">
+    <a href="/download/sop" target="_blank" title="Download Standard Operating Procedure (SOP)">
       <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;">
-        <span class="d-none-mobile">PDF </span>SOP
+        <span class="d-none-mobile">Engineering </span>SOP
       </button>
     </a>
-    <a href="/logout"><button type="button" class="btn-logout">Logout</button></a>
+    <a href="/logout"><button type="button" class="btn-logout">Sign Out</button></a>
   </div>
 </header>
 
@@ -1962,44 +1967,60 @@ html, body {
           </div>
 
           <div id="inbound-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(0,229,255,0.25);">
-            <table class="inbound-table">
+            <table class="inbound-table" style="table-layout:fixed; width:100%;">
+              <colgroup>
+                <col style="width:22%;">
+                <col style="width:17%;">
+                <col style="width:15%;">
+                <col style="width:11%;">
+                <col style="width:14%;">
+                <col style="width:9%;">
+                <col style="width:12%;">
+              </colgroup>
               <thead>
                 <tr>
                   <th>Stream ID (Path)</th>
-                  <th>Client IP &amp; Port</th>
+                  <th>Client Endpoint</th>
                   <th>Ingest Bitrate &amp; Loss</th>
                   <th>RTT Latency</th>
-                  <th>Traffic / Uptime</th>
-                  <th>Status</th>
+                  <th>Payload / Uptime</th>
+                  <th>Health Status</th>
                   <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody id="inbound-tbody"></tbody>
             </table>
           </div>
-          <!-- Mobile Cards View for Publishers (Ingest) -->
-          <div id="inbound-mobile-cards" class="mobile-traffic-cards" style="display:none; margin-top:8px;"></div>
         </div>
 
         <!-- VIEW 2: READERS (LISTENERS / CLIENTS PULLING STREAM) -->
         <div id="srt-readers-view" style="display:none;">
           <div id="readers-empty-notice" style="background:var(--panel-elevated); border:1px dashed var(--border); border-radius:8px; padding:12px 14px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <div>
-              <span>No downstream client listeners (such as vMix, OBS, or VLC) are currently pulling stream feeds from this gateway.</span>
+              <span>No downstream client listeners are currently pulling stream feeds from this gateway.</span>
               <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Listener Pull URL: srt://103.89.5.211:8890?streamid=read:STREAM_NAME</a>
             </div>
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
 
           <div id="readers-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(59,130,246,0.3);">
-            <table class="inbound-table">
+            <table class="inbound-table" style="table-layout:fixed; width:100%;">
+              <colgroup>
+                <col style="width:22%;">
+                <col style="width:17%;">
+                <col style="width:15%;">
+                <col style="width:11%;">
+                <col style="width:14%;">
+                <col style="width:9%;">
+                <col style="width:12%;">
+              </colgroup>
               <thead>
                 <tr>
                   <th>Stream ID (Target Feed)</th>
-                  <th>Listener IP &amp; Port</th>
+                  <th>Listener Endpoint</th>
                   <th>Egress Bitrate &amp; Loss</th>
                   <th>RTT Latency</th>
-                  <th>Data Sent / Duration</th>
+                  <th>Payload / Duration</th>
                   <th>Health Status</th>
                   <th style="text-align:right;">Actions</th>
                 </tr>
@@ -2007,8 +2028,6 @@ html, body {
               <tbody id="readers-tbody"></tbody>
             </table>
           </div>
-          <!-- Mobile Cards View for Readers (Listeners) -->
-          <div id="readers-mobile-cards" class="mobile-traffic-cards" style="display:none; margin-top:8px;"></div>
         </div>
       </div>
 
@@ -2609,7 +2628,7 @@ html, body {
               </div>
               <div style="width:auto; display:flex; align-items:flex-end;">
                 <button type="button" class="btn-mini" onclick="document.getElementById('upload-logo-1').click()" style="padding:6px 10px; font-size:11px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#e4e4e7; border-radius:4px; cursor:pointer;">
-                  📁 Upload PNG
+                  Upload Asset
                 </button>
                 <input type="file" id="upload-logo-1" accept="image/png,image/webp,image/jpeg" style="display:none;" onchange="uploadOverlayFile('overlay_1')">
               </div>
@@ -2686,7 +2705,7 @@ html, body {
               </div>
               <div style="width:auto; display:flex; align-items:flex-end;">
                 <button type="button" class="btn-mini" onclick="document.getElementById('upload-logo-2').click()" style="padding:6px 10px; font-size:11px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#e4e4e7; border-radius:4px; cursor:pointer;">
-                  📁 Upload PNG
+                  Upload Asset
                 </button>
                 <input type="file" id="upload-logo-2" accept="image/png,image/webp,image/jpeg" style="display:none;" onchange="uploadOverlayFile('overlay_2')">
               </div>
@@ -2796,7 +2815,7 @@ html, body {
         <h2 id="telem-route-name">Route Telemetry</h2>
         <span id="telem-route-id" style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted)"></span>
       </div>
-      <button class="btn-icon" onclick="closeTelemetryModal()">✕</button>
+      <button class="btn-icon" onclick="closeTelemetryModal()" title="Close">&times;</button>
     </div>
 
     <div class="modal-body">
@@ -2912,7 +2931,7 @@ html, body {
   <div class="modal-card" style="width:min(840px, 100%);">
     <div class="modal-header">
       <h2 id="modal-route-title">New Gateway Route</h2>
-      <button class="btn-icon" onclick="closeRouteModal()">✕</button>
+      <button class="btn-icon" onclick="closeRouteModal()" title="Close">&times;</button>
     </div>
 
     <form id="route-form" onsubmit="handleRouteFormSubmit(event)">
@@ -3075,7 +3094,7 @@ html, body {
   <div class="modal-card" style="width:min(420px, 100%);">
     <div class="modal-header">
       <h2>Global Settings &amp; SRT Port</h2>
-      <button class="btn-icon" onclick="closeSrtPortModal()">✕</button>
+      <button class="btn-icon" onclick="closeSrtPortModal()" title="Close">&times;</button>
     </div>
     <div class="modal-body">
       <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">
@@ -3123,7 +3142,7 @@ html, body {
         <h2 style="font-size:17px; font-weight:700;">SRT Connection Endpoints &amp; URLs</h2>
         <span style="font-size:11.5px; color:var(--muted);">Complete connection URL formats for OBS, VLC, vMix, and media players</span>
       </div>
-      <button class="btn-icon" onclick="closeConnectionUrlsModal()">✕</button>
+      <button class="btn-icon" onclick="closeConnectionUrlsModal()" title="Close">&times;</button>
     </div>
 
     <div class="modal-body" style="gap:16px;">
@@ -3397,10 +3416,10 @@ async function pollInboundSrt() {
     const pubTabDot = document.getElementById('srt-pub-tab-dot');
     const readTabDot = document.getElementById('srt-read-tab-dot');
 
-    if (pubBadge) pubBadge.textContent = `${d.total_publishers || 0} INGEST IN`;
-    if (readBadge) readBadge.textContent = `${d.total_readers || 0} LISTENERS OUT`;
+    if (pubBadge) pubBadge.textContent = `${d.total_publishers || 0} Ingest Active`;
+    if (readBadge) readBadge.textContent = `${d.total_readers || 0} Egress Listeners`;
     if (rxBadge) rxBadge.textContent = `↓ ${d.total_rx_rate_mbps || 0} | ↑ ${d.total_tx_rate_mbps || 0} Mbps`;
-    if (portBadge) portBadge.textContent = `PORT ${latestSrtPort}`;
+    if (portBadge) portBadge.textContent = `Port ${latestSrtPort}`;
 
     if (pubCountPill) pubCountPill.textContent = publishers.length;
     if (readCountPill) readCountPill.textContent = readers.length;
@@ -3408,21 +3427,18 @@ async function pollInboundSrt() {
     if (pubTabDot) pubTabDot.className = publishers.length ? 'dot dot-green' : 'dot dot-gray';
     if (readTabDot) readTabDot.className = readers.length ? 'dot dot-blue' : 'dot dot-gray';
 
-    // 1. Render Publishers Table & Mobile Cards
+    // 1. Render Publishers Table (Clean Broadcast Engineering Table)
     const pubEmptyNotice = document.getElementById('inbound-empty-notice');
     const pubTableContainer = document.getElementById('inbound-table-container');
-    const pubMobileCards = document.getElementById('inbound-mobile-cards');
     const pubTbody = document.getElementById('inbound-tbody');
 
     if (pubTbody) {
       if (!publishers.length) {
         if (pubEmptyNotice) pubEmptyNotice.style.display = 'flex';
         if (pubTableContainer) pubTableContainer.style.display = 'none';
-        if (pubMobileCards) pubMobileCards.style.display = 'none';
       } else {
         if (pubEmptyNotice) pubEmptyNotice.style.display = 'none';
         if (pubTableContainer) pubTableContainer.style.display = 'block';
-        if (pubMobileCards) pubMobileCards.style.display = 'flex';
 
         pubTbody.innerHTML = publishers.map(pub => {
           const dotClass = pub.health === 'Healthy' ? 'dot-green' : pub.health === 'Degraded' ? 'dot-amber' : 'dot-red';
@@ -3434,23 +3450,23 @@ async function pollInboundSrt() {
                 <div style="display:flex; align-items:center; gap:6px;">
                   <span class="tag tag-input" style="font-weight:700; font-size:12px;">publish:${escapeHtml(pub.stream_id)}</span>
                 </div>
-                <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">
+                <div style="font-size:11px; color:var(--text-dim); margin-top:3px; overflow:hidden; text-overflow:ellipsis;">
                   ${pub.tracks && pub.tracks.length ? pub.tracks.join(', ') : 'MPEG-TS Ingest'}
                 </div>
               </td>
               <td>
-                <span style="font-family:'JetBrains Mono'; font-weight:600; font-size:12px;">${escapeHtml(pub.remote_addr)}</span>
+                <span style="font-family:'JetBrains Mono'; font-weight:600; font-size:12px; font-variant-numeric:tabular-nums;">${escapeHtml(pub.remote_addr)}</span>
               </td>
               <td>
-                <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">↓ ${pub.mbps_rx} Mbps</div>
-                <div style="font-size:11px; font-family:'JetBrains Mono'; color:${pub.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${pub.loss_pct}% loss</div>
+                <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff; font-variant-numeric:tabular-nums;">↓ ${pub.mbps_rx} Mbps</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:${pub.loss_pct > 1 ? 'var(--red)' : 'var(--green)'}; font-variant-numeric:tabular-nums;">${pub.loss_pct}% loss</div>
               </td>
               <td>
-                <span style="font-family:'JetBrains Mono'; font-weight:600;">${pub.rtt_ms} ms</span>
+                <span style="font-family:'JetBrains Mono'; font-weight:600; font-variant-numeric:tabular-nums;">${pub.rtt_ms} ms</span>
               </td>
               <td>
-                <div style="font-family:'JetBrains Mono'; font-weight:600;">${pub.bytes_received_mb} MB</div>
-                <div style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</div>
+                <div style="font-family:'JetBrains Mono'; font-weight:600; font-variant-numeric:tabular-nums;">${pub.bytes_received_mb} MB</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted); font-variant-numeric:tabular-nums;">${durationFormatted}</div>
               </td>
               <td>
                 <div class="status-indicator">
@@ -3459,8 +3475,9 @@ async function pollInboundSrt() {
                 </div>
               </td>
               <td style="text-align:right;">
-                <div class="action-group" style="justify-content:flex-end;">
+                <div class="action-group" style="justify-content:flex-end; gap:6px;">
                   <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">Preview</button>
+                  <a href="/preview/${encodeURIComponent(pub.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center;">Full Player</a>
                   ${pub.routed
                     ? `<span class="tag tag-active-src" title="Active on route: ${escapeHtml(pub.route_name)}">Routed</span>`
                     : `<button class="btn-icon" style="color:var(--amber); font-weight:600;" onclick="adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">+ Route</button>`
@@ -3470,64 +3487,21 @@ async function pollInboundSrt() {
             </tr>
           `;
         }).join('');
-
-        if (pubMobileCards) {
-          pubMobileCards.innerHTML = publishers.map(pub => {
-            const dotClass = pub.health === 'Healthy' ? 'dot-green' : pub.health === 'Degraded' ? 'dot-amber' : 'dot-red';
-            const durationFormatted = formatSeconds(pub.duration_seconds);
-
-            return `
-              <div class="traffic-card">
-                <div class="traffic-card-header">
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="tag tag-input" style="font-weight:700; font-size:12.5px;">publish:${escapeHtml(pub.stream_id)}</span>
-                    <span class="dot ${dotClass}"></span>
-                    <span style="font-size:11px; font-weight:600; color:#fff;">${pub.health}</span>
-                  </div>
-                  <span style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</span>
-                </div>
-                <div class="traffic-card-grid">
-                  <div>
-                    <div style="color:var(--text-dim); font-size:10px;">BITRATE &amp; LOSS</div>
-                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">↓ ${pub.mbps_rx} Mbps</div>
-                    <div style="font-size:10.5px; color:${pub.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${pub.loss_pct}% loss</div>
-                  </div>
-                  <div>
-                    <div style="color:var(--text-dim); font-size:10px;">LATENCY &amp; CLIENT</div>
-                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">${pub.rtt_ms} ms RTT</div>
-                    <div style="font-size:10px; color:var(--muted);">${escapeHtml(pub.remote_addr)}</div>
-                  </div>
-                </div>
-                <div class="traffic-card-actions">
-                  <button type="button" class="btn-preview-lg" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">
-                    ▶ PREVIEW FEED
-                  </button>
-                  <a href="/preview/${encodeURIComponent(pub.stream_id)}" target="_blank" class="btn-icon" style="text-decoration:none; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:11px; min-height:42px; border-radius:6px; color:#fff; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); touch-action:manipulation;">
-                    ⛶ Full Player
-                  </a>
-                </div>
-              </div>
-            `;
-          }).join('');
-        }
       }
     }
 
-    // 2. Render Readers / Listeners Table & Mobile Cards
+    // 2. Render Readers Table (Clean Broadcast Engineering Table)
     const rdrEmptyNotice = document.getElementById('readers-empty-notice');
     const rdrTableContainer = document.getElementById('readers-table-container');
-    const rdrMobileCards = document.getElementById('readers-mobile-cards');
     const rdrTbody = document.getElementById('readers-tbody');
 
     if (rdrTbody) {
       if (!readers.length) {
         if (rdrEmptyNotice) rdrEmptyNotice.style.display = 'flex';
         if (rdrTableContainer) rdrTableContainer.style.display = 'none';
-        if (rdrMobileCards) rdrMobileCards.style.display = 'none';
       } else {
         if (rdrEmptyNotice) rdrEmptyNotice.style.display = 'none';
         if (rdrTableContainer) rdrTableContainer.style.display = 'block';
-        if (rdrMobileCards) rdrMobileCards.style.display = 'flex';
 
         rdrTbody.innerHTML = readers.map(rdr => {
           const dotClass = rdr.health === 'Healthy' ? 'dot-green' : rdr.health === 'Degraded' ? 'dot-amber' : 'dot-red';
@@ -3540,25 +3514,25 @@ async function pollInboundSrt() {
                 <div style="display:flex; align-items:center; gap:6px;">
                   <span class="tag tag-reader" style="font-weight:700; font-size:12px;">read:${escapeHtml(rdr.stream_id)}</span>
                 </div>
-                <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">
+                <div style="font-size:11px; color:var(--text-dim); margin-top:3px; overflow:hidden; text-overflow:ellipsis;">
                   ${rdr.tracks && rdr.tracks.length ? rdr.tracks.join(', ') : 'Live SRT Egress'}
                 </div>
               </td>
               <td>
-                <span style="font-family:'JetBrains Mono'; font-weight:600; font-size:12px; color:#fff;">${escapeHtml(rdr.remote_addr)}</span>
+                <span style="font-family:'JetBrains Mono'; font-weight:600; font-size:12px; color:#fff; font-variant-numeric:tabular-nums;">${escapeHtml(rdr.remote_addr)}</span>
                 <div style="font-size:11px; color:var(--muted); margin-top:2px;">Downstream Receiver</div>
               </td>
               <td>
-                <div style="font-family:'JetBrains Mono'; font-weight:700; color:#60a5fa;">↑ ${rdr.mbps_tx} Mbps</div>
-                <div style="font-size:11px; font-family:'JetBrains Mono'; color:${rdr.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${rdr.loss_pct}% loss (${rdr.dropped_packets} drops)</div>
+                <div style="font-family:'JetBrains Mono'; font-weight:700; color:#60a5fa; font-variant-numeric:tabular-nums;">↑ ${rdr.mbps_tx} Mbps</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:${rdr.loss_pct > 1 ? 'var(--red)' : 'var(--green)'}; font-variant-numeric:tabular-nums;">${rdr.loss_pct}% loss (${rdr.dropped_packets} drops)</div>
               </td>
               <td>
-                <span style="font-family:'JetBrains Mono'; font-weight:600;">${rdr.rtt_ms} ms</span>
+                <span style="font-family:'JetBrains Mono'; font-weight:600; font-variant-numeric:tabular-nums;">${rdr.rtt_ms} ms</span>
                 <div style="font-size:11px; color:var(--text-dim);">${rdr.link_capacity_mbps > 0 ? rdr.link_capacity_mbps + ' Mbps link' : 'RTT latency'}</div>
               </td>
               <td>
-                <div style="font-family:'JetBrains Mono'; font-weight:600;">${rdr.bytes_mb} MB sent</div>
-                <div style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</div>
+                <div style="font-family:'JetBrains Mono'; font-weight:600; font-variant-numeric:tabular-nums;">${rdr.bytes_mb} MB sent</div>
+                <div style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted); font-variant-numeric:tabular-nums;">${durationFormatted}</div>
               </td>
               <td>
                 <div class="status-indicator">
@@ -3567,55 +3541,15 @@ async function pollInboundSrt() {
                 </div>
               </td>
               <td style="text-align:right;">
-                <div class="action-group" style="justify-content:flex-end;">
+                <div class="action-group" style="justify-content:flex-end; gap:6px;">
                   <button class="btn-icon" style="color:#60a5fa; font-weight:600;" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">Preview</button>
+                  <a href="/preview/${encodeURIComponent(rdr.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center;">Full Player</a>
                   <button class="btn-icon" onclick="copyToClipboard('${readUrl}')" title="Copy SRT Pull URL">Copy</button>
                 </div>
               </td>
             </tr>
           `;
         }).join('');
-
-        if (rdrMobileCards) {
-          rdrMobileCards.innerHTML = readers.map(rdr => {
-            const dotClass = rdr.health === 'Healthy' ? 'dot-green' : rdr.health === 'Degraded' ? 'dot-amber' : 'dot-red';
-            const durationFormatted = formatSeconds(rdr.duration_seconds);
-            const readUrl = `srt://${SERVER_PUBLIC_IP}:${latestSrtPort}?streamid=read:${encodeURIComponent(rdr.stream_id)}`;
-
-            return `
-              <div class="traffic-card" style="border-color:rgba(59,130,246,0.3);">
-                <div class="traffic-card-header">
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="tag tag-reader" style="font-weight:700; font-size:12.5px;">read:${escapeHtml(rdr.stream_id)}</span>
-                    <span class="dot ${dotClass}"></span>
-                    <span style="font-size:11px; font-weight:600; color:#fff;">${rdr.health}</span>
-                  </div>
-                  <span style="font-size:11px; font-family:'JetBrains Mono'; color:var(--muted);">${durationFormatted}</span>
-                </div>
-                <div class="traffic-card-grid">
-                  <div>
-                    <div style="color:var(--text-dim); font-size:10px;">EGRESS BITRATE</div>
-                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#60a5fa;">↑ ${rdr.mbps_tx} Mbps</div>
-                    <div style="font-size:10.5px; color:${rdr.loss_pct > 1 ? 'var(--red)' : 'var(--green)'};">${rdr.loss_pct}% loss</div>
-                  </div>
-                  <div>
-                    <div style="color:var(--text-dim); font-size:10px;">RECEIVER CLIENT</div>
-                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">${rdr.rtt_ms} ms RTT</div>
-                    <div style="font-size:10px; color:var(--muted);">${escapeHtml(rdr.remote_addr)}</div>
-                  </div>
-                </div>
-                <div class="traffic-card-actions">
-                  <button type="button" class="btn-preview-lg" style="border-color:#3b82f6; color:#60a5fa; background:rgba(59,130,246,0.15);" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">
-                    ▶ PREVIEW FEED
-                  </button>
-                  <button type="button" class="btn-icon" style="font-weight:600; font-size:11px; min-height:42px; border-radius:6px; color:#fff; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15);" onclick="copyToClipboard('${readUrl}')">
-                    📋 Copy SRT URL
-                  </button>
-                </div>
-              </div>
-            `;
-          }).join('');
-        }
       }
     }
 
@@ -3747,14 +3681,16 @@ function copyInputVal(id) {
 }
 
 function formatSeconds(secs) {
-  if (!secs) return '00:00';
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  const h = Math.floor(m / 60);
-  if (h > 0) {
-    return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  secs = Math.max(0, parseInt(secs) || 0);
+  const d = Math.floor(secs / 86400);
+  const rem = secs % 86400;
+  const h = Math.floor(rem / 3600);
+  const m = Math.floor((rem % 3600) / 60);
+  const s = rem % 60;
+  if (d > 0) {
+    return `${d}d:${String(h).padStart(2, '0')}h:${String(m).padStart(2, '0')}m:${String(s).padStart(2, '0')}s`;
   }
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 function previewIncomingStream(streamId) {
@@ -4194,8 +4130,8 @@ async function pollTelemetry() {
             <div><span style="color:var(--muted);">Health:</span> <b style="color:${pub.health === 'Critical' ? '#ef4444' : (pub.health === 'Degraded' ? '#f59e0b' : '#22c55e')};">${pub.health}</b></div>
           </div>
           <div style="display:flex; gap:8px;">
-            <button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--cyan); font-weight:600;" onclick="copyToClipboard('srt://${d.server_host || location.hostname}:${d.srt_port || 8890}?streamid=read:${encodeURIComponent(pub.stream_id)}&latency=2000000', 'SRT Read URL Copied!')">📋 Copy Read URL</button>
-            ${!pub.routed ? `<button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--green); font-weight:600;" onclick="closeTelemetryModal(); adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">➕ Create Route</button>` : ''}
+            <button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--cyan); font-weight:600;" onclick="copyToClipboard('srt://${d.server_host || location.hostname}:${d.srt_port || 8890}?streamid=read:${encodeURIComponent(pub.stream_id)}&latency=2000000', 'SRT Read URL Copied!')">Copy Read URL</button>
+            ${!pub.routed ? `<button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--green); font-weight:600;" onclick="closeTelemetryModal(); adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">Create Route</button>` : ''}
           </div>
         `;
       }
@@ -4222,7 +4158,7 @@ async function pollTelemetry() {
         destList.innerHTML = `
           <div style="color:var(--muted); font-size:12px; padding:6px 0;">
             No external listeners currently reading <code style="color:var(--cyan);">read:${escapeHtml(pub.stream_id)}</code>.
-            ${pub.routed ? `<div style="margin-top:6px; color:#22c55e; font-size:11.5px;">✓ Routing active: <b>${escapeHtml(pub.route_name || 'Configured Route')}</b></div>` : '<div style="margin-top:6px; font-size:11.5px;">Stream is available for pull or routing.</div>'}
+            ${pub.routed ? `<div style="margin-top:6px; color:#22c55e; font-size:11.5px;">Active on Route: <b>${escapeHtml(pub.route_name || 'Configured Route')}</b></div>` : '<div style="margin-top:6px; font-size:11.5px;">Stream is available for pull or routing.</div>'}
           </div>
         `;
       }
@@ -4651,7 +4587,7 @@ function addDestinationRow(data = {}) {
           <option value="copy" ${mode==='copy'?'selected':''}>Direct Copy (0% CPU)</option>
           <option value="transcode" ${mode==='transcode'?'selected':''}>Transcode &amp; Process</option>
         </select>
-        <button type="button" class="btn-icon btn-danger" style="padding:6px 12px; min-height:34px;" onclick="this.closest('.dest-card').remove()" title="Remove Output">✕ Remove</button>
+        <button type="button" class="btn-icon btn-danger" style="padding:6px 12px; min-height:34px;" onclick="this.closest('.dest-card').remove()" title="Remove Output">Remove Output</button>
       </div>
     </div>
 
@@ -5741,13 +5677,13 @@ function toggleHyperdeckAudioListen(e) {
 
   if (btn) {
     if (hdAudioListening) {
-      btn.textContent = '🔊';
+      btn.textContent = 'Mute';
       btn.classList.add('active');
-      btn.title = 'Audio monitor AKTIF (Speaker bersuara). Klik untuk Mute.';
+      btn.title = 'Audio monitor active. Click to mute.';
     } else {
-      btn.textContent = '🔇';
+      btn.textContent = 'Unmute';
       btn.classList.remove('active');
-      btn.title = 'Audio monitor MUTED. Click to unmute speaker.';
+      btn.title = 'Audio monitor muted. Click to unmute.';
     }
   }
 }
