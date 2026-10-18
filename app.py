@@ -1131,15 +1131,34 @@ def supervisor_thread():
                         continue
 
                     # Collect metrics for active route
-                    active_src = info.get("active_source", "primary")
-                    src_cfg = route["primary_source"] if active_src == "primary" else route.get("secondary_source", {})
-                    stream_id = src_cfg.get("stream_id", "")
+                    # Check all stream IDs and paths belonging to this route
+                    route_stream_ids = set()
+                    p_sid = route.get("primary_source", {}).get("stream_id", "").strip()
+                    if p_sid:
+                        route_stream_ids.add(p_sid)
+                    s_sid = route.get("secondary_source", {}).get("stream_id", "").strip()
+                    if s_sid:
+                        route_stream_ids.add(s_sid)
+                    for d in route.get("destinations", []):
+                        d_sid = d.get("stream_id", "").strip()
+                        if d_sid:
+                            route_stream_ids.add(d_sid)
+                    route_stream_ids.add(rid)
+                    if not rid.startswith("route_"):
+                        route_stream_ids.add(f"route_{rid}")
 
                     # Check MediaMTX SRT publisher
                     matched_conn = None
                     for conn in srt_conns:
-                        if conn.get("state") == "publish" and conn.get("path") == stream_id:
-                            matched_conn = conn
+                        if conn.get("state") == "publish" and conn.get("path") in route_stream_ids:
+                            if not matched_conn or float(conn.get("mbpsReceiveRate", 0)) > float(matched_conn.get("mbpsReceiveRate", 0)):
+                                matched_conn = conn
+
+                    # Check MediaMTX path entries
+                    path_entry = None
+                    for sid in route_stream_ids:
+                        if sid in paths_map and paths_map[sid].get("ready"):
+                            path_entry = paths_map[sid]
                             break
 
                     stats = info.get("stats", {})
@@ -1156,27 +1175,29 @@ def supervisor_thread():
                         stats["link_capacity_mbps"] = round(float(matched_conn.get("mbpsLinkCapacity", 0.0)), 2)
                         stats["total_bytes_mb"] = round(int(matched_conn.get("bytesReceived", 0)) / (1024 * 1024), 2)
                         stats["health"] = classify_health(rtt, loss_rate, drops)
-                    else:
-                        # Process running, measure metrics from MediaMTX path
-                        path_entry = paths_map.get(f"route_{rid}") or paths_map.get(stream_id)
-                        if path_entry and path_entry.get("ready"):
+                        if path_entry:
                             tracks = path_entry.get("tracks", [])
-                            stats["health"] = "Healthy"
-                            cur_bytes = path_entry.get("bytesReceived", 0)
-                            prev_bytes = info.get("last_bytes", cur_bytes)
-                            prev_time = info.get("last_time", now)
-                            dt = max(0.5, now - prev_time)
-                            rx_rate = max(0.0, ((cur_bytes - prev_bytes) * 8) / (dt * 1_000_000))
-                            info["last_bytes"] = cur_bytes
-                            info["last_time"] = now
-                            if rx_rate > 0:
-                                stats["receive_rate_mbps"] = round(rx_rate, 2)
-                            stats["total_bytes_mb"] = round(cur_bytes / (1024 * 1024), 2)
                             if tracks and (stats.get("resolution") == "Waiting for stream" or stats.get("resolution") == "--"):
                                 stats["resolution"] = "1920x1080 (HD)"
                                 stats["framerate"] = "25 fps"
-                        else:
-                            stats["health"] = "Connecting" if (time.time() - info.get("started_at", 0)) < 10 else "Disconnected"
+                    elif path_entry and path_entry.get("ready"):
+                        tracks = path_entry.get("tracks", [])
+                        stats["health"] = "Healthy"
+                        cur_bytes = path_entry.get("bytesReceived", 0)
+                        prev_bytes = info.get("last_bytes")
+                        prev_time = info.get("last_time", now)
+                        dt = max(0.5, now - prev_time)
+                        if prev_bytes is not None and cur_bytes >= prev_bytes:
+                            rx_rate = max(0.0, ((cur_bytes - prev_bytes) * 8) / (dt * 1_000_000))
+                            stats["receive_rate_mbps"] = round(rx_rate, 2)
+                        info["last_bytes"] = cur_bytes
+                        info["last_time"] = now
+                        stats["total_bytes_mb"] = round(cur_bytes / (1024 * 1024), 2)
+                        if tracks and (stats.get("resolution") == "Waiting for stream" or stats.get("resolution") == "--"):
+                            stats["resolution"] = "1920x1080 (HD)"
+                            stats["framerate"] = "25 fps"
+                    else:
+                        stats["health"] = "Connecting" if (time.time() - info.get("started_at", 0)) < 10 else "Disconnected"
 
                     info["stats"] = stats
 
@@ -2192,9 +2213,27 @@ def api_srt_inbound():
     paths = get_mediamtx_paths()
     paths_map = {p.get("name"): p for p in paths if isinstance(p, dict)}
     routes = load_routes()
-    routes_map = {r.get("primary_source", {}).get("stream_id"): r for r in routes}
+    # Build bidirectional map of all path names associated with each route
+    route_by_path = {}
+    for r in routes:
+        rid = r.get("id")
+        if not rid:
+            continue
+        route_by_path[rid] = r
+        if not rid.startswith("route_"):
+            route_by_path[f"route_{rid}"] = r
+        p_sid = r.get("primary_source", {}).get("stream_id", "").strip()
+        if p_sid:
+            route_by_path[p_sid] = r
+        s_sid = r.get("secondary_source", {}).get("stream_id", "").strip()
+        if s_sid:
+            route_by_path[s_sid] = r
+        for d in r.get("destinations", []):
+            d_sid = d.get("stream_id", "").strip()
+            if d_sid:
+                route_by_path[d_sid] = r
 
-    publishers = []
+    consolidated_pubs = {}
     readers = []
     total_rx_rate = 0.0
     total_tx_rate = 0.0
@@ -2248,50 +2287,125 @@ def api_srt_inbound():
 
         health = classify_health(rtt, loss_pct, drops)
         tracks = path_info.get("tracks", [])
-        matched_route = routes_map.get(path_name)
+        matched_route = route_by_path.get(path_name)
 
-        conn_item = {
-            "id": c.get("id"),
-            "stream_id": path_name,
-            "remote_addr": remote_addr,
-            "state": state,
-            "mbps_rate": tx_rate if state == "read" else rx_rate,
-            "mbps_rx": rx_rate,
-            "mbps_tx": tx_rate,
-            "rtt_ms": rtt,
-            "loss_pct": loss_pct,
-            "dropped_packets": drops,
-            "retransmitted_packets": int(c.get("packetsReceivedRetrans", 0) if state == "publish" else c.get("packetsRetrans", 0)),
-            "packet_loss_count": int(c.get("packetsReceivedLoss", 0) if state == "publish" else c.get("packetsSendLoss", 0)),
-            "buffer_delay_ms": int(c.get("msReceiveTsbPdDelay", 0) if state == "publish" else c.get("msSendTsbPdDelay", 0)),
-            "buffer_current_ms": int(c.get("msReceiveBuf", 0) if state == "publish" else c.get("msSendBuf", 0)),
-            "bytes_mb": bytes_mb,
-            "bytes_received_mb": bytes_mb,
-            "link_capacity_mbps": round(float(c.get("mbpsLinkCapacity", 0)), 2),
-            "duration_seconds": max(0, duration_sec),
-            "health": health,
-            "tracks": tracks,
-            "routed": bool(matched_route),
-            "route_id": matched_route.get("id") if matched_route else None,
-            "route_name": matched_route.get("name") if matched_route else None
-        }
-
-        if state == "publish":
-            publishers.append(conn_item)
+        if state == "read":
+            readers.append({
+                "id": c.get("id"),
+                "stream_id": path_name,
+                "remote_addr": remote_addr,
+                "state": "read",
+                "mbps_rate": tx_rate,
+                "mbps_rx": rx_rate,
+                "mbps_tx": tx_rate,
+                "rtt_ms": rtt,
+                "loss_pct": loss_pct,
+                "dropped_packets": drops,
+                "retransmitted_packets": int(c.get("packetsRetrans", 0)),
+                "packet_loss_count": int(c.get("packetsSendLoss", 0)),
+                "buffer_delay_ms": int(c.get("msSendTsbPdDelay", 0)),
+                "buffer_current_ms": int(c.get("msSendBuf", 0)),
+                "bytes_mb": bytes_mb,
+                "bytes_received_mb": bytes_mb,
+                "link_capacity_mbps": round(float(c.get("mbpsLinkCapacity", 0)), 2),
+                "duration_seconds": max(0, duration_sec),
+                "health": health,
+                "tracks": tracks,
+                "routed": bool(matched_route),
+                "route_id": matched_route.get("id") if matched_route else None,
+                "route_name": matched_route.get("name") if matched_route else None
+            })
         else:
-            readers.append(conn_item)
+            # Publisher
+            if matched_route:
+                route_id = matched_route.get("id")
+                is_local = "127.0.0.1" in remote_addr or "localhost" in remote_addr
+                client_disp = "127.0.0.1 (Route Engine)" if is_local else remote_addr
+                if route_id not in consolidated_pubs:
+                    consolidated_pubs[route_id] = {
+                        "id": c.get("id"),
+                        "stream_id": path_name,
+                        "preview_stream_id": route_id,
+                        "remote_addr": client_disp,
+                        "state": "publish",
+                        "mbps_rate": rx_rate,
+                        "mbps_rx": rx_rate,
+                        "mbps_tx": tx_rate,
+                        "rtt_ms": rtt,
+                        "loss_pct": loss_pct,
+                        "dropped_packets": drops,
+                        "retransmitted_packets": int(c.get("packetsReceivedRetrans", 0)),
+                        "packet_loss_count": int(c.get("packetsReceivedLoss", 0)),
+                        "buffer_delay_ms": int(c.get("msReceiveTsbPdDelay", 0)),
+                        "buffer_current_ms": int(c.get("msReceiveBuf", 0)),
+                        "bytes_mb": bytes_mb,
+                        "bytes_received_mb": bytes_mb,
+                        "link_capacity_mbps": round(float(c.get("mbpsLinkCapacity", 0)), 2),
+                        "duration_seconds": max(0, duration_sec),
+                        "health": health,
+                        "tracks": tracks,
+                        "routed": True,
+                        "route_id": route_id,
+                        "route_name": matched_route.get("name")
+                    }
+                else:
+                    item = consolidated_pubs[route_id]
+                    if rx_rate > item["mbps_rx"]:
+                        item["mbps_rx"] = rx_rate
+                        item["mbps_rate"] = rx_rate
+                        item["stream_id"] = path_name
+                        item["rtt_ms"] = rtt
+                        item["loss_pct"] = loss_pct
+                    item["bytes_received_mb"] = max(item["bytes_received_mb"], bytes_mb)
+                    item["duration_seconds"] = max(item["duration_seconds"], duration_sec)
+                    if tracks and not item["tracks"]:
+                        item["tracks"] = tracks
+            else:
+                ext_key = f"ext_{c.get('id', path_name)}"
+                consolidated_pubs[ext_key] = {
+                    "id": c.get("id"),
+                    "stream_id": path_name,
+                    "preview_stream_id": path_name,
+                    "remote_addr": remote_addr,
+                    "state": "publish",
+                    "mbps_rate": rx_rate,
+                    "mbps_rx": rx_rate,
+                    "mbps_tx": tx_rate,
+                    "rtt_ms": rtt,
+                    "loss_pct": loss_pct,
+                    "dropped_packets": drops,
+                    "retransmitted_packets": int(c.get("packetsReceivedRetrans", 0)),
+                    "packet_loss_count": int(c.get("packetsReceivedLoss", 0)),
+                    "buffer_delay_ms": int(c.get("msReceiveTsbPdDelay", 0)),
+                    "buffer_current_ms": int(c.get("msReceiveBuf", 0)),
+                    "bytes_mb": bytes_mb,
+                    "bytes_received_mb": bytes_mb,
+                    "link_capacity_mbps": round(float(c.get("mbpsLinkCapacity", 0)), 2),
+                    "duration_seconds": max(0, duration_sec),
+                    "health": health,
+                    "tracks": tracks,
+                    "routed": False,
+                    "route_id": None,
+                    "route_name": None
+                }
 
-    # Also discover active inbound feeds published via RTMP/RTSP (e.g. from Mobile Camera Broadcaster)
-    existing_pub_paths = {p.get("stream_id") for p in publishers}
+    # Also discover RTMP/RTSP paths (e.g. mobile camera broadcaster or route preview)
     for p in paths:
         if not isinstance(p, dict):
             continue
         p_name = p.get("name", "")
-        if not p_name or p_name in existing_pub_paths:
+        if not p_name:
             continue
         source = p.get("source", {})
-        if isinstance(source, dict) and source.get("type"):
-            matched_route = routes_map.get(p_name)
+        if not (isinstance(source, dict) and source.get("type")):
+            continue
+
+        matched_route = route_by_path.get(p_name)
+        if matched_route:
+            route_id = matched_route.get("id")
+            # If this route is already represented by an active SRT publisher, do not duplicate!
+            if route_id in consolidated_pubs:
+                continue
             tracks = p.get("tracks", [])
             bytes_count = int(p.get("bytesReceived", 0))
             bytes_mb = round(bytes_count / (1024 * 1024), 2)
@@ -2304,10 +2418,11 @@ def api_srt_inbound():
                     rtmp_duration = max(0, int(now - dt.timestamp()))
                 except Exception:
                     pass
-            publishers.append({
+            consolidated_pubs[route_id] = {
                 "id": source.get("id", p_name),
                 "stream_id": p_name,
-                "remote_addr": f"{source.get('type', 'rtmp')}",
+                "preview_stream_id": route_id,
+                "remote_addr": "127.0.0.1 (Route Engine)",
                 "state": "publish",
                 "mbps_rate": 0.0,
                 "mbps_rx": 0.0,
@@ -2323,11 +2438,53 @@ def api_srt_inbound():
                 "bytes_sent_mb": 0.0,
                 "duration_seconds": rtmp_duration,
                 "health": "Healthy",
-                "tracks": tracks if tracks else ["Camera Broadcaster"],
-                "routed": bool(matched_route),
-                "route_id": matched_route.get("id") if matched_route else None,
-                "route_name": matched_route.get("name") if matched_route else None
-            })
+                "tracks": tracks if tracks else ["H264", "MPEG-4 Audio"],
+                "routed": True,
+                "route_id": route_id,
+                "route_name": matched_route.get("name")
+            }
+        else:
+            # External RTMP publisher (e.g. mobile camera)
+            if not any(pub.get("stream_id") == p_name for pub in consolidated_pubs.values()):
+                tracks = p.get("tracks", [])
+                bytes_count = int(p.get("bytesReceived", 0))
+                bytes_mb = round(bytes_count / (1024 * 1024), 2)
+                ready_str = p.get("readyTime") or p.get("onlineTime") or ""
+                rtmp_duration = 0
+                if ready_str:
+                    try:
+                        clean_ready = re.sub(r'(\.\d{6})\d+', r'\1', ready_str.replace("Z", "+00:00"))
+                        dt = datetime.fromisoformat(clean_ready)
+                        rtmp_duration = max(0, int(now - dt.timestamp()))
+                    except Exception:
+                        pass
+                consolidated_pubs[f"ext_rtmp_{p_name}"] = {
+                    "id": source.get("id", p_name),
+                    "stream_id": p_name,
+                    "preview_stream_id": p_name,
+                    "remote_addr": f"{source.get('type', 'rtmp')}",
+                    "state": "publish",
+                    "mbps_rate": 0.0,
+                    "mbps_rx": 0.0,
+                    "mbps_tx": 0.0,
+                    "rtt_ms": 0,
+                    "loss_pct": 0.0,
+                    "dropped_packets": 0,
+                    "retransmitted_packets": 0,
+                    "packet_loss_count": 0,
+                    "buffer_delay_ms": 0,
+                    "buffer_current_ms": 0,
+                    "bytes_received_mb": bytes_mb,
+                    "bytes_sent_mb": 0.0,
+                    "duration_seconds": rtmp_duration,
+                    "health": "Healthy",
+                    "tracks": tracks if tracks else ["Camera Broadcaster"],
+                    "routed": False,
+                    "route_id": None,
+                    "route_name": None
+                }
+
+    publishers = list(consolidated_pubs.values())
 
     port_info = {"port": 8890}
     try:

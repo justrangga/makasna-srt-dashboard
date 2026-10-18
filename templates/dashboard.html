@@ -3577,6 +3577,12 @@ async function pollInboundSrt() {
                 <div style="display:flex; align-items:center; gap:6px;">
                   <span class="tag tag-input" style="font-weight:700; font-size:12px;">publish:${escapeHtml(pub.stream_id)}</span>
                 </div>
+                ${pub.routed && pub.route_name ? `
+                  <div style="font-size:11px; margin-top:3px; display:flex; align-items:center; gap:6px;">
+                    <span class="tag tag-active-src" style="font-size:10px; padding:2px 6px; font-weight:700;">ROUTE: ${escapeHtml(pub.route_name)}</span>
+                    ${pub.preview_stream_id && pub.preview_stream_id !== pub.stream_id ? `<span style="color:var(--text-dim); font-size:10.5px;">(Preview: ${escapeHtml(pub.preview_stream_id)})</span>` : ''}
+                  </div>
+                ` : ''}
                 <div style="font-size:11px; color:var(--text-dim); margin-top:3px; overflow:hidden; text-overflow:ellipsis;">
                   ${pub.tracks && pub.tracks.length ? pub.tracks.join(', ') : 'MPEG-TS Ingest'}
                 </div>
@@ -3603,10 +3609,10 @@ async function pollInboundSrt() {
               </td>
               <td style="text-align:right; overflow:visible !important; white-space:nowrap !important;">
                 <div class="action-group" style="display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:nowrap;">
-                  <button class="btn-icon" style="color:var(--cyan); font-weight:600; padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="previewIncomingStream('${escapeHtml(pub.stream_id)}')">Preview</button>
-                  <a href="/preview/${encodeURIComponent(pub.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; flex-shrink:0; white-space:nowrap;">Full Player</a>
+                  <button class="btn-icon" style="color:var(--cyan); font-weight:600; padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="previewIncomingStream('${escapeHtml(pub.preview_stream_id || pub.stream_id)}')">Preview</button>
+                  <a href="/preview/${encodeURIComponent(pub.preview_stream_id || pub.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; flex-shrink:0; white-space:nowrap;">Full Player</a>
                   ${pub.routed
-                    ? `<span class="tag tag-active-src" style="flex-shrink:0; padding:6px 10px; white-space:nowrap;" title="Active on route: ${escapeHtml(pub.route_name)}">Routed</span>`
+                    ? `<span class="tag tag-active-src" style="flex-shrink:0; padding:6px 10px; white-space:nowrap;" title="Active on route: ${escapeHtml(pub.route_name)}">ROUTED (${escapeHtml(pub.route_name)})</span>`
                     : `<button class="btn-icon" style="color:var(--amber); font-weight:600; padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">+ Route</button>`
                   }
                 </div>
@@ -3914,11 +3920,19 @@ function renderRoutes() {
     }).join(' ') || '<span style="color:var(--text-dim)">None</span>';
 
     let qview = '<span style="color:var(--text-dim)">--</span>';
-    if (r.running && r.stats) {
-      qview = `<span style="font-family:'JetBrains Mono'; font-size:12px;">↓ ${r.stats.receive_rate_mbps || 0} Mbps · ${r.stats.rtt_ms || 0}ms</span>`;
+    if (r.running) {
+      if (r.stats) {
+        const mbps = (r.stats.receive_rate_mbps !== undefined && r.stats.receive_rate_mbps !== null) ? r.stats.receive_rate_mbps : 0;
+        const rtt = r.stats.rtt_ms || 0;
+        if (mbps > 0 || rtt > 0) {
+          qview = `<span style="font-family:'JetBrains Mono'; font-size:12px; color:var(--text-bright);">↓ ${mbps} Mbps · ${rtt}ms</span>`;
+        } else {
+          qview = `<span style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan);">Active · Synchronizing</span>`;
+        }
+      } else {
+        qview = `<span style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan);">Active</span>`;
+      }
     }
-
-    const recTag = r.is_recording ? `<span class="tag" style="background:rgba(239,68,68,0.2); color:#ef4444; border-color:#ef4444; font-weight:700; font-family:'JetBrains Mono'; margin-left:6px;"><span class="pulse-rec">●</span> REC</span>` : '';
 
     return `
       <tr>
@@ -3926,7 +3940,6 @@ function renderRoutes() {
           <div class="status-indicator">
             <span class="dot ${dotClass}"></span>
             <span style="font-weight:600;">${escapeHtml(r.name)}</span>
-            ${recTag}
           </div>
           <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">ID: ${r.id} · ${statusText}</div>
         </td>
@@ -3939,12 +3952,6 @@ function renderRoutes() {
             ${r.running 
               ? `<button class="btn-icon btn-stop" onclick="stopRoute('${r.id}')">Stop</button>`
               : `<button class="btn-icon btn-start" onclick="startRoute('${r.id}')">Start</button>`
-            }
-            ${r.running
-              ? (r.is_recording 
-                  ? `<button class="btn-icon btn-rec-active" onclick="quickStopRec('${r.id}')" title="Stop Recording"><span class="pulse-rec">●</span> STOP REC</button>`
-                  : `<button class="btn-icon btn-rec" onclick="quickStartRec('${r.id}')" title="Record this camera">● REC</button>`)
-              : ''
             }
             <button class="btn-icon" onclick="inspectRoute('${r.id}')">Inspect</button>
             <button class="btn-icon" onclick="cloneRoute('${r.id}')">Clone</button>
@@ -3963,13 +3970,17 @@ function renderRoutes() {
     const activeSrc = (r.current_active_source || 'primary').toUpperCase();
     const p = r.primary_source;
     const inputTag = `${p.type.toUpperCase()}:${p.port || p.stream_id}`;
-    const recTag = r.is_recording ? `<span class="tag" style="background:rgba(239,68,68,0.2); color:#ef4444; border-color:#ef4444; font-weight:700; font-family:'JetBrains Mono'; margin-left:6px;"><span class="pulse-rec">●</span> REC</span>` : '';
     
     let rateText = '--';
     let rttText = '--';
-    if (r.running && r.stats) {
-      rateText = `↓ ${r.stats.receive_rate_mbps || 0} Mbps`;
-      rttText = `${r.stats.rtt_ms || 0} ms`;
+    if (r.running) {
+      if (r.stats) {
+        const mbps = (r.stats.receive_rate_mbps !== undefined && r.stats.receive_rate_mbps !== null) ? r.stats.receive_rate_mbps : 0;
+        rateText = mbps > 0 ? `↓ ${mbps} Mbps` : 'Active';
+        rttText = `${r.stats.rtt_ms || 0} ms`;
+      } else {
+        rateText = 'Active';
+      }
     }
 
     return `
@@ -3978,7 +3989,6 @@ function renderRoutes() {
           <div class="route-card-title">
             <span class="dot ${dotClass}"></span>
             <span>${escapeHtml(r.name)}</span>
-            ${recTag}
           </div>
           <span class="tag tag-active-src">${statusText}</span>
         </div>
@@ -4006,12 +4016,6 @@ function renderRoutes() {
           ${r.running 
             ? `<button class="btn-icon btn-stop" onclick="stopRoute('${r.id}')">Stop</button>`
             : `<button class="btn-icon btn-start" onclick="startRoute('${r.id}')">Start</button>`
-          }
-          ${r.running
-            ? (r.is_recording 
-                ? `<button class="btn-icon btn-rec-active" onclick="quickStopRec('${r.id}')"><span class="pulse-rec">●</span> STOP REC</button>`
-                : `<button class="btn-icon btn-rec" onclick="quickStartRec('${r.id}')">● REC</button>`)
-            : ''
           }
           <button class="btn-icon" onclick="inspectRoute('${r.id}')">Inspect</button>
           <button class="btn-icon" onclick="editRoute('${r.id}')">Edit</button>
