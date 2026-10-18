@@ -392,10 +392,14 @@ def build_source_url(source_config):
         return f"rtsp://127.0.0.1:8554/{stream_id or 'live'}"
     elif stype == "srt_listener":
         # Bind SRT listener on specified port (listen for incoming push)
+        # Always bind to 0.0.0.0 to allow incoming connections from any network interface
+        bind_addr = "0.0.0.0" if (not addr or addr in ("127.0.0.1", "localhost")) else addr
         opts = [f"mode=listener", f"latency={int(latency) * 1000}"]
+        if stream_id:
+            opts.append(f"streamid={stream_id}")
         if passphrase:
             opts.append(f"passphrase={passphrase}")
-        return f"srt://{addr}:{port}?" + "&".join(opts)
+        return f"srt://{bind_addr}:{port}?" + "&".join(opts)
     elif stype == "srt_caller":
         # Connect / pull from remote external SRT server
         opts = [f"mode=caller", f"latency={int(latency) * 1000}"]
@@ -500,7 +504,8 @@ def build_video_filters(dest, overlay_cfg=None):
 
 def build_ffmpeg_cmd(route, source_config):
     input_url = build_source_url(source_config)
-    route_id = route["id"]
+    route_id = str(route["id"]).strip()
+    stream_path = route_id if route_id.startswith("route_") else f"route_{route_id}"
 
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-y"]
 
@@ -522,7 +527,7 @@ def build_ffmpeg_cmd(route, source_config):
         "-b:a", "128k",
         "-ar", "48000",
         "-f", "flv",
-        f"rtmp://127.0.0.1:1935/route_{route_id}"
+        f"rtmp://127.0.0.1:1935/{stream_path}"
     ])
 
     overlay_cfg = load_overlay_config()
@@ -530,8 +535,27 @@ def build_ffmpeg_cmd(route, source_config):
     # 2. Fan-out to all configured Destinations
     for dest in route.get("destinations", []):
         durl = dest.get("url", "").strip()
+        dtype = dest.get("type", "")
         if not durl:
             continue
+
+        # Normalize SRT Listener destinations: must bind to 0.0.0.0 and have mode=listener
+        if durl.startswith("srt://") and (dtype == "srt_listener" or "mode=listener" in durl):
+            try:
+                from urllib.parse import urlparse, parse_qs, urlencode
+                p = urlparse(durl)
+                port = p.port or 8890
+                qs = parse_qs(p.query)
+                qs["mode"] = ["listener"]
+                if "latency" not in qs:
+                    qs["latency"] = ["2000000"]
+                query_str = urlencode({k: v[0] for k, v in qs.items()})
+                durl = f"srt://0.0.0.0:{port}?{query_str}"
+            except Exception:
+                if "mode=listener" not in durl:
+                    sep = "&" if "?" in durl else "?"
+                    durl = f"{durl}{sep}mode=listener"
+
         mode = dest.get("mode", "copy")
         a_idx = int(dest.get("audio_track", 0))
 
@@ -1785,11 +1809,14 @@ def proxy_hls(subpath):
 @login_required
 def api_route_preview(route_id):
     host = request.host.split(":")[0]
+    raw_rid = str(route_id).strip()
+    stream_path = raw_rid if raw_rid.startswith("route_") else f"route_{raw_rid}"
     return jsonify({
         "ok": True,
-        "hls_url": f"/hls/route_{route_id}/index.m3u8",
-        "hls_direct_url": f"http://{host}:8888/route_{route_id}/index.m3u8",
-        "webrtc_url": f"http://{host}:8889/route_{route_id}"
+        "stream_name": stream_path,
+        "hls_url": f"/hls/{stream_path}/index.m3u8",
+        "hls_direct_url": f"http://{host}:8888/{stream_path}/index.m3u8",
+        "webrtc_url": f"http://{host}:8889/{stream_path}"
     })
 
 

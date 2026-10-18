@@ -326,11 +326,18 @@
 
         hlsInstance.on(Hls.Events.ERROR, (evt, data) => {
           if (data.fatal) {
-            txtStatus.textContent = "RECONNECTING";
-            txtStatus.style.color = "#f59e0b";
-            statsDisplay.textContent = "Stream interrupted, reconnecting...";
+            const is404 = data.response && (data.response.code === 404 || data.response.code === 0);
+            if (is404) {
+              txtStatus.textContent = "STANDBY";
+              txtStatus.style.color = "#f59e0b";
+              statsDisplay.textContent = "Standby: Menunggu feed sinyal siaran aktif...";
+            } else {
+              txtStatus.textContent = "RECONNECTING";
+              txtStatus.style.color = "#f59e0b";
+              statsDisplay.textContent = "Stream interrupted, reconnecting...";
+            }
             tapOverlay.style.display = 'flex';
-            setTimeout(initPlayer, 2500);
+            setTimeout(initPlayer, 3000);
           }
         });
       } else {

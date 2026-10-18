@@ -4117,7 +4117,15 @@ async function inspectRoute(id) {
 
   document.getElementById('modal-telemetry').classList.remove('hidden');
 
-  loadRoutePreview(id);
+  if (!route.running) {
+    const previewState = document.getElementById('preview-state');
+    if (previewState) {
+      previewState.innerHTML = '<span style="color:var(--muted); font-weight:600;"><span style="width:7px; height:7px; background:var(--muted); border-radius:50%; display:inline-block; margin-right:5px;"></span>ROUTE STOPPED &middot; Start route to activate playout</span>';
+    }
+  } else {
+    loadRoutePreview(id);
+  }
+
   pollTelemetry();
   if (telemTimer) clearInterval(telemTimer);
   telemTimer = setInterval(pollTelemetry, 2500);
@@ -4382,8 +4390,15 @@ function initHlsPlayer(video, streamUrl) {
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
             console.warn('[HLS] Network error, auto retrying...', data.details);
-            if (previewState) previewState.innerHTML = '<span style="color:var(--amber);">Reconnecting...</span>';
-            setTimeout(() => { if (hlsInstance) hlsInstance.startLoad(); }, 1500);
+            const isNotFound = data.response && (data.response.code === 404 || data.response.code === 0);
+            if (previewState) {
+              if (isNotFound) {
+                previewState.innerHTML = '<span style="color:#f59e0b; font-weight:600;"><span class="pulse-indicator" style="background:#f59e0b; width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:5px; box-shadow:0 0 6px #f59e0b;"></span>STANDBY &middot; Menunggu Sinyal Masuk</span>';
+              } else {
+                previewState.innerHTML = '<span style="color:var(--amber);">Reconnecting feed...</span>';
+              }
+            }
+            setTimeout(() => { if (hlsInstance) hlsInstance.startLoad(); }, 3000);
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
             console.warn('[HLS] Media decode error, recovering...', data.details);
@@ -4440,13 +4455,14 @@ function toggleTelemVideoPlayback() {
 
 async function loadRoutePreview(routeId) {
   const video = document.getElementById('telem-video');
-  currentPreviewStreamName = `route_${routeId}`;
+  const safeName = routeId.startsWith('route_') ? routeId : `route_${routeId}`;
+  currentPreviewStreamName = safeName;
   try {
     const d = await api(`/api/routes/${routeId}/preview`);
-    const streamUrl = d.hls_url || `/hls/route_${routeId}/index.m3u8`;
+    const streamUrl = d.hls_url || `/hls/${safeName}/index.m3u8`;
     initHlsPlayer(video, streamUrl);
   } catch(e) {
-    const streamUrl = `/hls/route_${routeId}/index.m3u8`;
+    const streamUrl = `/hls/${safeName}/index.m3u8`;
     initHlsPlayer(video, streamUrl);
   }
 }
