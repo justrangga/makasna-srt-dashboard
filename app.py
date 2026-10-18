@@ -590,6 +590,16 @@ def build_ffmpeg_cmd(route, source_config):
                     opts.append(f"passphrase={d_pass}")
                 durl = f"srt://{d_addr}:{d_port}?" + "&".join(opts)
 
+        # Direct SRT Local: Ingest to local MediaMTX SRT server for receivers to pull
+        if dtype == "srt_local":
+            d_sid = dest.get("stream_id", "").strip() or f"route_{route_id}"
+            d_lat = int(dest.get("latency", 200))
+            d_pass = dest.get("passphrase", "").strip()
+            opts = [f"streamid=publish:{d_sid}", f"latency={d_lat * 1000}"]
+            if d_pass:
+                opts.append(f"passphrase={d_pass}")
+            durl = f"srt://127.0.0.1:8890?" + "&".join(opts)
+
         # RTMP Push: If rtmp_url and stream_key are given
         if dtype == "rtmp" and dest.get("rtmp_url"):
             base_rtmp = dest.get("rtmp_url", "").strip().rstrip("/")
@@ -1456,11 +1466,22 @@ def api_create_route():
             "label": d.get("label", "Destination"),
             "type": d.get("type", "srt_caller"),
             "url": d.get("url", "").strip(),
+            "address": d.get("address", "").strip(),
+            "port": int(d.get("port", 9000)) if d.get("port") else 9000,
+            "stream_id": d.get("stream_id", "").strip(),
+            "latency": int(d.get("latency", 200)) if d.get("latency") else 200,
+            "passphrase": d.get("passphrase", "").strip(),
+            "rtmp_url": d.get("rtmp_url", "").strip(),
+            "stream_key": d.get("stream_key", "").strip(),
             "mode": d.get("mode", "copy"),
+            "video_mode": d.get("video_mode", d.get("mode", "copy")),
             "video_bitrate": int(d.get("video_bitrate", 4500)),
             "max_bitrate": int(d.get("max_bitrate", 5000)),
             "buffer_size": int(d.get("buffer_size", 9000)),
-            "audio_bitrate": int(d.get("audio_bitrate", 160)),
+            "audio_mode": d.get("audio_mode", d.get("audio_codec", "copy")),
+            "audio_codec": d.get("audio_codec", "copy"),
+            "audio_bitrate": int(d.get("audio_bitrate", 192)),
+            "audio_channel_map": d.get("audio_channel_map", "all"),
             "encoder_preset": d.get("encoder_preset", "veryfast"),
             "audio_track": int(d.get("audio_track", 0))
         })

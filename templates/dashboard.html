@@ -4494,13 +4494,41 @@ function copyToClipboard(text) {
   }
 }
 
+function updateDestinationsEmptyState() {
+  const container = document.getElementById('destinations-container');
+  if (!container) return;
+  const cards = container.querySelectorAll('.dest-card');
+  let emptyNotice = document.getElementById('dest-empty-notice');
+  if (cards.length === 0) {
+    if (!emptyNotice) {
+      emptyNotice = document.createElement('div');
+      emptyNotice.id = 'dest-empty-notice';
+      emptyNotice.style.cssText = 'padding:16px; text-align:center; background:rgba(255,255,255,0.02); border:1px dashed var(--border); border-radius:6px; color:var(--muted); font-size:12px; margin-bottom:8px;';
+      emptyNotice.textContent = 'No fan-out destinations added yet. Click "+ Add Destination" above to forward this stream.';
+      container.appendChild(emptyNotice);
+    } else {
+      emptyNotice.style.display = 'block';
+    }
+  } else {
+    if (emptyNotice) emptyNotice.style.display = 'none';
+  }
+}
+
+function removeDestinationCard(btn) {
+  const card = btn.closest('.dest-card');
+  if (card) {
+    card.remove();
+    updateDestinationsEmptyState();
+  }
+}
+
 function openAddRouteModal() {
   document.getElementById('modal-route-title').textContent = 'New Gateway Route';
   document.getElementById('route-form').reset();
   document.getElementById('rf-id').value = '';
   document.getElementById('destinations-container').innerHTML = '';
   destinationCount = 0;
-  addDestinationRow();
+  updateDestinationsEmptyState();
   document.getElementById('rf-p-type').value = 'srt_caller';
   handleSourceTypeChange('srt_caller');
   document.getElementById('rf-s-type').value = 'srt_caller';
@@ -4571,7 +4599,7 @@ function editRoute(id) {
   (r.destinations || []).forEach(d => {
     addDestinationRow(d);
   });
-  if (!r.destinations || !r.destinations.length) addDestinationRow();
+  updateDestinationsEmptyState();
 
   document.getElementById('modal-route').classList.remove('hidden');
 }
@@ -4720,9 +4748,37 @@ function handleDestTypeChange(selectEl, id) {
   const type = selectEl.value;
   const srtBox = document.getElementById(`dest-fields-srt-caller-${id}`);
   const rtmpBox = document.getElementById(`dest-fields-rtmp-${id}`);
+  const localBox = document.getElementById(`dest-fields-srt-local-${id}`);
 
   if (srtBox) srtBox.style.display = (type === 'srt_caller') ? 'flex' : 'none';
   if (rtmpBox) rtmpBox.style.display = (type === 'rtmp') ? 'flex' : 'none';
+  if (localBox) {
+    localBox.style.display = (type === 'srt_local') ? 'flex' : 'none';
+    if (type === 'srt_local') updateLocalSrtDisplay(selectEl, id);
+  }
+}
+
+function updateLocalSrtDisplay(inputEl, id) {
+  const card = document.getElementById(`dest-card-${id}`);
+  if (!card) return;
+  const sidInput = card.querySelector('[name="dest_srt_local_streamid"]');
+  const passInput = card.querySelector('[name="dest_srt_local_passphrase"]');
+  const latInput = card.querySelector('[name="dest_srt_local_latency"]');
+
+  const rawSid = sidInput ? sidInput.value.trim() : '';
+  const sid = rawSid || 'client_feed_1';
+  const pass = passInput ? passInput.value.trim() : '';
+  const lat = latInput ? parseInt(latInput.value) || 200 : 200;
+
+  const sidEl = card.querySelector(`.dest-local-sid-val-${id}`);
+  const urlEl = card.querySelector(`.dest-local-url-val-${id}`);
+
+  const readSid = `read:${sid}`;
+  if (sidEl) sidEl.textContent = readSid;
+
+  let pullUrl = `srt://103.89.5.211:8890?streamid=${readSid}&latency=${lat * 1000}`;
+  if (pass) pullUrl += `&passphrase=${encodeURIComponent(pass)}`;
+  if (urlEl) urlEl.textContent = pullUrl;
 }
 
 function toggleVBitrate(selectEl, id) {
@@ -4765,7 +4821,17 @@ function addDestinationRow(data = {}) {
   let rtmpKey = data.stream_key || '';
 
   if (data.url) {
-    if (data.url.startsWith('srt://') && !srtAddr) {
+    if (data.url.startsWith('srt://') && (type === 'srt_local' || data.url.includes('streamid=publish:'))) {
+      try {
+        const u = new URL(data.url);
+        let sid = u.searchParams.get('streamid') || '';
+        if (sid.startsWith('publish:')) sid = sid.substring(8);
+        if (sid) srtSid = sid;
+        const lat = u.searchParams.get('latency');
+        if (lat) srtLat = Math.round(parseInt(lat) / 1000);
+        srtPass = u.searchParams.get('passphrase') || '';
+      } catch(e) {}
+    } else if (data.url.startsWith('srt://') && !srtAddr) {
       try {
         const u = new URL(data.url);
         srtAddr = u.hostname;
@@ -4791,9 +4857,9 @@ function addDestinationRow(data = {}) {
     <div class="dest-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border);">
       <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:200px;">
         <span class="tag tag-output" style="font-weight:700; background:rgba(0,229,255,0.15); color:var(--cyan); padding:4px 8px; border-radius:4px;">OUTPUT #${destinationCount}</span>
-        <input type="text" class="form-control dest-label-input" name="dest_label" placeholder="Output Label (e.g. Client Router, YouTube Live)" value="${escapeHtml(data.label || `Output ${destinationCount}`)}" style="font-weight:600;">
+        <input type="text" class="form-control dest-label-input" name="dest_label" placeholder="Output Label (e.g. Client Router, YouTube Live, SRT Local)" value="${escapeHtml(data.label || `Output ${destinationCount}`)}" style="font-weight:600;">
       </div>
-      <button type="button" class="btn-icon btn-danger" style="padding:6px 12px; min-height:32px;" onclick="this.closest('.dest-card').remove()" title="Remove Output">Remove Output</button>
+      <button type="button" class="btn-icon btn-danger" style="padding:6px 12px; min-height:32px;" onclick="removeDestinationCard(this)" title="Remove Output">Remove Output</button>
     </div>
 
     <!-- Protocol Selector -->
@@ -4803,6 +4869,7 @@ function addDestinationRow(data = {}) {
         <select class="form-control" name="dest_type" onchange="handleDestTypeChange(this, ${destinationCount})" style="font-weight:600;">
           <option value="srt_caller" ${type==='srt_caller'?'selected':''}>1. SRT Caller</option>
           <option value="rtmp" ${type==='rtmp'?'selected':''}>2. RTMP Push</option>
+          <option value="srt_local" ${type==='srt_local'?'selected':''}>3. Direct SRT Local</option>
         </select>
       </div>
     </div>
@@ -4853,6 +4920,46 @@ function addDestinationRow(data = {}) {
       </div>
     </div>
 
+    <!-- 3. Direct SRT Local Parameters -->
+    <div id="dest-fields-srt-local-${destinationCount}" class="dest-proto-fields" style="display:${type==='srt_local'?'flex':'none'}; flex-direction:column; gap:12px; background:rgba(16,185,129,0.04); border:1px solid rgba(16,185,129,0.25); border-radius:6px; padding:12px; margin-bottom:12px;">
+      <!-- Baris 1: Kotak Stream ID -->
+      <div class="form-group" style="margin:0;">
+        <label style="color:#10b981; font-weight:700;">Stream ID (Receiver Pull Identifier)</label>
+        <input type="text" class="form-control" name="dest_srt_local_streamid" id="dest-local-sid-input-${destinationCount}" placeholder="e.g. client_feed_1" value="${escapeHtml(srtSid)}" oninput="updateLocalSrtDisplay(this, ${destinationCount})">
+        <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Stream ID unik yang akan digunakan oleh penerima untuk menarik siaran langsung dari server gateway kita.</span>
+      </div>
+
+      <!-- Baris 2: Kotak Passphrase lalu Kotak Latensi -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>Passphrase (AES - Optional)</label>
+          <input type="password" class="form-control" name="dest_srt_local_passphrase" placeholder="Leave empty for cleartext" value="${escapeHtml(srtPass)}" oninput="updateLocalSrtDisplay(this, ${destinationCount})">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Latency Buffer (ms)</label>
+          <input type="number" class="form-control" name="dest_srt_local_latency" value="${srtLat}" oninput="updateLocalSrtDisplay(this, ${destinationCount})">
+        </div>
+      </div>
+
+      <!-- Receiver Pull Box -->
+      <div style="background:rgba(0,0,0,0.35); border:1px dashed rgba(16,185,129,0.3); border-radius:6px; padding:10px 12px; font-size:11.5px; font-family:'JetBrains Mono', monospace; line-height:1.7;">
+        <div style="color:#10b981; font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Receiver Pull Parameters (Diberikan ke Penerima):</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:6px 14px; margin-bottom:8px;">
+          <div><span style="color:var(--text-dim);">Server IP:</span> <b style="color:#fff;">103.89.5.211</b></div>
+          <div><span style="color:var(--text-dim);">Port:</span> <b style="color:#fff;">8890</b></div>
+          <div><span style="color:var(--text-dim);">Mode:</span> <b style="color:#fff;">Caller</b></div>
+          <div><span style="color:var(--text-dim);">Stream ID:</span> <b class="dest-local-sid-val-${destinationCount}" style="color:#10b981;">read:${escapeHtml(srtSid || 'client_feed_1')}</b></div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; background:rgba(0,0,0,0.5); padding:6px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.07);">
+          <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+            <span style="color:var(--text-dim);">Pull URL: </span>
+            <span class="dest-local-url-val-${destinationCount}" style="color:#34d399;">srt://103.89.5.211:8890?streamid=read:${escapeHtml(srtSid || 'client_feed_1')}&amp;latency=${srtLat * 1000}</span>
+          </div>
+          <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px; white-space:nowrap;" onclick="copyToClipboard(this.previousElementSibling.querySelector('.dest-local-url-val-${destinationCount}').textContent)">Copy URL</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Bitrate (Video & Audio) & Audio Channel Selection -->
     <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:8px;">
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
@@ -4864,18 +4971,9 @@ function addDestinationRow(data = {}) {
             <option value="copy" ${mode==='copy'?'selected':''}>Direct Copy (Original Bitrate)</option>
             <option value="transcode" ${mode==='transcode'?'selected':''}>Custom Video Bitrate</option>
           </select>
-          <div id="dest-vbitrate-group-${destinationCount}" style="display:${mode==='transcode'?'flex':'none'}; align-items:center; gap:6px;">
-            <select class="form-control" onchange="this.nextElementSibling.value=this.value" style="width:140px;">
-              <option value="12000" ${vbitrate==12000?'selected':''}>12 Mbps</option>
-              <option value="8000" ${vbitrate==8000?'selected':''}>8 Mbps</option>
-              <option value="6000" ${vbitrate==6000?'selected':''}>6 Mbps</option>
-              <option value="4500" ${vbitrate==4500?'selected':''}>4.5 Mbps</option>
-              <option value="3000" ${vbitrate==3000?'selected':''}>3 Mbps</option>
-              <option value="2000" ${vbitrate==2000?'selected':''}>2 Mbps</option>
-              <option value="1500" ${vbitrate==1500?'selected':''}>1.5 Mbps</option>
-            </select>
-            <input type="number" class="form-control" name="dest_vbitrate" value="${vbitrate}" placeholder="kbps" style="flex:1;">
-            <span style="font-size:11px; color:var(--text-dim);">kbps</span>
+          <div id="dest-vbitrate-group-${destinationCount}" style="display:${mode==='transcode'?'flex':'none'}; align-items:center; gap:8px;">
+            <input type="number" class="form-control" name="dest_vbitrate" value="${vbitrate}" placeholder="Enter video bitrate (kbps)" style="flex:1;">
+            <span style="font-size:11px; color:var(--text-dim); white-space:nowrap;">kbps</span>
           </div>
         </div>
 
@@ -4886,16 +4984,9 @@ function addDestinationRow(data = {}) {
             <option value="copy" ${amode==='copy'?'selected':''}>Direct Copy (Original Bitrate)</option>
             <option value="aac" ${amode==='aac'?'selected':''}>Custom Audio Bitrate</option>
           </select>
-          <div id="dest-abitrate-group-${destinationCount}" style="display:${amode==='aac'?'flex':'none'}; align-items:center; gap:6px;">
-            <select class="form-control" name="dest_abitrate" style="flex:1;">
-              <option value="320" ${abitrate==320?'selected':''}>320 kbps</option>
-              <option value="256" ${abitrate==256?'selected':''}>256 kbps</option>
-              <option value="192" ${abitrate==192?'selected':''}>192 kbps</option>
-              <option value="160" ${abitrate==160?'selected':''}>160 kbps</option>
-              <option value="128" ${abitrate==128?'selected':''}>128 kbps</option>
-              <option value="96" ${abitrate==96?'selected':''}>96 kbps</option>
-              <option value="64" ${abitrate==64?'selected':''}>64 kbps</option>
-            </select>
+          <div id="dest-abitrate-group-${destinationCount}" style="display:${amode==='aac'?'flex':'none'}; align-items:center; gap:8px;">
+            <input type="number" class="form-control" name="dest_abitrate" value="${abitrate}" placeholder="Enter audio bitrate (kbps)" style="flex:1;">
+            <span style="font-size:11px; color:var(--text-dim); white-space:nowrap;">kbps</span>
           </div>
         </div>
 
@@ -4919,6 +5010,10 @@ function addDestinationRow(data = {}) {
     </div>
   `;
   container.appendChild(div);
+  updateDestinationsEmptyState();
+  if (type === 'srt_local') {
+    updateLocalSrtDisplay(null, destinationCount);
+  }
 }
 
 function toggleProcessing(selectEl, id) {
@@ -4965,6 +5060,15 @@ async function handleRouteFormSubmit(e) {
       } else if (rtmpUrl) {
         url = rtmpUrl;
       }
+    } else if (type === 'srt_local') {
+      srtSid = (row.querySelector('[name="dest_srt_local_streamid"]') ? row.querySelector('[name="dest_srt_local_streamid"]').value : '').trim();
+      srtLat = parseInt(row.querySelector('[name="dest_srt_local_latency"]') ? row.querySelector('[name="dest_srt_local_latency"]').value : 200) || 200;
+      srtPass = (row.querySelector('[name="dest_srt_local_passphrase"]') ? row.querySelector('[name="dest_srt_local_passphrase"]').value : '').trim();
+
+      const effectiveSid = srtSid || `feed_${destinations.length + 1}`;
+      let qs = `streamid=publish:${encodeURIComponent(effectiveSid)}&latency=${srtLat * 1000}`;
+      if (srtPass) qs += `&passphrase=${encodeURIComponent(srtPass)}`;
+      url = `srt://127.0.0.1:8890?${qs}`;
     }
 
     const vmode = row.querySelector('[name="dest_vmode"]') ? row.querySelector('[name="dest_vmode"]').value : 'copy';
@@ -4978,8 +5082,8 @@ async function handleRouteFormSubmit(e) {
         label: label || `Output ${destinations.length + 1}`,
         type,
         url,
-        address: srtAddr,
-        port: srtPort,
+        address: (type === 'srt_local') ? '127.0.0.1' : srtAddr,
+        port: (type === 'srt_local') ? 8890 : srtPort,
         stream_id: srtSid,
         latency: srtLat,
         passphrase: srtPass,
