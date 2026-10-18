@@ -373,14 +373,51 @@ def classify_health(rtt, loss_rate, drops):
 # =========================================================================
 # Route Media Process Engine
 # =========================================================================
+def resolve_direct_stream_url(url):
+    url = (url or "").strip()
+    if not url:
+        return ""
+    # Check if a YouTube, Twitch, or web video page URL was provided
+    url_lower = url.lower()
+    if any(k in url_lower for k in ("youtube.com", "youtu.be", "twitch.tv", "dailymotion.com", "vimeo.com")):
+        try:
+            import yt_dlp
+            ydl_opts = {
+                "format": "best[protocol^=m3u8]/best[protocol^=http]/best",
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if info and "url" in info:
+                    logger.info(f"Resolved direct stream URL for {url} -> {info['url'][:80]}...")
+                    return info["url"]
+        except Exception as e:
+            logger.warning(f"yt-dlp resolution failed for {url}: {e}")
+    return url
+
+
 def build_source_url(source_config):
+    stype = source_config.get("type", "srt_caller")
+
+    # 1. Direct Stream URL (YouTube, Web Live, HLS, or direct link)
+    if stype == "direct_url":
+        raw_url = str(source_config.get("url") or source_config.get("address") or source_config.get("stream_id") or "").strip()
+        return resolve_direct_stream_url(raw_url)
+
+    # 2. Server RTMP (Push from client with Stream Key)
+    if stype in ("rtmp_server", "rtmp_ingest"):
+        stream_key = str(source_config.get("stream_key") or source_config.get("stream_id") or "live").strip()
+        # MediaMTX exposes RTMP ingest locally on 1935 and 8554
+        return f"rtmp://127.0.0.1:1935/live/{stream_key}"
+
     # Check if a direct URL was provided in url, address, or stream_id
     for key in ("url", "address", "stream_id"):
         val = str(source_config.get(key) or "").strip()
         if val.startswith(("srt://", "udp://", "rtmp://", "rtsp://", "http://", "https://")):
-            return val
+            return resolve_direct_stream_url(val)
 
-    stype = source_config.get("type", "local_stream")
     stream_id = str(source_config.get("stream_id") or "live").strip()
     addr = str(source_config.get("address") or "127.0.0.1").strip()
     port = source_config.get("port", 8890)
@@ -392,7 +429,6 @@ def build_source_url(source_config):
         return f"rtsp://127.0.0.1:8554/{stream_id or 'live'}"
     elif stype == "srt_listener":
         # Bind SRT listener on specified port (listen for incoming push)
-        # Always bind to 0.0.0.0 to allow incoming connections from any network interface
         bind_addr = "0.0.0.0" if (not addr or addr in ("127.0.0.1", "localhost")) else addr
         opts = [f"mode=listener", f"latency={int(latency) * 1000}"]
         if stream_id:
@@ -503,18 +539,20 @@ def build_video_filters(dest, overlay_cfg=None):
 
 
 def build_ffmpeg_cmd(route, source_config):
-    input_url = build_source_url(source_config)
+    input_url = build_source_url(source_config) or ""
     route_id = str(route["id"]).strip()
     stream_path = route_id if route_id.startswith("route_") else f"route_{route_id}"
 
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-y"]
 
     # Input specific flags
-    stype = source_config.get("type", "local_stream")
-    if stype == "local_stream" or input_url.startswith("rtsp://"):
+    stype = source_config.get("type", "srt_caller")
+    if stype in ("local_stream", "rtmp_server") or input_url.startswith("rtsp://"):
         cmd.extend(["-rtsp_transport", "tcp"])
     elif stype in ("srt_listener", "srt_caller", "srt_rendezvous") or input_url.startswith("srt://"):
         cmd.extend(["-thread_queue_size", "1024"])
+    elif input_url.startswith(("http://", "https://")):
+        cmd.extend(["-reconnect", "1", "-reconnect_at_eof", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"])
 
     cmd.extend(["-i", input_url])
 
@@ -534,8 +572,33 @@ def build_ffmpeg_cmd(route, source_config):
 
     # 2. Fan-out to all configured Destinations
     for dest in route.get("destinations", []):
+        dtype = dest.get("type", "srt_caller")
         durl = dest.get("url", "").strip()
-        dtype = dest.get("type", "")
+
+        # SRT Caller: If structured parameters are given
+        if dtype == "srt_caller" and (not durl or not durl.startswith("srt://")):
+            d_addr = dest.get("address", "").strip()
+            d_port = dest.get("port", 9000)
+            d_sid = dest.get("stream_id", "").strip()
+            d_lat = int(dest.get("latency", 200))
+            d_pass = dest.get("passphrase", "").strip()
+            if d_addr:
+                opts = ["mode=caller", f"latency={d_lat * 1000}"]
+                if d_sid:
+                    opts.append(f"streamid={d_sid}")
+                if d_pass:
+                    opts.append(f"passphrase={d_pass}")
+                durl = f"srt://{d_addr}:{d_port}?" + "&".join(opts)
+
+        # RTMP Push: If rtmp_url and stream_key are given
+        if dtype == "rtmp" and dest.get("rtmp_url"):
+            base_rtmp = dest.get("rtmp_url", "").strip().rstrip("/")
+            s_key = dest.get("stream_key", "").strip()
+            if base_rtmp and s_key:
+                durl = f"{base_rtmp}/{s_key}"
+            elif base_rtmp:
+                durl = base_rtmp
+
         if not durl:
             continue
 
@@ -556,8 +619,17 @@ def build_ffmpeg_cmd(route, source_config):
                     sep = "&" if "?" in durl else "?"
                     durl = f"{durl}{sep}mode=listener"
 
-        mode = dest.get("mode", "copy")
+        v_mode = dest.get("video_mode", dest.get("mode", "copy"))
+        a_mode = dest.get("audio_mode", dest.get("audio_codec", "copy"))
+        v_bitrate = int(dest.get("video_bitrate", 4500))
+        a_bitrate = int(dest.get("audio_bitrate", 192))
+        a_channel_map = dest.get("audio_channel_map", "all")
         a_idx = int(dest.get("audio_track", 0))
+
+        if a_channel_map == "track_2":
+            a_idx = 1
+        elif a_channel_map == "track_3":
+            a_idx = 2
 
         # Map video and selected audio track
         cmd.extend(["-map", "0:v:0?"])
@@ -568,9 +640,8 @@ def build_ffmpeg_cmd(route, source_config):
 
         vf = build_video_filters(dest, overlay_cfg=overlay_cfg)
 
-        if vf or mode != "copy":
+        if vf or v_mode == "transcode":
             v_codec = dest.get("video_codec", "libx264")
-            v_bitrate = int(dest.get("video_bitrate", 4500))
             max_b = int(dest.get("max_bitrate", int(v_bitrate * 1.15)))
             buf_b = int(dest.get("buffer_size", int(v_bitrate * 2)))
             preset = dest.get("encoder_preset", "veryfast")
@@ -586,32 +657,45 @@ def build_ffmpeg_cmd(route, source_config):
                 "-bufsize", f"{buf_b}k",
                 "-pix_fmt", "yuv420p"
             ])
-
-            # Audio processing
-            a_codec = dest.get("audio_codec", "aac")
-            if a_codec == "copy":
-                if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
-                    # RTMP/FLV strictly requires AAC; copying MP2/AC3 crashes RTMP
-                    cmd.extend(["-c:a", "aac", "-b:a", "160k", "-ar", "48000"])
-                else:
-                    cmd.extend(["-c:a", "copy"])
-            else:
-                a_bitrate = int(dest.get("audio_bitrate", 160))
-                a_sample_rate = int(dest.get("audio_sample_rate", 48000))
-                cmd.extend([
-                    "-c:a", a_codec,
-                    "-b:a", f"{a_bitrate}k",
-                    "-ar", str(a_sample_rate)
-                ])
         else:
-            # Pure passthrough
-            if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
-                cmd.extend(["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"])
-            else:
-                cmd.extend(["-c:v", "copy", "-c:a", "copy"])
+            cmd.extend(["-c:v", "copy"])
+
+        # Audio multi-channel mapping and encoding
+        af_filters = []
+        if a_channel_map == "ch1_ch2":
+            af_filters.append("pan=stereo|c0=c0|c1=c1")
+        elif a_channel_map == "ch3_ch4":
+            af_filters.append("pan=stereo|c0=c2|c1=c3")
+        elif a_channel_map == "ch5_ch6":
+            af_filters.append("pan=stereo|c0=c4|c1=c5")
+        elif a_channel_map == "ch7_ch8":
+            af_filters.append("pan=stereo|c0=c6|c1=c7")
+        elif a_channel_map == "ch1_mono":
+            af_filters.append("pan=stereo|c0=c0|c1=c0")
+        elif a_channel_map == "ch2_mono":
+            af_filters.append("pan=stereo|c0=c1|c1=c1")
+        elif a_channel_map == "ch3_mono":
+            af_filters.append("pan=stereo|c0=c2|c1=c2")
+        elif a_channel_map == "ch4_mono":
+            af_filters.append("pan=stereo|c0=c3|c1=c3")
+        elif a_channel_map and a_channel_map.startswith("pan="):
+            af_filters.append(a_channel_map)
+
+        is_rtmp = durl.startswith(("rtmp://", "rtmps://"))
+
+        if af_filters or a_mode == "aac" or is_rtmp:
+            if af_filters:
+                cmd.extend(["-af", ",".join(af_filters)])
+            cmd.extend([
+                "-c:a", "aac",
+                "-b:a", f"{a_bitrate}k",
+                "-ar", "48000"
+            ])
+        else:
+            cmd.extend(["-c:a", "copy"])
 
         # Format detection
-        if durl.startswith("rtmp://") or durl.startswith("rtmps://"):
+        if is_rtmp:
             cmd.extend(["-f", "flv", durl])
         elif durl.startswith("udp://"):
             cmd.extend(["-f", "mpegts", "-pkt_size", "1316", durl])
