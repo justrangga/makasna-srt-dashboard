@@ -66,38 +66,48 @@ if not logger.handlers:
 DEFAULT_OVERLAY_CONFIG = {
     "enabled": True,
     "apply_to_egress": True,
-    "feed_source": "live/feed1",
-    "overlay_1": {
-        "enabled": True,
-        "name": "Station ID (Logo)",
-        "file": "/static/overlays/station_logo.png",
-        "x_percent": 82.0,
-        "y_percent": 5.0,
-        "scale_percent": 14.0,
-        "opacity": 0.95
-    },
-    "overlay_2": {
-        "enabled": True,
-        "name": "Lower Third / Live Bug",
-        "file": "/static/overlays/live_badge.png",
-        "x_percent": 5.0,
-        "y_percent": 84.0,
-        "scale_percent": 18.0,
-        "opacity": 1.0
-    }
+    "target_output": "all",
+    "feed_source": "",
+    "layers": [
+        {
+            "id": 1,
+            "name": "Overlay 1",
+            "file": "",
+            "x_percent": 80.0,
+            "y_percent": 5.0,
+            "scale_percent": 15.0,
+            "opacity": 1.0,
+            "enabled": True
+        }
+    ]
 }
 
 def load_overlay_config():
+    cfg = DEFAULT_OVERLAY_CONFIG.copy()
     if os.path.exists(OVERLAY_CONFIG_FILE):
         try:
             with open(OVERLAY_CONFIG_FILE, "r") as f:
                 data = json.load(f)
-                res = DEFAULT_OVERLAY_CONFIG.copy()
-                res.update(data)
-                return res
+                if isinstance(data, dict):
+                    cfg.update(data)
         except Exception as e:
             print(f"[OVERLAY] Error loading config: {e}", file=sys.stderr)
-    return DEFAULT_OVERLAY_CONFIG.copy()
+
+    # Ensure layers list exists and has at least 1 layer without forcing default assets
+    if "layers" not in cfg or not isinstance(cfg.get("layers"), list) or len(cfg["layers"]) == 0:
+        cfg["layers"] = [
+            {
+                "id": 1,
+                "name": "Overlay 1",
+                "file": "",
+                "x_percent": 80.0,
+                "y_percent": 5.0,
+                "scale_percent": 15.0,
+                "opacity": 1.0,
+                "enabled": True
+            }
+        ]
+    return cfg
 
 def save_overlay_config(cfg):
     try:
@@ -457,13 +467,24 @@ def build_source_url(source_config):
     return f"rtsp://127.0.0.1:8554/{stream_id or 'live'}"
 
 
-def build_video_filters(dest, overlay_cfg=None):
+def build_video_filters(dest, overlay_cfg=None, route_id=None, dest_idx=0):
     if overlay_cfg is None:
         overlay_cfg = load_overlay_config()
 
-    use_overlay = overlay_cfg.get("enabled", False) and (
-        dest.get("overlay", True) if "overlay" in dest else overlay_cfg.get("apply_to_egress", True)
-    )
+    use_overlay = overlay_cfg.get("enabled", False)
+
+    # Output target selection check
+    target_output = str(overlay_cfg.get("target_output", "all")).strip()
+    if target_output and target_output != "all":
+        clean_target = target_output.replace("route_", "")
+        clean_rid = str(route_id or "").replace("route_", "")
+        matches = False
+        if clean_target == clean_rid:
+            matches = True
+        elif clean_target == f"{clean_rid}:{dest_idx}":
+            matches = True
+        if not matches:
+            use_overlay = False
 
     scale = dest.get("scale", "original")
     scale_filter = None
@@ -488,12 +509,7 @@ def build_video_filters(dest, overlay_cfg=None):
     if fps_filter:
         pre_filters.append(fps_filter)
 
-    ov1 = overlay_cfg.get("overlay_1", {}) if use_overlay else {}
-    ov2 = overlay_cfg.get("overlay_2", {}) if use_overlay else {}
-    ov1_active = ov1.get("enabled", False) and bool(ov1.get("file"))
-    ov2_active = ov2.get("enabled", False) and bool(ov2.get("file"))
-
-    if not (ov1_active or ov2_active):
+    if not use_overlay:
         return ",".join(pre_filters) if pre_filters else None
 
     def resolve_path(p):
@@ -503,8 +519,21 @@ def build_video_filters(dest, overlay_cfg=None):
             return os.path.join(BASE_DIR, p.lstrip("/"))
         return p
 
-    f1 = resolve_path(ov1.get("file", ""))
-    f2 = resolve_path(ov2.get("file", ""))
+    # Collect active layers (supports dynamic list up to 4 layers)
+    layers = overlay_cfg.get("layers", [])
+    if not layers:
+        for k in ("overlay_1", "overlay_2", "overlay_3", "overlay_4"):
+            if k in overlay_cfg:
+                layers.append(overlay_cfg[k])
+
+    active_layers = []
+    for l in layers:
+        fpath = resolve_path(l.get("file", ""))
+        if l.get("enabled", False) and fpath and os.path.exists(fpath):
+            active_layers.append((l, fpath))
+
+    if not active_layers:
+        return ",".join(pre_filters) if pre_filters else None
 
     filter_parts = []
     last_label = "in"
@@ -513,28 +542,21 @@ def build_video_filters(dest, overlay_cfg=None):
         filter_parts.append(f"[in]{','.join(pre_filters)}[v_pre]")
         last_label = "v_pre"
 
-    if ov1_active and os.path.exists(f1):
-        base_w = 1280 if scale == "720p" else 1920
-        scale_pct = float(ov1.get("scale_percent", 14.0)) / 100.0
-        w_px = max(30, int(base_w * scale_pct))
-        opacity = max(0.1, min(1.0, float(ov1.get("opacity", 0.95))))
-        x_pct = float(ov1.get("x_percent", 88.0)) / 100.0
-        y_pct = float(ov1.get("y_percent", 6.0)) / 100.0
-        filter_parts.append(f"movie='{f1}',scale={w_px}:-1,format=rgba,colorchannelmixer=aa={opacity}[ov1]")
-        next_label = "tmp_ov" if (ov2_active and os.path.exists(f2)) else "out"
-        filter_parts.append(f"[{last_label}][ov1]overlay=W*{x_pct}:H*{y_pct}[{next_label}]")
-        last_label = next_label
+    base_w = 1280 if scale == "720p" else 1920
+    for idx, (ov, fpath) in enumerate(active_layers):
+        scale_pct = float(ov.get("scale_percent", 15.0)) / 100.0
+        w_px = max(20, int(base_w * scale_pct))
+        opacity = max(0.1, min(1.0, float(ov.get("opacity", 1.0))))
+        x_pct = float(ov.get("x_percent", 80.0)) / 100.0
+        y_pct = float(ov.get("y_percent", 5.0)) / 100.0
 
-    if ov2_active and os.path.exists(f2):
-        base_w = 1280 if scale == "720p" else 1920
-        scale_pct = float(ov2.get("scale_percent", 18.0)) / 100.0
-        w_px = max(30, int(base_w * scale_pct))
-        opacity = max(0.1, min(1.0, float(ov2.get("opacity", 1.0))))
-        x_pct = float(ov2.get("x_percent", 6.0)) / 100.0
-        y_pct = float(ov2.get("y_percent", 86.0)) / 100.0
-        filter_parts.append(f"movie='{f2}',scale={w_px}:-1,format=rgba,colorchannelmixer=aa={opacity}[ov2]")
-        filter_parts.append(f"[{last_label}][ov2]overlay=W*{x_pct}:H*{y_pct}[out]")
-        last_label = "out"
+        ov_tag = f"ov{idx+1}"
+        filter_parts.append(f"movie='{fpath}',scale={w_px}:-1,format=rgba,colorchannelmixer=aa={opacity}[{ov_tag}]")
+
+        is_last = (idx == len(active_layers) - 1)
+        next_label = "out" if is_last else f"tmp_ov{idx+1}"
+        filter_parts.append(f"[{last_label}][{ov_tag}]overlay=W*{x_pct:.4f}:H*{y_pct:.4f}[{next_label}]")
+        last_label = next_label
 
     return ";".join(filter_parts) if filter_parts else None
 
@@ -572,7 +594,7 @@ def build_ffmpeg_cmd(route, source_config):
     overlay_cfg = load_overlay_config()
 
     # 2. Fan-out to all configured Destinations
-    for dest in route.get("destinations", []):
+    for dest_idx, dest in enumerate(route.get("destinations", [])):
         dtype = dest.get("type", "srt_caller")
         durl = dest.get("url", "").strip()
 
@@ -649,7 +671,7 @@ def build_ffmpeg_cmd(route, source_config):
         else:
             cmd.extend(["-map", "0:a:0?"])
 
-        vf = build_video_filters(dest, overlay_cfg=overlay_cfg)
+        vf = build_video_filters(dest, overlay_cfg=overlay_cfg, route_id=route_id, dest_idx=dest_idx)
 
         if vf or v_mode == "transcode":
             v_codec = dest.get("video_codec", "libx264")
@@ -1815,7 +1837,9 @@ def api_save_overlay():
     data = get_safe_json()
     cfg = load_overlay_config()
     for k, v in data.items():
-        if isinstance(v, dict) and k in cfg and isinstance(cfg[k], dict):
+        if k == "layers" and isinstance(v, list):
+            cfg["layers"] = v
+        elif isinstance(v, dict) and k in cfg and isinstance(cfg[k], dict):
             cfg[k].update(v)
         else:
             cfg[k] = v
@@ -1830,7 +1854,7 @@ def api_upload_overlay():
     if "file" not in request.files:
         return jsonify({"ok": False, "error": "No file uploaded"}), 400
     file = request.files["file"]
-    layer = request.form.get("layer", "overlay_1")
+    layer = str(request.form.get("layer", "1")).strip()
     if not file or file.filename == "":
         return jsonify({"ok": False, "error": "Empty filename"}), 400
 
@@ -1839,16 +1863,27 @@ def api_upload_overlay():
     if ext not in (".png", ".webp", ".jpg", ".jpeg"):
         return jsonify({"ok": False, "error": "Only image files (.png, .webp, .jpg) are supported"}), 400
 
-    save_name = f"{layer}_{int(time.time())}{ext}"
+    save_name = f"overlay_{layer}_{int(time.time())}{ext}"
     save_path = os.path.join(OVERLAYS_DIR, save_name)
     file.save(save_path)
 
     web_path = f"/static/overlays/{save_name}"
     cfg = load_overlay_config()
-    if layer in cfg and isinstance(cfg[layer], dict):
-        cfg[layer]["file"] = web_path
-        cfg[layer]["enabled"] = True
-        save_overlay_config(cfg)
+
+    # Update layer in layers list
+    layers = cfg.get("layers", [])
+    found = False
+    for l in layers:
+        if str(l.get("id")) == layer or f"overlay_{l.get('id')}" == layer:
+            l["file"] = web_path
+            l["enabled"] = True
+            found = True
+            break
+    if not found and layers:
+        layers[0]["file"] = web_path
+        layers[0]["enabled"] = True
+
+    save_overlay_config(cfg)
 
     return jsonify({"ok": True, "file": web_path, "layer": layer, "config": cfg, "assets": get_available_overlays()})
 

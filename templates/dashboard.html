@@ -2279,6 +2279,34 @@ html, body {
           background: rgba(255, 179, 0, 0.08);
           box-shadow: 0 4px 14px rgba(255, 179, 0, 0.25);
         }
+        .drag-magenta {
+          border: 2px dashed #e040fb;
+          background: rgba(224, 64, 251, 0.08);
+          box-shadow: 0 4px 14px rgba(224, 64, 251, 0.25);
+        }
+        .drag-emerald {
+          border: 2px dashed #00e676;
+          background: rgba(0, 230, 118, 0.08);
+          box-shadow: 0 4px 14px rgba(0, 230, 118, 0.25);
+        }
+        .dot-cyan { background: #00e5ff; box-shadow: 0 0 6px #00e5ff; }
+        .dot-amber { background: #ffb300; box-shadow: 0 0 6px #ffb300; }
+        .dot-magenta { background: #e040fb; box-shadow: 0 0 6px #e040fb; }
+        .dot-emerald { background: #00e676; box-shadow: 0 0 6px #00e676; }
+        .range-slider-magenta::-webkit-slider-thumb {
+          background: #e040fb;
+          box-shadow: 0 0 6px rgba(224, 64, 251, 0.6);
+        }
+        .range-slider-magenta::-moz-range-thumb {
+          background: #e040fb;
+        }
+        .range-slider-emerald::-webkit-slider-thumb {
+          background: #00e676;
+          box-shadow: 0 0 6px rgba(0, 230, 118, 0.6);
+        }
+        .range-slider-emerald::-moz-range-thumb {
+          background: #00e676;
+        }
         .drag-header {
           display: flex;
           align-items: center;
@@ -2517,8 +2545,14 @@ html, body {
             </div>
           </div>
         </div>
-        <div class="overlay-header-actions" style="display:flex; gap:8px; align-items:center; margin-top:8px; width:100%;">
-          <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:0;">
+        <div class="overlay-header-actions" style="display:flex; gap:8px; align-items:center; margin-top:8px; width:100%; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:200px;">
+            <span style="font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">TARGET OUTPUT:</span>
+            <select id="overlay-target-output" class="hd-select" style="width:100%; min-width:0; padding:4px 6px; font-size:11.5px;" onchange="onOverlayTargetChange()">
+              <option value="all">ALL OUTPUTS (Global Master Burn-In)</option>
+            </select>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:180px;">
             <span style="font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">FEED:</span>
             <select id="overlay-feed-select" class="hd-select" style="width:100%; min-width:0; padding:4px 6px; font-size:11.5px;" onchange="onOverlayFeedChange()">
               <option value="">-- SELECT BROADCAST FEED --</option>
@@ -2576,66 +2610,14 @@ html, body {
 
               <!-- Interactive Drag & Drop Canvas Layer -->
               <div id="overlay-drag-canvas" class="overlay-drag-canvas">
-                <!-- Draggable Box 1: Station ID Logo -->
-                <div id="drag-box-1" class="overlay-drag-item drag-cyan" style="left:82%; top:5%; width:14%;">
-                  <div class="drag-header">
-                    <span>L1</span>
-                    <span id="drag-coord-1" style="color:#00e5ff; font-family:'JetBrains Mono',monospace;">82%, 5%</span>
-                  </div>
-                  <div class="drag-content">
-                    <img id="preview-img-1" src="/static/overlays/station_logo.png" alt="Station ID Logo" />
-                  </div>
-                </div>
-
-                <!-- Draggable Box 2: Lower-Third / Live Bug -->
-                <div id="drag-box-2" class="overlay-drag-item drag-amber" style="left:5%; top:84%; width:18%;">
-                  <div class="drag-header">
-                    <span>L2</span>
-                    <span id="drag-coord-2" style="color:#ffb300; font-family:'JetBrains Mono',monospace;">5%, 84%</span>
-                  </div>
-                  <div class="drag-content">
-                    <img id="preview-img-2" src="/static/overlays/live_badge.png" alt="Lower Third" />
-                  </div>
-                </div>
+                <!-- Dynamically populated by renderCanvasBoxes() -->
               </div>
             </div>
           </div>
 
           <!-- Bottom Telemetry Status Strip -->
-          <div class="overlay-monitor-footer">
-            <!-- LAYER 1 TELEMETRY CARD -->
-            <div class="telemetry-layer-card">
-              <div class="telemetry-layer-head">
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <span class="dot-indicator dot-cyan"></span>
-                  <span class="coord-title">LAYER 1 &mdash; STATION ID (LOGO)</span>
-                </div>
-                <span class="tag-live-sm" style="color:#00e5ff; background:rgba(0,229,255,0.1); border:1px solid rgba(0,229,255,0.25);">BUG</span>
-              </div>
-              <div class="telemetry-stats-grid">
-                <div class="stat-pill"><span class="stat-label">X-POS</span><b id="readout-x1">82.0%</b></div>
-                <div class="stat-pill"><span class="stat-label">Y-POS</span><b id="readout-y1">5.0%</b></div>
-                <div class="stat-pill"><span class="stat-label">SCALE</span><b id="readout-s1">14.0%</b></div>
-                <div class="stat-pill"><span class="stat-label">ALPHA</span><b id="readout-a1">95%</b></div>
-              </div>
-            </div>
-
-            <!-- LAYER 2 TELEMETRY CARD -->
-            <div class="telemetry-layer-card">
-              <div class="telemetry-layer-head">
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <span class="dot-indicator dot-amber"></span>
-                  <span class="coord-title">LAYER 2 &mdash; LOWER-THIRD / LIVE</span>
-                </div>
-                <span class="tag-live-sm" style="color:#ffb300; background:rgba(255,179,0,0.1); border:1px solid rgba(255,179,0,0.25);">BANNER</span>
-              </div>
-              <div class="telemetry-stats-grid">
-                <div class="stat-pill"><span class="stat-label">X-POS</span><b id="readout-x2">5.0%</b></div>
-                <div class="stat-pill"><span class="stat-label">Y-POS</span><b id="readout-y2">84.0%</b></div>
-                <div class="stat-pill"><span class="stat-label">SCALE</span><b id="readout-s2">18.0%</b></div>
-                <div class="stat-pill"><span class="stat-label">ALPHA</span><b id="readout-a2">100%</b></div>
-              </div>
-            </div>
+          <div id="overlay-telemetry-container" class="overlay-monitor-footer">
+            <!-- Dynamically populated by renderTelemetryCards() -->
           </div>
         </div>
 
@@ -2655,157 +2637,17 @@ html, body {
             </div>
           </div>
 
-          <!-- LAYER 1 CONTROLS: Station ID Logo -->
-          <div class="overlay-control-box">
-            <div class="control-box-header">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span class="dot-indicator dot-cyan"></span>
-                <span style="font-weight:700; font-size:13px; color:#00e5ff; letter-spacing:0.5px;">LAYER 1 : STATION ID (LOGO)</span>
-              </div>
-              <label class="toggle-switch-sm">
-                <input type="checkbox" id="cfg-ov1-enabled" checked onchange="onLayerToggle('overlay_1')">
-                <span class="toggle-slider-sm"></span>
-              </label>
-            </div>
-
-            <!-- Asset Selector & Upload -->
-            <div class="form-row-sm" style="margin-top:10px;">
-              <div style="flex:1;">
-                <label class="control-label">GRAPHIC ASSET</label>
-                <select id="cfg-ov1-file" class="form-control-sm" onchange="onOverlayAssetSelect('overlay_1')">
-                  <option value="/static/overlays/station_logo.png">Makasna Broadcast Logo (Default)</option>
-                </select>
-              </div>
-              <div style="width:auto; display:flex; align-items:flex-end;">
-                <button type="button" class="btn-mini" onclick="document.getElementById('upload-logo-1').click()" style="padding:6px 10px; font-size:11px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#e4e4e7; border-radius:4px; cursor:pointer;">
-                  Upload Asset
-                </button>
-                <input type="file" id="upload-logo-1" accept="image/png,image/webp,image/jpeg" style="display:none;" onchange="uploadOverlayFile('overlay_1')">
-              </div>
-            </div>
-
-            <!-- Quick Position Presets -->
-            <div style="margin-top:10px;">
-              <label class="control-label">QUICK POSITION PRESETS</label>
-              <div class="preset-pill-group">
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 82, 5)">Top-Right (Standard)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 5, 5)">Top-Left</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 82, 82)">Bottom-Right</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_1', 5, 82)">Bottom-Left</button>
-              </div>
-            </div>
-
-            <!-- Sliders -->
-            <div class="sliders-grid">
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Horizontal (X-Pos)</span>
-                  <span id="txt-x1" class="slider-val-txt">82.0%</span>
-                </div>
-                <input type="range" id="rng-x1" min="0" max="95" step="0.5" value="82" class="range-slider" oninput="onSliderChange('overlay_1')">
-              </div>
-
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Vertical (Y-Pos)</span>
-                  <span id="txt-y1" class="slider-val-txt">5.0%</span>
-                </div>
-                <input type="range" id="rng-y1" min="0" max="95" step="0.5" value="5" class="range-slider" oninput="onSliderChange('overlay_1')">
-              </div>
-
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Scale / Width</span>
-                  <span id="txt-s1" class="slider-val-txt">14.0%</span>
-                </div>
-                <input type="range" id="rng-s1" min="5" max="40" step="0.5" value="14" class="range-slider" oninput="onSliderChange('overlay_1')">
-              </div>
-
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Opacity</span>
-                  <span id="txt-a1" class="slider-val-txt">95%</span>
-                </div>
-                <input type="range" id="rng-a1" min="20" max="100" step="1" value="95" class="range-slider" oninput="onSliderChange('overlay_1')">
-              </div>
-            </div>
+          <!-- Dynamic Overlay Layers Control Panels Container -->
+          <div id="overlay-layers-controls-container" style="display:flex; flex-direction:column; gap:14px;">
+            <!-- Dynamically populated by renderControlPanels() -->
           </div>
 
-          <!-- LAYER 2 CONTROLS: Lower-Third / Live Bug -->
-          <div class="overlay-control-box">
-            <div class="control-box-header">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span class="dot-indicator dot-amber"></span>
-                <span style="font-weight:700; font-size:13px; color:#ffb300; letter-spacing:0.5px;">LAYER 2 : LOWER-THIRD / BUG</span>
-              </div>
-              <label class="toggle-switch-sm">
-                <input type="checkbox" id="cfg-ov2-enabled" checked onchange="onLayerToggle('overlay_2')">
-                <span class="toggle-slider-sm"></span>
-              </label>
-            </div>
-
-            <!-- Asset Selector & Upload -->
-            <div class="form-row-sm" style="margin-top:10px;">
-              <div style="flex:1;">
-                <label class="control-label">GRAPHIC ASSET</label>
-                <select id="cfg-ov2-file" class="form-control-sm" onchange="onOverlayAssetSelect('overlay_2')">
-                  <option value="/static/overlays/live_badge.png">● LIVE Badge (Red Pill)</option>
-                  <option value="/static/overlays/lower_third.png">Lower-Third Program Banner</option>
-                </select>
-              </div>
-              <div style="width:auto; display:flex; align-items:flex-end;">
-                <button type="button" class="btn-mini" onclick="document.getElementById('upload-logo-2').click()" style="padding:6px 10px; font-size:11px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#e4e4e7; border-radius:4px; cursor:pointer;">
-                  Upload Asset
-                </button>
-                <input type="file" id="upload-logo-2" accept="image/png,image/webp,image/jpeg" style="display:none;" onchange="uploadOverlayFile('overlay_2')">
-              </div>
-            </div>
-
-            <!-- Quick Position Presets -->
-            <div style="margin-top:10px;">
-              <label class="control-label">QUICK POSITION PRESETS</label>
-              <div class="preset-pill-group">
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 5, 84)">Bottom-Left (News)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 41, 84)">Bottom-Center (Ticker)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 5, 5)">Top-Left (Bug)</button>
-                <button type="button" class="preset-pill" onclick="applyPreset('overlay_2', 76, 84)">Bottom-Right</button>
-              </div>
-            </div>
-
-            <!-- Sliders -->
-            <div class="sliders-grid">
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Horizontal (X-Pos)</span>
-                  <span id="txt-x2" class="slider-val-txt">5.0%</span>
-                </div>
-                <input type="range" id="rng-x2" min="0" max="95" step="0.5" value="5" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
-              </div>
-
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Vertical (Y-Pos)</span>
-                  <span id="txt-y2" class="slider-val-txt">84.0%</span>
-                </div>
-                <input type="range" id="rng-y2" min="0" max="95" step="0.5" value="84" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
-              </div>
-
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Scale / Width</span>
-                  <span id="txt-s2" class="slider-val-txt">18.0%</span>
-                </div>
-                <input type="range" id="rng-s2" min="5" max="50" step="0.5" value="18" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
-              </div>
-
-              <div class="slider-row">
-                <div class="slider-label-row">
-                  <span>Opacity</span>
-                  <span id="txt-a2" class="slider-val-txt">100%</span>
-                </div>
-                <input type="range" id="rng-a2" min="20" max="100" step="1" value="100" class="range-slider range-slider-amber" oninput="onSliderChange('overlay_2')">
-              </div>
-            </div>
+          <!-- Add Layer Button (Max 4) -->
+          <div style="margin-top:4px;">
+            <button type="button" id="btn-add-overlay" class="btn-mini" onclick="addOverlayLayer()" style="padding:10px 14px; font-size:12.5px; font-weight:700; width:100%; border-radius:6px; display:flex; align-items:center; justify-content:center; gap:6px; background:rgba(0,229,255,0.1); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); cursor:pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span id="btn-add-overlay-text">+ Tambah Overlay (1/4)</span>
+            </button>
           </div>
 
           <!-- Bottom Action Buttons & FFmpeg Filter String Inspection -->
@@ -2827,7 +2669,7 @@ html, body {
                 <span style="font-size:9.5px; color:var(--muted);">AUTO-GENERATED FOR RESTREAMING</span>
               </div>
               <div id="filter-cmd-preview" style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#38bdf8; word-break:break-all; line-height:1.4;">
-                movie='/srv/makasna-dashboard/static/overlays/station_logo.png',scale=268:-1,colorchannelmixer=aa=0.95[ov1];[in][ov1]overlay=W*0.88:H*0.06[out]
+                -c:v copy (Pure passthrough, no overlay active)
               </div>
             </div>
           </div>
@@ -6523,29 +6365,35 @@ requestAnimationFrame(runHyperdeckAudioMeter);
 // =========================================================================
 // STATION ID & OVERLAY STUDIO JAVASCRIPT CONTROLLER
 // =========================================================================
+const LAYER_THEMES = [
+  { id: 1, name: "Overlay 1", color: "#00e5ff", classDrag: "drag-cyan", classDot: "dot-cyan", classSlider: "range-slider", tag: "L1", defaultX: 80.0, defaultY: 5.0, defaultScale: 15.0 },
+  { id: 2, name: "Overlay 2", color: "#ffb300", classDrag: "drag-amber", classDot: "dot-amber", classSlider: "range-slider range-slider-amber", tag: "L2", defaultX: 5.0, defaultY: 84.0, defaultScale: 18.0 },
+  { id: 3, name: "Overlay 3", color: "#e040fb", classDrag: "drag-magenta", classDot: "dot-magenta", classSlider: "range-slider range-slider-magenta", tag: "L3", defaultX: 5.0, defaultY: 5.0, defaultScale: 15.0 },
+  { id: 4, name: "Overlay 4", color: "#00e676", classDrag: "drag-emerald", classDot: "dot-emerald", classSlider: "range-slider range-slider-emerald", tag: "L4", defaultX: 80.0, defaultY: 84.0, defaultScale: 15.0 }
+];
+
 let overlayConfigState = {
   enabled: true,
   apply_to_egress: true,
+  target_output: "all",
   feed_source: "",
-  overlay_1: {
-    enabled: true,
-    file: "/static/overlays/station_logo.png",
-    x_percent: 88.0,
-    y_percent: 6.0,
-    scale_percent: 14.0,
-    opacity: 0.95
-  },
-  overlay_2: {
-    enabled: true,
-    file: "/static/overlays/live_badge.png",
-    x_percent: 6.0,
-    y_percent: 86.0,
-    scale_percent: 18.0,
-    opacity: 1.0
-  }
+  layers: []
 };
 
-let overlayDraggablesInitialized = false;
+let overlayLayers = [
+  {
+    id: 1,
+    name: "Overlay 1",
+    file: "",
+    x_percent: 80.0,
+    y_percent: 5.0,
+    scale_percent: 15.0,
+    opacity: 1.0,
+    enabled: true
+  }
+];
+
+let availableOverlayAssets = [];
 
 async function loadOverlayStudio() {
   try {
@@ -6555,27 +6403,101 @@ async function loadOverlayStudio() {
       if (data.config) {
         overlayConfigState = { ...overlayConfigState, ...data.config };
       }
-      if (data.assets && Array.isArray(data.assets)) {
-        populateOverlayAssetSelects(data.assets);
+      if (Array.isArray(data.assets)) {
+        availableOverlayAssets = data.assets;
       }
     }
   } catch (e) {
-    console.warn("Could not load /api/overlay/config, using defaults", e);
+    console.warn("Could not load /api/overlay/config", e);
   }
+
+  // Populate Target Output Select
+  populateOverlayTargetSelect();
 
   // Populate Feed Source Select from routes
   populateOverlayFeedSelect();
 
-  // Apply state to DOM controls
-  applyStateToOverlayDOM();
-
-  // Init Draggables
-  if (!overlayDraggablesInitialized) {
-    initOverlayDraggables();
-    overlayDraggablesInitialized = true;
+  // Parse layers from config (initial default: 1 layer, empty asset)
+  if (Array.isArray(overlayConfigState.layers) && overlayConfigState.layers.length > 0) {
+    overlayLayers = overlayConfigState.layers.slice(0, 4).map((l, idx) => {
+      const theme = LAYER_THEMES[idx] || LAYER_THEMES[0];
+      return {
+        id: idx + 1,
+        name: l.name || `Overlay ${idx + 1}`,
+        file: l.file || "",
+        x_percent: typeof l.x_percent === 'number' ? l.x_percent : theme.defaultX,
+        y_percent: typeof l.y_percent === 'number' ? l.y_percent : theme.defaultY,
+        scale_percent: typeof l.scale_percent === 'number' ? l.scale_percent : theme.defaultScale,
+        opacity: typeof l.opacity === 'number' ? l.opacity : 1.0,
+        enabled: l.enabled !== false
+      };
+    });
+  } else {
+    overlayLayers = [
+      {
+        id: 1,
+        name: "Overlay 1",
+        file: "",
+        x_percent: 80.0,
+        y_percent: 5.0,
+        scale_percent: 15.0,
+        opacity: 1.0,
+        enabled: true
+      }
+    ];
   }
 
-  updateFilterCodePreview();
+  const masterChk = document.getElementById('cfg-overlay-master');
+  if (masterChk) masterChk.checked = overlayConfigState.enabled !== false;
+
+  renderAllOverlayLayers();
+}
+
+function populateOverlayTargetSelect() {
+  const sel = document.getElementById('overlay-target-output');
+  if (!sel) return;
+  const currentVal = overlayConfigState.target_output || 'all';
+  sel.innerHTML = '';
+
+  const optAll = document.createElement('option');
+  optAll.value = 'all';
+  optAll.textContent = 'ALL OUTPUTS (Global Master Burn-In)';
+  if (currentVal === 'all') optAll.selected = true;
+  sel.appendChild(optAll);
+
+  const routesList = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes)) ? currentRoutes : [];
+  routesList.forEach(r => {
+    const grp = document.createElement('optgroup');
+    grp.label = `Route: ${r.name || 'Route ' + r.id}`;
+
+    const optRoute = document.createElement('option');
+    optRoute.value = `route_${r.id}`;
+    optRoute.textContent = `[${r.name}] All Egress Outputs`;
+    if (currentVal === `route_${r.id}` || currentVal === `${r.id}`) optRoute.selected = true;
+    grp.appendChild(optRoute);
+
+    const dests = Array.isArray(r.destinations) ? r.destinations : [];
+    dests.forEach((d, dIdx) => {
+      const optDest = document.createElement('option');
+      optDest.value = `route_${r.id}:${dIdx}`;
+      let dName = d.type === 'direct_srt_local' ? `Direct SRT Local (${d.stream_id || 'stream'})` :
+                  d.type === 'rtmp_push' ? `RTMP Push (${d.url || 'url'})` :
+                  d.type === 'srt_caller' ? `SRT Caller (${d.address || 'ip'}:${d.port || 'port'})` :
+                  `Destination #${dIdx + 1}`;
+      optDest.textContent = `[${r.name}] Output #${dIdx + 1}: ${dName}`;
+      if (currentVal === `route_${r.id}:${dIdx}` || currentVal === `${r.id}:${dIdx}`) optDest.selected = true;
+      grp.appendChild(optDest);
+    });
+
+    sel.appendChild(grp);
+  });
+}
+
+function onOverlayTargetChange() {
+  const sel = document.getElementById('overlay-target-output');
+  if (sel) {
+    overlayConfigState.target_output = sel.value;
+  }
 }
 
 function populateOverlayFeedSelect() {
@@ -6584,7 +6506,6 @@ function populateOverlayFeedSelect() {
   const currentVal = sel.value || overlayConfigState.feed_source;
   sel.innerHTML = '<option value="">-- SELECT BROADCAST FEED --</option>';
 
-  // 1. Inbound Publishers (e.g. JSM)
   if (Array.isArray(latestInboundPublishers) && latestInboundPublishers.length > 0) {
     const grp = document.createElement('optgroup');
     grp.label = "Inbound SRT Publishers";
@@ -6598,7 +6519,6 @@ function populateOverlayFeedSelect() {
     sel.appendChild(grp);
   }
 
-  // 2. Gateway Routes
   const routesList = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes)) ? currentRoutes : [];
   if (routesList.length > 0) {
     const grp = document.createElement('optgroup');
@@ -6613,7 +6533,6 @@ function populateOverlayFeedSelect() {
     sel.appendChild(grp);
   }
 
-  // Add standard MediaMTX paths if any
   const optDefault = document.createElement('option');
   optDefault.value = 'live/feed1';
   optDefault.textContent = 'MediaMTX: live/feed1 (Default)';
@@ -6621,201 +6540,381 @@ function populateOverlayFeedSelect() {
   sel.appendChild(optDefault);
 }
 
-function populateOverlayAssetSelects(assets) {
-  const sel1 = document.getElementById('cfg-ov1-file');
-  const sel2 = document.getElementById('cfg-ov2-file');
-  if (!sel1 || !sel2) return;
+function renderAllOverlayLayers() {
+  renderCanvasBoxes();
+  renderControlPanels();
+  renderTelemetryCards();
+  updateAddOverlayButtonState();
+  updateFilterCodePreview();
+}
 
-  const current1 = overlayConfigState.overlay_1.file;
-  const current2 = overlayConfigState.overlay_2.file;
+function updateAddOverlayButtonState() {
+  const btn = document.getElementById('btn-add-overlay');
+  const txt = document.getElementById('btn-add-overlay-text');
+  if (!btn || !txt) return;
 
-  sel1.innerHTML = '';
-  sel2.innerHTML = '';
+  const count = overlayLayers.length;
+  if (count >= 4) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+    txt.textContent = 'Maksimal 4 Overlay Tercapai (4/4)';
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    txt.textContent = `+ Tambah Overlay (${count}/4)`;
+  }
+}
 
-  assets.forEach(a => {
-    const opt1 = document.createElement('option');
-    opt1.value = a.url;
-    opt1.textContent = a.name;
-    if (a.url === current1) opt1.selected = true;
-    sel1.appendChild(opt1);
+function addOverlayLayer() {
+  if (overlayLayers.length >= 4) {
+    showToast("Maksimal 4 overlay layer tercapai.", "error");
+    return;
+  }
 
-    const opt2 = document.createElement('option');
-    opt2.value = a.url;
-    opt2.textContent = a.name;
-    if (a.url === current2) opt2.selected = true;
-    sel2.appendChild(opt2);
+  const nextIdx = overlayLayers.length;
+  const theme = LAYER_THEMES[nextIdx] || LAYER_THEMES[0];
+  const newId = nextIdx + 1;
+
+  overlayLayers.push({
+    id: newId,
+    name: `Overlay ${newId}`,
+    file: "",
+    x_percent: theme.defaultX,
+    y_percent: theme.defaultY,
+    scale_percent: theme.defaultScale,
+    opacity: 1.0,
+    enabled: true
+  });
+
+  renderAllOverlayLayers();
+  showToast(`Overlay Layer ${newId} berhasil ditambahkan. Silakan upload aset grafis.`, "success");
+}
+
+function removeOverlayLayer(id) {
+  if (overlayLayers.length <= 1) {
+    showToast("Minimal harus ada 1 overlay layer.", "error");
+    return;
+  }
+
+  overlayLayers = overlayLayers.filter(l => l.id !== id);
+  overlayLayers.forEach((l, idx) => {
+    l.id = idx + 1;
+    l.name = `Overlay ${idx + 1}`;
+  });
+
+  renderAllOverlayLayers();
+  showToast("Overlay Layer telah dihapus.", "info");
+}
+
+function renderCanvasBoxes() {
+  const canvas = document.getElementById('overlay-drag-canvas');
+  if (!canvas) return;
+  canvas.innerHTML = '';
+
+  overlayLayers.forEach((layer, idx) => {
+    const theme = LAYER_THEMES[idx] || LAYER_THEMES[0];
+    const box = document.createElement('div');
+    box.id = `drag-box-${layer.id}`;
+    box.className = `overlay-drag-item ${theme.classDrag}`;
+    box.style.left = `${layer.x_percent}%`;
+    box.style.top = `${layer.y_percent}%`;
+    box.style.width = `${layer.scale_percent}%`;
+    box.style.opacity = `${layer.opacity}`;
+    box.style.display = layer.enabled ? 'block' : 'none';
+
+    let contentHtml = '';
+    if (layer.file) {
+      contentHtml = `<img id="preview-img-${layer.id}" src="${escapeHtml(layer.file)}" alt="${escapeHtml(layer.name)}" style="width:100%; height:auto; display:block;" />`;
+    } else {
+      contentHtml = `
+        <div style="padding:10px 4px; text-align:center; width:100%; border:1px dashed ${theme.color}40; background:rgba(0,0,0,0.6); border-radius:4px;">
+          <div style="font-size:10px; font-weight:800; color:${theme.color};">LAYER ${layer.id}</div>
+          <div style="font-size:8px; color:var(--muted); margin-top:2px;">(Aset Kosong)</div>
+        </div>
+      `;
+    }
+
+    box.innerHTML = `
+      <div class="drag-header" style="border-bottom:1px solid ${theme.color}40;">
+        <span style="color:${theme.color}; font-weight:800;">${theme.tag}</span>
+        <span id="drag-coord-${layer.id}" style="color:${theme.color}; font-family:'JetBrains Mono',monospace;">${Math.round(layer.x_percent)}%, ${Math.round(layer.y_percent)}%</span>
+      </div>
+      <div class="drag-content" id="drag-content-${layer.id}">
+        ${contentHtml}
+      </div>
+    `;
+
+    canvas.appendChild(box);
+  });
+
+  // Re-attach interactive drag listeners
+  overlayLayers.forEach(layer => {
+    setupInteractiveDrag(`drag-box-${layer.id}`, (xPct, yPct) => {
+      layer.x_percent = xPct;
+      layer.y_percent = yPct;
+      syncLayerDOM(layer.id);
+    });
   });
 }
 
-function applyStateToOverlayDOM() {
-  const masterChk = document.getElementById('cfg-overlay-master');
-  if (masterChk) masterChk.checked = overlayConfigState.enabled !== false;
+function renderControlPanels() {
+  const container = document.getElementById('overlay-layers-controls-container');
+  if (!container) return;
+  container.innerHTML = '';
 
-  // Layer 1
-  const ov1 = overlayConfigState.overlay_1 || {};
-  const chk1 = document.getElementById('cfg-ov1-enabled');
-  if (chk1) chk1.checked = ov1.enabled !== false;
+  overlayLayers.forEach((layer, idx) => {
+    const theme = LAYER_THEMES[idx] || LAYER_THEMES[0];
+    const canDelete = overlayLayers.length > 1;
 
-  const sel1 = document.getElementById('cfg-ov1-file');
-  if (sel1 && ov1.file) sel1.value = ov1.file;
+    const box = document.createElement('div');
+    box.className = 'overlay-control-box';
+    box.style.borderLeft = `3px solid ${theme.color}`;
 
-  const rngX1 = document.getElementById('rng-x1');
-  const rngY1 = document.getElementById('rng-y1');
-  const rngS1 = document.getElementById('rng-s1');
-  const rngA1 = document.getElementById('rng-a1');
+    let assetOptions = `<option value="">-- Kosong (Belum ada aset) --</option>`;
+    availableOverlayAssets.forEach(a => {
+      const selected = (a.url === layer.file) ? 'selected' : '';
+      assetOptions += `<option value="${escapeHtml(a.url)}" ${selected}>${escapeHtml(a.name)}</option>`;
+    });
 
-  if (rngX1) rngX1.value = ov1.x_percent ?? 82;
-  if (rngY1) rngY1.value = ov1.y_percent ?? 5;
-  if (rngS1) rngS1.value = ov1.scale_percent ?? 14;
-  if (rngA1) rngA1.value = Math.round((ov1.opacity ?? 0.95) * 100);
+    box.innerHTML = `
+      <div class="control-box-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="dot-indicator ${theme.classDot}"></span>
+          <span style="font-weight:700; font-size:13px; color:${theme.color}; letter-spacing:0.5px;">LAYER ${layer.id} : ${escapeHtml(layer.name).toUpperCase()}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${canDelete ? `
+            <button type="button" class="btn-mini" onclick="removeOverlayLayer(${layer.id})" style="padding:2px 8px; font-size:10.5px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#ef4444; border-radius:4px; cursor:pointer;" title="Hapus Layer ${layer.id}">
+              Hapus
+            </button>
+          ` : ''}
+          <label class="toggle-switch-sm">
+            <input type="checkbox" id="cfg-ov${layer.id}-enabled" ${layer.enabled ? 'checked' : ''} onchange="onLayerToggle(${layer.id})">
+            <span class="toggle-slider-sm"></span>
+          </label>
+        </div>
+      </div>
 
-  // Layer 2
-  const ov2 = overlayConfigState.overlay_2 || {};
-  const chk2 = document.getElementById('cfg-ov2-enabled');
-  if (chk2) chk2.checked = ov2.enabled !== false;
+      <!-- Asset Selector & Upload -->
+      <div class="form-row-sm" style="margin-top:10px;">
+        <div style="flex:1;">
+          <label class="control-label">ASET GRAFIS</label>
+          <select id="cfg-ov${layer.id}-file" class="form-control-sm" onchange="onLayerAssetSelect(${layer.id})">
+            ${assetOptions}
+          </select>
+        </div>
+        <div style="width:auto; display:flex; align-items:flex-end;">
+          <button type="button" class="btn-mini" onclick="document.getElementById('upload-logo-${layer.id}').click()" style="padding:6px 10px; font-size:11px; white-space:nowrap; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:#e4e4e7; border-radius:4px; cursor:pointer;">
+            Upload Aset
+          </button>
+          <input type="file" id="upload-logo-${layer.id}" accept="image/png,image/webp,image/jpeg" style="display:none;" onchange="uploadOverlayFile(${layer.id})">
+        </div>
+      </div>
 
-  const sel2 = document.getElementById('cfg-ov2-file');
-  if (sel2 && ov2.file) sel2.value = ov2.file;
+      <!-- Quick Position Presets -->
+      <div style="margin-top:10px;">
+        <label class="control-label">PRESET POSISI CEPAT</label>
+        <div class="preset-pill-group">
+          <button type="button" class="preset-pill" onclick="applyPreset(${layer.id}, 80, 5)">Kanan-Atas</button>
+          <button type="button" class="preset-pill" onclick="applyPreset(${layer.id}, 5, 5)">Kiri-Atas</button>
+          <button type="button" class="preset-pill" onclick="applyPreset(${layer.id}, 80, 84)">Kanan-Bawah</button>
+          <button type="button" class="preset-pill" onclick="applyPreset(${layer.id}, 5, 84)">Kiri-Bawah</button>
+        </div>
+      </div>
 
-  const rngX2 = document.getElementById('rng-x2');
-  const rngY2 = document.getElementById('rng-y2');
-  const rngS2 = document.getElementById('rng-s2');
-  const rngA2 = document.getElementById('rng-a2');
+      <!-- Sliders -->
+      <div class="sliders-grid">
+        <div class="slider-row">
+          <div class="slider-label-row">
+            <span>Horizontal (X-Pos)</span>
+            <span id="txt-x${layer.id}" class="slider-val-txt">${layer.x_percent.toFixed(1)}%</span>
+          </div>
+          <input type="range" id="rng-x${layer.id}" min="0" max="95" step="0.5" value="${layer.x_percent}" class="${theme.classSlider}" oninput="onSliderChange(${layer.id})">
+        </div>
 
-  if (rngX2) rngX2.value = ov2.x_percent ?? 5;
-  if (rngY2) rngY2.value = ov2.y_percent ?? 84;
-  if (rngS2) rngS2.value = ov2.scale_percent ?? 18;
-  if (rngA2) rngA2.value = Math.round((ov2.opacity ?? 1.0) * 100);
+        <div class="slider-row">
+          <div class="slider-label-row">
+            <span>Vertical (Y-Pos)</span>
+            <span id="txt-y${layer.id}" class="slider-val-txt">${layer.y_percent.toFixed(1)}%</span>
+          </div>
+          <input type="range" id="rng-y${layer.id}" min="0" max="95" step="0.5" value="${layer.y_percent}" class="${theme.classSlider}" oninput="onSliderChange(${layer.id})">
+        </div>
 
-  updateDOMPositionsFromSliders();
+        <div class="slider-row">
+          <div class="slider-label-row">
+            <span>Scale / Width</span>
+            <span id="txt-s${layer.id}" class="slider-val-txt">${layer.scale_percent.toFixed(1)}%</span>
+          </div>
+          <input type="range" id="rng-s${layer.id}" min="5" max="50" step="0.5" value="${layer.scale_percent}" class="${theme.classSlider}" oninput="onSliderChange(${layer.id})">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label-row">
+            <span>Opacity</span>
+            <span id="txt-a${layer.id}" class="slider-val-txt">${Math.round(layer.opacity * 100)}%</span>
+          </div>
+          <input type="range" id="rng-a${layer.id}" min="10" max="100" step="1" value="${Math.round(layer.opacity * 100)}" class="${theme.classSlider}" oninput="onSliderChange(${layer.id})">
+        </div>
+      </div>
+    `;
+
+    container.appendChild(box);
+  });
 }
 
-function updateDOMPositionsFromSliders() {
-  // Layer 1
-  const box1 = document.getElementById('drag-box-1');
-  const chk1 = document.getElementById('cfg-ov1-enabled');
-  const x1 = parseFloat(document.getElementById('rng-x1')?.value || 82);
-  const y1 = parseFloat(document.getElementById('rng-y1')?.value || 5);
-  const s1 = parseFloat(document.getElementById('rng-s1')?.value || 14);
-  const a1 = parseInt(document.getElementById('rng-a1')?.value || 95);
+function renderTelemetryCards() {
+  const container = document.getElementById('overlay-telemetry-container');
+  if (!container) return;
+  container.innerHTML = '';
 
-  if (box1) {
-    box1.style.display = (chk1 && !chk1.checked) ? 'none' : 'block';
-    const effX1 = Math.max(0, Math.min(x1, 100 - s1));
-    const effY1 = Math.max(0, Math.min(y1, 95));
-    box1.style.left = effX1 + '%';
-    box1.style.top = effY1 + '%';
-    box1.style.width = s1 + '%';
-    box1.style.opacity = (a1 / 100).toFixed(2);
+  overlayLayers.forEach((layer, idx) => {
+    const theme = LAYER_THEMES[idx] || LAYER_THEMES[0];
+    const hasAsset = Boolean(layer.file);
+
+    const card = document.createElement('div');
+    card.className = 'telemetry-layer-card';
+    card.innerHTML = `
+      <div class="telemetry-layer-head">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span class="dot-indicator ${theme.classDot}"></span>
+          <span class="coord-title">LAYER ${layer.id} &mdash; ${escapeHtml(layer.name).toUpperCase()}</span>
+        </div>
+        <span class="tag-live-sm" style="color:${theme.color}; background:${theme.color}18; border:1px solid ${theme.color}40;">
+          ${hasAsset ? 'ACTIVE ASSET' : 'NO ASSET'}
+        </span>
+      </div>
+      <div class="telemetry-stats-grid">
+        <div class="stat-pill"><span class="stat-label">X-POS</span><b id="readout-x${layer.id}">${layer.x_percent.toFixed(1)}%</b></div>
+        <div class="stat-pill"><span class="stat-label">Y-POS</span><b id="readout-y${layer.id}">${layer.y_percent.toFixed(1)}%</b></div>
+        <div class="stat-pill"><span class="stat-label">SCALE</span><b id="readout-s${layer.id}">${layer.scale_percent.toFixed(1)}%</b></div>
+        <div class="stat-pill"><span class="stat-label">ALPHA</span><b id="readout-a${layer.id}">${Math.round(layer.opacity * 100)}%</b></div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function syncLayerDOM(layerId) {
+  const layer = overlayLayers.find(l => l.id === layerId);
+  if (!layer) return;
+
+  const box = document.getElementById(`drag-box-${layer.id}`);
+  const coord = document.getElementById(`drag-coord-${layer.id}`);
+  const rx = document.getElementById(`rng-x${layer.id}`);
+  const ry = document.getElementById(`rng-y${layer.id}`);
+  const rs = document.getElementById(`rng-s${layer.id}`);
+  const ra = document.getElementById(`rng-a${layer.id}`);
+
+  const tx = document.getElementById(`txt-x${layer.id}`);
+  const ty = document.getElementById(`txt-y${layer.id}`);
+  const ts = document.getElementById(`txt-s${layer.id}`);
+  const ta = document.getElementById(`txt-a${layer.id}`);
+
+  const rX = document.getElementById(`readout-x${layer.id}`);
+  const rY = document.getElementById(`readout-y${layer.id}`);
+  const rS = document.getElementById(`readout-s${layer.id}`);
+  const rA = document.getElementById(`readout-a${layer.id}`);
+
+  if (rx) rx.value = layer.x_percent;
+  if (ry) ry.value = layer.y_percent;
+  if (rs) rs.value = layer.scale_percent;
+  if (ra) ra.value = Math.round(layer.opacity * 100);
+
+  if (tx) tx.textContent = `${layer.x_percent.toFixed(1)}%`;
+  if (ty) ty.textContent = `${layer.y_percent.toFixed(1)}%`;
+  if (ts) ts.textContent = `${layer.scale_percent.toFixed(1)}%`;
+  if (ta) ta.textContent = `${Math.round(layer.opacity * 100)}%`;
+
+  if (rX) rX.textContent = `${layer.x_percent.toFixed(1)}%`;
+  if (rY) rY.textContent = `${layer.y_percent.toFixed(1)}%`;
+  if (rS) rS.textContent = `${layer.scale_percent.toFixed(1)}%`;
+  if (rA) rA.textContent = `${Math.round(layer.opacity * 100)}%`;
+
+  if (coord) coord.textContent = `${Math.round(layer.x_percent)}%, ${Math.round(layer.y_percent)}%`;
+
+  if (box) {
+    box.style.display = layer.enabled ? 'block' : 'none';
+    box.style.left = `${layer.x_percent}%`;
+    box.style.top = `${layer.y_percent}%`;
+    box.style.width = `${layer.scale_percent}%`;
+    box.style.opacity = `${layer.opacity}`;
   }
-
-  const txtX1 = document.getElementById('txt-x1');
-  const txtY1 = document.getElementById('txt-y1');
-  const txtS1 = document.getElementById('txt-s1');
-  const txtA1 = document.getElementById('txt-a1');
-  const rX1 = document.getElementById('readout-x1');
-  const rY1 = document.getElementById('readout-y1');
-  const rS1 = document.getElementById('readout-s1');
-  const rA1 = document.getElementById('readout-a1');
-  const coord1 = document.getElementById('drag-coord-1');
-
-  if (txtX1) txtX1.textContent = x1.toFixed(1) + '%';
-  if (txtY1) txtY1.textContent = y1.toFixed(1) + '%';
-  if (txtS1) txtS1.textContent = s1.toFixed(1) + '%';
-  if (txtA1) txtA1.textContent = a1 + '%';
-  if (rX1) rX1.textContent = x1.toFixed(1) + '%';
-  if (rY1) rY1.textContent = y1.toFixed(1) + '%';
-  if (rS1) rS1.textContent = s1.toFixed(1) + '%';
-  if (rA1) rA1.textContent = a1 + '%';
-  if (coord1) coord1.textContent = `${Math.round(x1)}%, ${Math.round(y1)}%`;
-
-  // Layer 2
-  const box2 = document.getElementById('drag-box-2');
-  const chk2 = document.getElementById('cfg-ov2-enabled');
-  const x2 = parseFloat(document.getElementById('rng-x2')?.value || 5);
-  const y2 = parseFloat(document.getElementById('rng-y2')?.value || 84);
-  const s2 = parseFloat(document.getElementById('rng-s2')?.value || 18);
-  const a2 = parseInt(document.getElementById('rng-a2')?.value || 100);
-
-  if (box2) {
-    box2.style.display = (chk2 && !chk2.checked) ? 'none' : 'block';
-    const effX2 = Math.max(0, Math.min(x2, 100 - s2));
-    const effY2 = Math.max(0, Math.min(y2, 95));
-    box2.style.left = effX2 + '%';
-    box2.style.top = effY2 + '%';
-    box2.style.width = s2 + '%';
-    box2.style.opacity = (a2 / 100).toFixed(2);
-  }
-
-  const txtX2 = document.getElementById('txt-x2');
-  const txtY2 = document.getElementById('txt-y2');
-  const txtS2 = document.getElementById('txt-s2');
-  const txtA2 = document.getElementById('txt-a2');
-  const rX2 = document.getElementById('readout-x2');
-  const rY2 = document.getElementById('readout-y2');
-  const rS2 = document.getElementById('readout-s2');
-  const rA2 = document.getElementById('readout-a2');
-  const coord2 = document.getElementById('drag-coord-2');
-
-  if (txtX2) txtX2.textContent = x2.toFixed(1) + '%';
-  if (txtY2) txtY2.textContent = y2.toFixed(1) + '%';
-  if (txtS2) txtS2.textContent = s2.toFixed(1) + '%';
-  if (txtA2) txtA2.textContent = a2 + '%';
-  if (rX2) rX2.textContent = x2.toFixed(1) + '%';
-  if (rY2) rY2.textContent = y2.toFixed(1) + '%';
-  if (rS2) rS2.textContent = s2.toFixed(1) + '%';
-  if (rA2) rA2.textContent = a2 + '%';
-  if (coord2) coord2.textContent = `${Math.round(x2)}%, ${Math.round(y2)}%`;
 
   updateFilterCodePreview();
 }
 
-function onSliderChange(layer) {
-  updateDOMPositionsFromSliders();
+function onSliderChange(layerId) {
+  const layer = overlayLayers.find(l => l.id === layerId);
+  if (!layer) return;
+
+  const rx = document.getElementById(`rng-x${layer.id}`);
+  const ry = document.getElementById(`rng-y${layer.id}`);
+  const rs = document.getElementById(`rng-s${layer.id}`);
+  const ra = document.getElementById(`rng-a${layer.id}`);
+
+  if (rx) layer.x_percent = parseFloat(rx.value);
+  if (ry) layer.y_percent = parseFloat(ry.value);
+  if (rs) layer.scale_percent = parseFloat(rs.value);
+  if (ra) layer.opacity = parseFloat(ra.value) / 100.0;
+
+  syncLayerDOM(layerId);
 }
 
-function onLayerToggle(layer) {
-  updateDOMPositionsFromSliders();
+function onLayerToggle(layerId) {
+  const layer = overlayLayers.find(l => l.id === layerId);
+  if (!layer) return;
+  const chk = document.getElementById(`cfg-ov${layer.id}-enabled`);
+  if (chk) layer.enabled = chk.checked;
+  syncLayerDOM(layerId);
 }
 
-function applyPreset(layer, xPct, yPct) {
-  if (layer === 'overlay_1') {
-    const rx = document.getElementById('rng-x1');
-    const ry = document.getElementById('rng-y1');
-    if (rx) rx.value = xPct;
-    if (ry) ry.value = yPct;
-  } else {
-    const rx = document.getElementById('rng-x2');
-    const ry = document.getElementById('rng-y2');
-    if (rx) rx.value = xPct;
-    if (ry) ry.value = yPct;
+function applyPreset(layerId, xPct, yPct) {
+  const layer = overlayLayers.find(l => l.id === layerId);
+  if (!layer) return;
+  layer.x_percent = xPct;
+  layer.y_percent = yPct;
+  syncLayerDOM(layerId);
+}
+
+function onLayerAssetSelect(layerId) {
+  const layer = overlayLayers.find(l => l.id === layerId);
+  if (!layer) return;
+  const sel = document.getElementById(`cfg-ov${layer.id}-file`);
+  if (!sel) return;
+
+  layer.file = sel.value;
+
+  const content = document.getElementById(`drag-content-${layer.id}`);
+  const theme = LAYER_THEMES[layer.id - 1] || LAYER_THEMES[0];
+  if (content) {
+    if (layer.file) {
+      content.innerHTML = `<img id="preview-img-${layer.id}" src="${escapeHtml(layer.file)}" alt="${escapeHtml(layer.name)}" style="width:100%; height:auto; display:block;" />`;
+    } else {
+      content.innerHTML = `
+        <div style="padding:10px 4px; text-align:center; width:100%; border:1px dashed ${theme.color}40; background:rgba(0,0,0,0.6); border-radius:4px;">
+          <div style="font-size:10px; font-weight:800; color:${theme.color};">LAYER ${layer.id}</div>
+          <div style="font-size:8px; color:var(--muted); margin-top:2px;">(Aset Kosong)</div>
+        </div>
+      `;
+    }
   }
-  updateDOMPositionsFromSliders();
-}
 
-function onOverlayAssetSelect(layer) {
-  if (layer === 'overlay_1') {
-    const sel = document.getElementById('cfg-ov1-file');
-    const img = document.getElementById('preview-img-1');
-    if (sel && img) img.src = sel.value;
-  } else {
-    const sel = document.getElementById('cfg-ov2-file');
-    const img = document.getElementById('preview-img-2');
-    if (sel && img) img.src = sel.value;
-  }
+  renderTelemetryCards();
   updateFilterCodePreview();
 }
 
-async function uploadOverlayFile(layer) {
-  const input = document.getElementById(layer === 'overlay_1' ? 'upload-logo-1' : 'upload-logo-2');
+async function uploadOverlayFile(layerId) {
+  const input = document.getElementById(`upload-logo-${layerId}`);
   if (!input || !input.files || input.files.length === 0) return;
 
   const file = input.files[0];
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('layer', layer);
+  formData.append('layer', layerId);
 
-  showToast(`Uploading ${file.name}...`);
+  showToast(`Mengunggah ${file.name}...`);
   try {
     const res = await fetch('/api/overlay/upload', {
       method: 'POST',
@@ -6823,18 +6922,24 @@ async function uploadOverlayFile(layer) {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast(`Uploaded ${file.name} successfully!`, 'success');
-      if (data.assets) populateOverlayAssetSelects(data.assets);
-      const sel = document.getElementById(layer === 'overlay_1' ? 'cfg-ov1-file' : 'cfg-ov2-file');
-      if (sel) sel.value = data.file;
-      const img = document.getElementById(layer === 'overlay_1' ? 'preview-img-1' : 'preview-img-2');
-      if (img) img.src = data.file;
+      showToast(`Aset ${file.name} berhasil diunggah!`, 'success');
+      if (Array.isArray(data.assets)) {
+        availableOverlayAssets = data.assets;
+      }
+      const layer = overlayLayers.find(l => l.id === layerId);
+      if (layer) {
+        layer.file = data.file;
+        layer.enabled = true;
+      }
+      renderControlPanels();
+      renderCanvasBoxes();
+      renderTelemetryCards();
       updateFilterCodePreview();
     } else {
-      showToast(data.error || 'Upload failed', 'error');
+      showToast(data.error || 'Upload gagal', 'error');
     }
   } catch (err) {
-    showToast(`Upload error: ${err.message}`, 'error');
+    showToast(`Kesalahan upload: ${err.message}`, 'error');
   }
 }
 
@@ -6845,24 +6950,6 @@ function toggleOverlayGuides() {
   const isHidden = guides.style.display === 'none';
   guides.style.display = isHidden ? 'block' : 'none';
   if (btn) btn.textContent = isHidden ? 'GUIDES: ON' : 'GUIDES: OFF';
-}
-
-function initOverlayDraggables() {
-  setupInteractiveDrag('drag-box-1', (xPct, yPct) => {
-    const rx = document.getElementById('rng-x1');
-    const ry = document.getElementById('rng-y1');
-    if (rx) rx.value = xPct;
-    if (ry) ry.value = yPct;
-    updateDOMPositionsFromSliders();
-  });
-
-  setupInteractiveDrag('drag-box-2', (xPct, yPct) => {
-    const rx = document.getElementById('rng-x2');
-    const ry = document.getElementById('rng-y2');
-    if (rx) rx.value = xPct;
-    if (ry) ry.value = yPct;
-    updateDOMPositionsFromSliders();
-  });
 }
 
 function setupInteractiveDrag(elemId, onDragUpdate) {
@@ -6935,74 +7022,63 @@ function setupInteractiveDrag(elemId, onDragUpdate) {
 
 function updateFilterCodePreview() {
   const masterOn = document.getElementById('cfg-overlay-master')?.checked;
-  const on1 = document.getElementById('cfg-ov1-enabled')?.checked;
-  const on2 = document.getElementById('cfg-ov2-enabled')?.checked;
   const previewDiv = document.getElementById('filter-cmd-preview');
   if (!previewDiv) return;
 
-  if (!masterOn || (!on1 && !on2)) {
-    previewDiv.textContent = "-c:v copy (Pure passthrough, overlay disabled)";
+  const activeLayers = overlayLayers.filter(l => l.enabled && l.file);
+
+  if (!masterOn || activeLayers.length === 0) {
+    previewDiv.textContent = "-c:v copy (Pure passthrough, no overlay active)";
     previewDiv.style.color = "#a1a1aa";
     return;
   }
 
   previewDiv.style.color = "#38bdf8";
 
-  const x1 = (parseFloat(document.getElementById('rng-x1')?.value || 88) / 100).toFixed(2);
-  const y1 = (parseFloat(document.getElementById('rng-y1')?.value || 6) / 100).toFixed(2);
-  const s1 = parseInt((1920 * (parseFloat(document.getElementById('rng-s1')?.value || 14) / 100)));
-  const a1 = (parseInt(document.getElementById('rng-a1')?.value || 95) / 100).toFixed(2);
-
-  const x2 = (parseFloat(document.getElementById('rng-x2')?.value || 6) / 100).toFixed(2);
-  const y2 = (parseFloat(document.getElementById('rng-y2')?.value || 86) / 100).toFixed(2);
-  const s2 = parseInt((1920 * (parseFloat(document.getElementById('rng-s2')?.value || 18) / 100)));
-  const a2 = (parseInt(document.getElementById('rng-a2')?.value || 100) / 100).toFixed(2);
-
   const parts = [];
   let lastIn = "in";
 
-  if (on1) {
-    parts.push(`movie='station_logo.png',scale=${s1}:-1,format=rgba,colorchannelmixer=aa=${a1}[ov1]`);
-    const nextLabel = on2 ? "tmp_ov" : "out";
-    parts.push(`[${lastIn}][ov1]overlay=W*${x1}:H*${y1}[${nextLabel}]`);
-    lastIn = nextLabel;
-  }
+  activeLayers.forEach((l, idx) => {
+    const filename = l.file.split('/').pop();
+    const wPx = Math.round(1920 * (l.scale_percent / 100));
+    const opacity = l.opacity.toFixed(2);
+    const xPct = (l.x_percent / 100).toFixed(4);
+    const yPct = (l.y_percent / 100).toFixed(4);
+    const tag = `ov${idx + 1}`;
+    const isLast = (idx === activeLayers.length - 1);
+    const nextLabel = isLast ? "out" : `tmp_ov${idx + 1}`;
 
-  if (on2) {
-    parts.push(`movie='live_badge.png',scale=${s2}:-1,format=rgba,colorchannelmixer=aa=${a2}[ov2]`);
-    parts.push(`[${lastIn}][ov2]overlay=W*${x2}:H*${y2}[out]`);
-  }
+    parts.push(`movie='${filename}',scale=${wPx}:-1,format=rgba,colorchannelmixer=aa=${opacity}[${tag}]`);
+    parts.push(`[${lastIn}][${tag}]overlay=W*${xPct}:H*${yPct}[${nextLabel}]`);
+    lastIn = nextLabel;
+  });
 
   previewDiv.textContent = `-vf "${parts.join(';')}"`;
 }
 
 async function saveOverlayConfig() {
   const masterOn = document.getElementById('cfg-overlay-master')?.checked;
+  const targetOutput = document.getElementById('overlay-target-output')?.value || "all";
   const feedSource = document.getElementById('overlay-feed-select')?.value || "";
 
   const payload = {
-    enabled: masterOn,
+    enabled: Boolean(masterOn),
     apply_to_egress: true,
+    target_output: targetOutput,
     feed_source: feedSource,
-    overlay_1: {
-      enabled: document.getElementById('cfg-ov1-enabled')?.checked,
-      file: document.getElementById('cfg-ov1-file')?.value,
-      x_percent: parseFloat(document.getElementById('rng-x1')?.value || 88),
-      y_percent: parseFloat(document.getElementById('rng-y1')?.value || 6),
-      scale_percent: parseFloat(document.getElementById('rng-s1')?.value || 14),
-      opacity: parseInt(document.getElementById('rng-a1')?.value || 95) / 100.0
-    },
-    overlay_2: {
-      enabled: document.getElementById('cfg-ov2-enabled')?.checked,
-      file: document.getElementById('cfg-ov2-file')?.value,
-      x_percent: parseFloat(document.getElementById('rng-x2')?.value || 6),
-      y_percent: parseFloat(document.getElementById('rng-y2')?.value || 86),
-      scale_percent: parseFloat(document.getElementById('rng-s2')?.value || 18),
-      opacity: parseInt(document.getElementById('rng-a2')?.value || 100) / 100.0
-    }
+    layers: overlayLayers.map(l => ({
+      id: l.id,
+      name: l.name,
+      file: l.file || "",
+      x_percent: l.x_percent,
+      y_percent: l.y_percent,
+      scale_percent: l.scale_percent,
+      opacity: l.opacity,
+      enabled: Boolean(l.enabled)
+    }))
   };
 
-  showToast("Saving overlay configuration to server...");
+  showToast("Menyimpan konfigurasi overlay...");
   try {
     const res = await fetch('/api/overlay/save', {
       method: 'POST',
@@ -7011,29 +7087,31 @@ async function saveOverlayConfig() {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast("Overlay configuration saved! YouTube egress will render with updated coordinates.", "success");
+      showToast("Konfigurasi overlay berhasil disimpan!", "success");
       overlayConfigState = { ...overlayConfigState, ...payload };
     } else {
-      showToast(data.error || "Failed to save overlay configuration", "error");
+      showToast(data.error || "Gagal menyimpan konfigurasi", "error");
     }
   } catch (err) {
-    showToast(`Network error saving overlay: ${err.message}`, "error");
+    showToast(`Kesalahan jaringan: ${err.message}`, "error");
   }
 }
 
 function resetOverlayDefaults() {
-  applyPreset('overlay_1', 82, 5);
-  applyPreset('overlay_2', 5, 84);
-  const s1 = document.getElementById('rng-s1');
-  const a1 = document.getElementById('rng-a1');
-  const s2 = document.getElementById('rng-s2');
-  const a2 = document.getElementById('rng-a2');
-  if (s1) s1.value = 14;
-  if (a1) a1.value = 95;
-  if (s2) s2.value = 18;
-  if (a2) a2.value = 100;
-  updateDOMPositionsFromSliders();
-  showToast("Reset to broadcast standards (Top-Right Logo, Bottom-Left Bug).");
+  overlayLayers = [
+    {
+      id: 1,
+      name: "Overlay 1",
+      file: "",
+      x_percent: 80.0,
+      y_percent: 5.0,
+      scale_percent: 15.0,
+      opacity: 1.0,
+      enabled: true
+    }
+  ];
+  renderAllOverlayLayers();
+  showToast("Reset ke kondisi awal (1 overlay layer kosong).");
 }
 
 function onOverlayFeedChange() {

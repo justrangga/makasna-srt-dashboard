@@ -1,23 +1,18 @@
 {
   "enabled": true,
   "apply_to_egress": true,
-  "feed_source": "live/feed1",
-  "overlay_1": {
-    "enabled": true,
-    "name": "Station ID (Logo)",
-    "file": "/static/overlays/station_logo.png",
-    "x_percent": 82.0,
-    "y_percent": 5.0,
-    "scale_percent": 14.0,
-    "opacity": 0.95
-  },
-  "overlay_2": {
-    "enabled": true,
-    "name": "Lower Third / Live Bug",
-    "file": "/static/overlays/live_badge.png",
-    "x_percent": 5.0,
-    "y_percent": 84.0,
-    "scale_percent": 18.0,
-    "opacity": 1.0
-  }
+  "target_output": "all",
+  "feed_source": "",
+  "layers": [
+    {
+      "id": 1,
+      "name": "Overlay 1",
+      "file": "",
+      "x_percent": 80.0,
+      "y_percent": 5.0,
+      "scale_percent": 15.0,
+      "opacity": 1.0,
+      "enabled": true
+    }
+  ]
 }
