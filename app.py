@@ -1805,6 +1805,40 @@ def proxy_hls(subpath):
         return jsonify({"error": str(e)}), 502
 
 
+@app.route("/whep/<path:subpath>", methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
+def proxy_whep(subpath):
+    if request.method == "OPTIONS":
+        resp = Response("", 204)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, If-Match, Authorization"
+        resp.headers["Access-Control-Expose-Headers"] = "Location, Link"
+        return resp
+
+    target_url = f"http://127.0.0.1:8889/{subpath}"
+    if request.query_string:
+        target_url += f"?{request.query_string.decode('utf-8')}"
+
+    try:
+        req_headers = {k: v for k, v in request.headers if k.lower() not in ["host", "content-length"]}
+        r = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=req_headers,
+            data=request.get_data(),
+            timeout=10,
+            allow_redirects=False,
+        )
+        excluded_headers = ["content-encoding", "content-length", "transfer-encoding", "connection"]
+        resp_headers = [(name, value) for (name, value) in r.headers.items() if name.lower() not in excluded_headers]
+        resp_headers.append(("Access-Control-Allow-Origin", "*"))
+        resp_headers.append(("Access-Control-Allow-Headers", "*"))
+        resp_headers.append(("Access-Control-Expose-Headers", "Location, Link"))
+        return Response(r.content, r.status_code, resp_headers)
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+
+
 @app.route("/api/routes/<route_id>/preview", methods=["GET"])
 @login_required
 def api_route_preview(route_id):

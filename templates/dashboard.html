@@ -4385,8 +4385,8 @@ function reloadPreview() {
 }
 
 function openWebRTCViewer() {
-  const streamName = currentPreviewStreamName || (activeTelemetryRouteId ? `route_${activeTelemetryRouteId}` : 'MAKASNA');
-  window.open(`/preview/${encodeURIComponent(streamName)}`, '_blank');
+  const streamName = currentPreviewStreamName || (activeTelemetryRouteId ? (activeTelemetryRouteId.startsWith('route_') ? activeTelemetryRouteId : `route_${activeTelemetryRouteId}`) : 'MAKASNA');
+  window.open(`/preview/${encodeURIComponent(streamName)}?engine=webrtc`, '_blank');
 }
 
 // Add / Edit Route Form

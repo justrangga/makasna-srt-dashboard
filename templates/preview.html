@@ -26,15 +26,17 @@
       flex-direction: column;
     }
     .top-bar {
-      height: 48px;
+      min-height: 48px;
       background: rgba(13, 16, 23, 0.95);
       backdrop-filter: blur(10px);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 14px;
+      padding: 6px 14px;
       z-index: 20;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .brand-title {
       display: flex;
@@ -44,6 +46,42 @@
       font-weight: 700;
       letter-spacing: 0.5px;
     }
+    .engine-switcher {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .btn-engine {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+      touch-action: manipulation;
+    }
+    .btn-engine.active-webrtc {
+      background: rgba(0, 229, 255, 0.2);
+      color: #00e5ff;
+      border: 1px solid rgba(0, 229, 255, 0.4);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+    }
+    .btn-engine.active-hls {
+      background: rgba(0, 230, 118, 0.2);
+      color: #00e676;
+      border: 1px solid rgba(0, 230, 118, 0.4);
+      box-shadow: 0 0 10px rgba(0, 230, 118, 0.25);
+    }
     .badge-live {
       display: inline-flex;
       align-items: center;
@@ -51,17 +89,27 @@
       background: rgba(0, 230, 118, 0.15);
       color: #00e676;
       border: 1px solid rgba(0, 230, 118, 0.4);
-      padding: 2px 8px;
+      padding: 3px 8px;
       border-radius: 12px;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
+    }
+    .badge-standby {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    .badge-error {
+      background: rgba(244, 63, 94, 0.15);
+      color: #f43f5e;
+      border-color: rgba(244, 63, 94, 0.4);
     }
     .pulse-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: #00e676;
-      box-shadow: 0 0 6px #00e676;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
       animation: pulse 1.5s infinite;
     }
     @keyframes pulse {
@@ -115,7 +163,7 @@
     .tap-overlay {
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(4px);
       display: flex;
       flex-direction: column;
@@ -152,16 +200,38 @@
       font-size: 12px;
       color: #94a3b8;
     }
+    .notice-banner {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      color: #fbbf24;
+      font-size: 11.5px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      gap: 6px;
+      z-index: 15;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      max-width: 90%;
+      text-align: center;
+    }
     .bottom-bar {
-      height: 52px;
+      min-height: 52px;
       background: rgba(13, 16, 23, 0.95);
       backdrop-filter: blur(10px);
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 14px;
+      padding: 6px 14px;
       z-index: 20;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .stats-info {
       font-size: 11.5px;
@@ -185,9 +255,20 @@
       </button>
       <span class="stream-label">{{ stream_name }}</span>
     </div>
+
+    <!-- Engine Switcher -->
+    <div class="engine-switcher">
+      <button id="btn-engine-webrtc" class="btn-engine" onclick="switchEngine('webrtc')">
+        ⚡ WebRTC (&lt;0.3s)
+      </button>
+      <button id="btn-engine-hls" class="btn-engine" onclick="switchEngine('hls')">
+        📺 LL-HLS
+      </button>
+    </div>
+
     <div id="live-indicator" class="badge-live">
       <span class="pulse-dot"></span>
-      <span id="txt-status">CONNECTING</span>
+      <span id="txt-status">INITIALIZING</span>
     </div>
   </div>
 
@@ -202,6 +283,11 @@
       preload="auto">
     </video>
 
+    <!-- Fallback / Info Banner -->
+    <div id="notice-banner" class="notice-banner">
+      <span id="notice-text">Notice</span>
+    </div>
+
     <!-- Tap to Play Overlay (iPhone Safari compliance) -->
     <div id="tap-overlay" class="tap-overlay" onclick="startPlaybackManual(event)">
       <div class="tap-btn-circle">▶</div>
@@ -213,7 +299,7 @@
   <!-- Bottom Bar Controls -->
   <div class="bottom-bar">
     <div class="stats-info" id="stats-display">
-      HLS Engine Initializing...
+      Engine Initializing...
     </div>
     <div class="control-cluster">
       <button id="btn-audio" class="btn-action" onclick="toggleAudio(event)">
@@ -230,14 +316,22 @@
 
   <script>
     const streamName = "{{ stream_name }}";
-    const streamUrl = "/hls/" + encodeURIComponent(streamName) + "/index.m3u8";
+    const hlsStreamUrl = "/hls/" + encodeURIComponent(streamName) + "/index.m3u8";
     const video = document.getElementById('player');
     const tapOverlay = document.getElementById('tap-overlay');
+    const liveIndicator = document.getElementById('live-indicator');
     const txtStatus = document.getElementById('txt-status');
     const statsDisplay = document.getElementById('stats-display');
     const btnAudio = document.getElementById('btn-audio');
+    const btnEngineWebRtc = document.getElementById('btn-engine-webrtc');
+    const btnEngineHls = document.getElementById('btn-engine-hls');
+    const noticeBanner = document.getElementById('notice-banner');
+    const noticeText = document.getElementById('notice-text');
 
+    let currentEngine = 'webrtc';
     let hlsInstance = null;
+    let peerConnection = null;
+    let retryTimer = null;
     let isUserInteracted = false;
 
     function goBack() {
@@ -248,39 +342,214 @@
       }
     }
 
-    function initPlayer() {
+    function showNotice(msg, timeoutMs = 4000) {
+      if (!noticeBanner || !noticeText) return;
+      noticeText.textContent = msg;
+      noticeBanner.style.display = 'inline-flex';
+      if (timeoutMs > 0) {
+        setTimeout(() => {
+          noticeBanner.style.display = 'none';
+        }, timeoutMs);
+      }
+    }
+
+    function setStatus(text, type = 'live') {
+      txtStatus.textContent = text;
+      liveIndicator.className = 'badge-live';
+      if (type === 'standby') {
+        liveIndicator.classList.add('badge-standby');
+      } else if (type === 'error') {
+        liveIndicator.classList.add('badge-error');
+      }
+    }
+
+    function updateEngineButtons() {
+      if (currentEngine === 'webrtc') {
+        btnEngineWebRtc.className = 'btn-engine active-webrtc';
+        btnEngineHls.className = 'btn-engine';
+      } else {
+        btnEngineWebRtc.className = 'btn-engine';
+        btnEngineHls.className = 'btn-engine active-hls';
+      }
+    }
+
+    function switchEngine(targetEngine) {
+      if (currentEngine === targetEngine && (peerConnection || hlsInstance || video.src)) {
+        return;
+      }
+      currentEngine = targetEngine;
+      updateEngineButtons();
+      stopAllEngines();
+      if (currentEngine === 'webrtc') {
+        initWebRtc();
+      } else {
+        initHls();
+      }
+    }
+
+    function stopAllEngines() {
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      if (peerConnection) {
+        try { peerConnection.close(); } catch(e) {}
+        peerConnection = null;
+      }
       if (hlsInstance) {
-        try { hlsInstance.destroy(); } catch (e) {}
+        try { hlsInstance.destroy(); } catch(e) {}
         hlsInstance = null;
       }
+      video.pause();
+      video.srcObject = null;
+      video.removeAttribute('src');
+      video.load();
+    }
 
-      // 1. Apple Native HLS (iPhone Safari, iPad, Mac Safari)
+    // ---------------------------------------------------------
+    // WEBRTC (WHEP) IMPLEMENTATION
+    // ---------------------------------------------------------
+    async function initWebRtc() {
+      updateEngineButtons();
+      statsDisplay.textContent = "Connecting WebRTC (WHEP)...";
+      setStatus("NEGOTIATING", "standby");
+
+      if (!window.RTCPeerConnection) {
+        console.warn("RTCPeerConnection not supported");
+        showNotice("Browser tidak mendukung WebRTC. Beralih ke LL-HLS...");
+        switchEngine('hls');
+        return;
+      }
+
+      try {
+        const pc = new RTCPeerConnection({
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }
+          ]
+        });
+        peerConnection = pc;
+
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+
+        pc.ontrack = (evt) => {
+          if (video.srcObject !== evt.streams[0]) {
+            video.srcObject = evt.streams[0];
+            const p = video.play();
+            if (p !== undefined) {
+              p.then(() => {
+                tapOverlay.style.display = 'none';
+              }).catch(() => {
+                tapOverlay.style.display = 'flex';
+              });
+            }
+          }
+          setStatus("LIVE", "live");
+          statsDisplay.textContent = "● LIVE (WebRTC · sub-300ms)";
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === 'connected') {
+            setStatus("LIVE", "live");
+            statsDisplay.textContent = "● LIVE (WebRTC · sub-300ms)";
+          } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            setStatus("STANDBY", "standby");
+            statsDisplay.textContent = "WebRTC standby: Menunggu sinyal siaran...";
+            retryTimer = setTimeout(initWebRtc, 3000);
+          }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // Try WHEP proxy first (same port 8080), then fallback to direct port 8889
+        const whepUrls = [
+          `/whep/${encodeURIComponent(streamName)}/whep`,
+          `http://${window.location.hostname}:8889/${encodeURIComponent(streamName)}/whep`
+        ];
+
+        let answerSdp = null;
+        let lastError = null;
+
+        for (const url of whepUrls) {
+          try {
+            const resp = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/sdp' },
+              body: offer.sdp
+            });
+
+            if (resp.ok) {
+              answerSdp = await resp.text();
+              break;
+            } else {
+              const errBody = await resp.text();
+              try {
+                const j = JSON.parse(errBody);
+                lastError = j.error || `HTTP ${resp.status}`;
+              } catch(e) {
+                lastError = `HTTP ${resp.status}`;
+              }
+            }
+          } catch(netErr) {
+            lastError = netErr.message;
+          }
+        }
+
+        if (!answerSdp) {
+          throw new Error(lastError || "WHEP endpoint error");
+        }
+
+        await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+      } catch (err) {
+        console.warn("WebRTC startup error:", err.message);
+        // Codec mismatch (e.g. stream is H.265 or AAC): MediaMTX returns 'codecs not supported by client'
+        if (err.message && err.message.includes('codecs not supported')) {
+          showNotice("Stream menggunakan H.265 (HEVC). WebRTC butuh H.264. Mengalihkan ke LL-HLS...", 5000);
+          switchEngine('hls');
+          return;
+        }
+
+        if (err.message && err.message.includes('no stream is available')) {
+          setStatus("STANDBY", "standby");
+          statsDisplay.textContent = "Standby: Menunggu feed sinyal siaran aktif...";
+          tapOverlay.style.display = 'flex';
+          retryTimer = setTimeout(initWebRtc, 3000);
+          return;
+        }
+
+        // Other failure -> fallback to HLS
+        showNotice(`WebRTC: ${err.message}. Mengalihkan ke LL-HLS...`, 4000);
+        switchEngine('hls');
+      }
+    }
+
+    // ---------------------------------------------------------
+    // HLS IMPLEMENTATION
+    // ---------------------------------------------------------
+    function initHls() {
+      updateEngineButtons();
+      statsDisplay.textContent = "Connecting Low-Latency HLS...";
+      setStatus("CONNECTING", "standby");
+
+      // 1. Apple Native HLS (iPhone Safari, Mac Safari)
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         statsDisplay.textContent = "Engine: Apple Native AVPlayer";
-        video.src = streamUrl;
+        video.src = hlsStreamUrl;
 
-        video.addEventListener('playing', () => {
+        video.onplaying = () => {
           tapOverlay.style.display = 'none';
-          txtStatus.textContent = "LIVE";
-          txtStatus.style.color = "#00e676";
-          statsDisplay.textContent = "● LIVE (Safari Native HLS)";
-        });
+          setStatus("LIVE", "live");
+          statsDisplay.textContent = "● LIVE (Safari Native HLS · fMP4)";
+        };
 
-        video.addEventListener('pause', () => {
-          if (!video.ended) {
-            tapOverlay.style.display = 'flex';
-          }
-        });
-
-        video.addEventListener('error', (e) => {
-          console.warn("Native video error", e);
-          statsDisplay.textContent = "Waiting stream feed...";
-          txtStatus.textContent = "OFFLINE";
-          txtStatus.style.color = "#f43f5e";
+        video.onerror = () => {
+          setStatus("STANDBY", "standby");
+          statsDisplay.textContent = "Standby: Menunggu feed sinyal siaran aktif...";
           tapOverlay.style.display = 'flex';
-        });
+        };
 
-        // Attempt silent autoplay
         const p = video.play();
         if (p !== undefined) {
           p.then(() => {
@@ -303,7 +572,7 @@
         hlsInstance.attachMedia(video);
 
         hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
-          hlsInstance.loadSource(streamUrl);
+          hlsInstance.loadSource(hlsStreamUrl);
         });
 
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -318,45 +587,41 @@
         });
 
         hlsInstance.on(Hls.Events.FRAG_LOADED, (evt, data) => {
-          txtStatus.textContent = "LIVE";
-          txtStatus.style.color = "#00e676";
+          setStatus("LIVE", "live");
           const res = video.videoWidth && video.videoHeight ? `${video.videoWidth}x${video.videoHeight}` : '1080p';
-          statsDisplay.textContent = `● LIVE (${res} | fMP4)`;
+          statsDisplay.textContent = `● LIVE (${res} | LL-HLS fMP4)`;
         });
 
         hlsInstance.on(Hls.Events.ERROR, (evt, data) => {
           if (data.fatal) {
             const is404 = data.response && (data.response.code === 404 || data.response.code === 0);
             if (is404) {
-              txtStatus.textContent = "STANDBY";
-              txtStatus.style.color = "#f59e0b";
+              setStatus("STANDBY", "standby");
               statsDisplay.textContent = "Standby: Menunggu feed sinyal siaran aktif...";
             } else {
-              txtStatus.textContent = "RECONNECTING";
-              txtStatus.style.color = "#f59e0b";
+              setStatus("RECONNECTING", "standby");
               statsDisplay.textContent = "Stream interrupted, reconnecting...";
             }
             tapOverlay.style.display = 'flex';
-            setTimeout(initPlayer, 3000);
+            retryTimer = setTimeout(initHls, 3000);
           }
         });
       } else {
-        statsDisplay.textContent = "Browser tidak mendukung HLS playback.";
+        statsDisplay.textContent = "Browser tidak mendukung WebRTC maupun HLS playback.";
       }
     }
 
     function startPlaybackManual(e) {
       if (e) e.stopPropagation();
       isUserInteracted = true;
-      video.muted = true; // Start muted for instant autoplay unlock
+      video.muted = true;
       const p = video.play();
       if (p !== undefined) {
         p.then(() => {
           tapOverlay.style.display = 'none';
-          txtStatus.textContent = "LIVE";
+          setStatus("LIVE", "live");
         }).catch((err) => {
           console.warn("Manual play error", err);
-          // Try reloading source
           video.load();
           video.play().catch(() => {});
         });
@@ -367,7 +632,6 @@
       if (video.paused) {
         startPlaybackManual();
       } else {
-        // Toggle play/pause
         video.pause();
         tapOverlay.style.display = 'flex';
       }
@@ -389,9 +653,14 @@
 
     function reloadStream(e) {
       if (e) e.stopPropagation();
-      txtStatus.textContent = "RELOADING";
+      setStatus("RELOADING", "standby");
       statsDisplay.textContent = "Reloading feed...";
-      initPlayer();
+      stopAllEngines();
+      if (currentEngine === 'webrtc') {
+        initWebRtc();
+      } else {
+        initHls();
+      }
     }
 
     function toggleFullscreen(e) {
@@ -402,7 +671,6 @@
         } else if (video.webkitRequestFullscreen) {
           video.webkitRequestFullscreen();
         } else if (video.webkitEnterFullscreen) {
-          // iOS Safari native video fullscreen
           video.webkitEnterFullscreen();
         }
       } else {
@@ -414,9 +682,17 @@
       }
     }
 
-    // Auto-boot on load
+    // Auto-boot on load: inspect URL query ?engine=hls or ?engine=webrtc
     window.addEventListener('DOMContentLoaded', () => {
-      initPlayer();
+      const params = new URLSearchParams(window.location.search);
+      const requestedEngine = params.get('engine');
+      if (requestedEngine === 'hls') {
+        currentEngine = 'hls';
+        initHls();
+      } else {
+        currentEngine = 'webrtc';
+        initWebRtc();
+      }
     });
   </script>
 </body>
