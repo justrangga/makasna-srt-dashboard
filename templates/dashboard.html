@@ -2881,11 +2881,12 @@ html, body {
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px;">
             <div style="display:flex; align-items:center; gap:8px;">
               <span id="preview-state" style="font-size:12px; color:var(--muted)">Connecting stream...</span>
-              <span id="preview-engine-badge" class="tag tag-input" style="font-size:10px; background:rgba(0,229,255,0.15); color:var(--cyan); border:1px solid rgba(0,229,255,0.3);">fMP4 BUFFERED</span>
+              <span id="preview-engine-badge" class="tag tag-input" style="font-size:10px; background:rgba(0,229,255,0.15); color:var(--cyan); border:1px solid rgba(0,229,255,0.3);">WEBRTC</span>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
-              <button class="btn-icon" style="font-size:11px; padding:4px 8px;" onclick="reloadPreview()">Resync / Reload</button>
-              <button id="btn-webrtc-open" class="btn-icon" style="font-size:11px; padding:4px 8px; color:var(--cyan);" onclick="openWebRTCViewer()">WebRTC (&lt;0.3s)</button>
+              <button class="btn-icon" style="font-size:11px; padding:4px 8px;" onclick="reloadPreview()">Resync</button>
+              <button id="btn-toggle-engine" class="btn-icon" style="font-size:11px; padding:4px 8px; color:var(--cyan);" onclick="toggleTelemEngine()">Switch to HLS</button>
+              <button id="btn-webrtc-open" class="btn-icon" style="font-size:11px; padding:4px 8px;" onclick="openWebRTCViewer()">Popout</button>
             </div>
           </div>
         </div>
@@ -3676,8 +3677,6 @@ async function pollInboundSrt() {
               <td style="text-align:right; overflow:visible !important; white-space:nowrap !important;">
                 <div class="action-group" style="display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:nowrap;">
                   <button class="btn-icon" style="color:#60a5fa; font-weight:600; padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="previewIncomingStream('${escapeHtml(rdr.stream_id)}')">Preview</button>
-                  <a href="/preview/${encodeURIComponent(rdr.stream_id)}?engine=webrtc" target="_blank" class="btn-icon" style="color:#fff; border-color:rgba(255,255,255,0.25); font-weight:600; text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; flex-shrink:0; white-space:nowrap;">Full Player</a>
-                  <button class="btn-icon" style="padding:6px 12px; flex-shrink:0; white-space:nowrap;" onclick="copyToClipboard('${readUrl}')" title="Copy SRT Pull URL">Copy</button>
                 </div>
               </td>
             </tr>
@@ -3835,8 +3834,10 @@ function previewIncomingStream(streamId) {
   document.getElementById('telem-route-id').textContent = `Publisher Path: ${streamId} · Port: ${latestSrtPort}`;
   document.getElementById('modal-telemetry').classList.remove('hidden');
 
-  const streamUrl = `/hls/${streamId}/index.m3u8`;
-  initHlsPlayer(video, streamUrl);
+  const inboundDetails = document.getElementById('telem-inbound-details');
+  if (inboundDetails) inboundDetails.dataset.initialized = '';
+
+  initTelemPlayer(video, streamId, 'webrtc');
 
   pollTelemetry();
   if (telemTimer) clearInterval(telemTimer);
@@ -4112,16 +4113,141 @@ function closeTelemetryModal() {
   document.getElementById('modal-telemetry').classList.add('hidden');
   if (telemTimer) clearInterval(telemTimer);
   telemTimer = null;
+  if (pingAutoTimer) clearInterval(pingAutoTimer);
+  pingAutoTimer = null;
   activeTelemetryRouteId = null;
   currentPreviewStreamName = null;
+
+  if (telemPc) {
+    try { telemPc.close(); } catch(e) {}
+    telemPc = null;
+  }
   if (hlsInstance) {
     try { hlsInstance.destroy(); } catch(e) {}
     hlsInstance = null;
   }
   const video = document.getElementById('telem-video');
   if (video) {
-    try { video.pause(); video.src = ''; } catch(e) {}
+    try { video.pause(); video.srcObject = null; video.src = ''; } catch(e) {}
   }
+  const inboundDetails = document.getElementById('telem-inbound-details');
+  if (inboundDetails) inboundDetails.dataset.initialized = '';
+}
+
+let pingAutoTimer = null;
+let isPingRunning = false;
+let currentPingTargetIp = '';
+
+async function runDestinationPing(targetIpOverride) {
+  if (isPingRunning) return;
+  const ipInput = document.getElementById('ping-target-ip');
+  const targetIp = (targetIpOverride || (ipInput ? ipInput.value : '') || currentPingTargetIp || '').trim();
+  if (!targetIp) return;
+
+  isPingRunning = true;
+  currentPingTargetIp = targetIp;
+  const logBox = document.getElementById('ping-terminal-log');
+  const badge = document.getElementById('telem-active-source-badge');
+  const statsBox = document.getElementById('ping-stats-summary');
+  const btnPing = document.getElementById('btn-run-ping');
+
+  if (badge) {
+    badge.className = 'tag tag-input';
+    badge.textContent = 'PINGING...';
+    badge.style.color = 'var(--cyan)';
+  }
+  if (btnPing) btnPing.disabled = true;
+
+  if (logBox) {
+    logBox.innerHTML += `<div style="color:var(--text-dim); margin-top:4px;">&gt; ping -c 3 -W 2 ${escapeHtml(targetIp)}...</div>`;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  try {
+    const res = await api(`/api/diagnostics/ping?ip=${encodeURIComponent(targetIp)}&count=3`);
+    if (res.ok) {
+      if (logBox) {
+        const formattedLines = (res.lines || []).map(line => {
+          let color = '#a3e635';
+          if (line.includes('packet loss')) {
+            color = res.packet_loss_pct > 0 ? '#ef4444' : '#22c55e';
+          } else if (line.includes('rtt min/avg/max') || line.includes('round-trip')) {
+            color = '#38bdf8';
+          } else if (line.includes('Destination Host Unreachable') || line.includes('timed out')) {
+            color = '#ef4444';
+          }
+          return `<div style="color:${color};">&gt; ${escapeHtml(line)}</div>`;
+        }).join('');
+        logBox.innerHTML += formattedLines;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+
+      if (statsBox) {
+        const qualityColor = res.quality === 'Excellent' ? '#22c55e' : (res.quality === 'Good' ? '#38bdf8' : (res.quality === 'Fair' ? '#f59e0b' : '#ef4444'));
+        statsBox.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; font-size:11.5px; font-family:'JetBrains Mono';">
+            <div><span style="color:var(--muted);">RTT:</span> <b style="color:#fff;">${res.avg_rtt_ms} ms</b> <span style="color:var(--muted); font-size:10.5px;">(min ${res.min_rtt_ms} / max ${res.max_rtt_ms})</span></div>
+            <div><span style="color:var(--muted);">Loss:</span> <b style="color:${res.packet_loss_pct > 0 ? '#ef4444' : '#22c55e'};">${res.packet_loss_pct}%</b></div>
+            <div><span class="tag" style="padding:2px 6px; font-size:10px; font-weight:700; background:rgba(255,255,255,0.08); color:${qualityColor}; border:1px solid ${qualityColor}40;">${res.quality.toUpperCase()}</span></div>
+          </div>
+        `;
+      }
+
+      if (badge) {
+        badge.className = 'tag';
+        badge.style.background = res.packet_loss_pct === 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+        badge.style.color = res.packet_loss_pct === 0 ? '#22c55e' : '#ef4444';
+        badge.style.border = `1px solid ${res.packet_loss_pct === 0 ? '#22c55e' : '#ef4444'}40`;
+        badge.textContent = `${res.avg_rtt_ms} ms · ${res.packet_loss_pct}% Loss`;
+      }
+
+    } else {
+      if (logBox) {
+        logBox.innerHTML += `<div style="color:#ef4444;">&gt; Error: ${escapeHtml(res.error || 'Failed to ping host')}</div>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+      if (badge) {
+        badge.className = 'tag';
+        badge.style.background = 'rgba(239,68,68,0.15)';
+        badge.style.color = '#ef4444';
+        badge.textContent = 'UNREACHABLE';
+      }
+    }
+  } catch(e) {
+    if (logBox) {
+      logBox.innerHTML += `<div style="color:#ef4444;">&gt; Ping error: ${escapeHtml(e.message)}</div>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+  } finally {
+    isPingRunning = false;
+    if (btnPing) btnPing.disabled = false;
+  }
+}
+
+function toggleAutoPing() {
+  const btn = document.getElementById('btn-auto-ping');
+  if (pingAutoTimer) {
+    clearInterval(pingAutoTimer);
+    pingAutoTimer = null;
+    if (btn) {
+      btn.style.borderColor = 'var(--border)';
+      btn.style.color = 'var(--text-dim)';
+      btn.textContent = 'Auto (5s): OFF';
+    }
+  } else {
+    runDestinationPing();
+    pingAutoTimer = setInterval(runDestinationPing, 5000);
+    if (btn) {
+      btn.style.borderColor = '#22c55e';
+      btn.style.color = '#22c55e';
+      btn.textContent = 'Auto (5s): ON';
+    }
+  }
+}
+
+function clearPingLog() {
+  const logBox = document.getElementById('ping-terminal-log');
+  if (logBox) logBox.innerHTML = '<div style="color:var(--text-dim);">&gt; Console cleared. Ready for ICMP ping.</div>';
 }
 
 function applyHealthBadgeStyle(badgeEl, health) {
@@ -4244,29 +4370,62 @@ async function pollTelemetry() {
       healthBadge.textContent = (pub.health || 'RUNNING').toUpperCase();
       applyHealthBadgeStyle(healthBadge, pub.health);
 
-      // Ingest Publisher Connection Box
+      // Destination ICMP Ping Diagnostics Box
       const failoverTitle = document.getElementById('telem-failover-title');
-      if (failoverTitle) failoverTitle.textContent = 'Ingest Publisher Details';
-      document.getElementById('telem-active-source-badge').textContent = `PORT ${d.srt_port || 8890}`;
+      if (failoverTitle) failoverTitle.textContent = 'Destination ICMP Ping Diagnostics';
       
       const routeFailoverPanel = document.getElementById('telem-route-failover-panel');
       if (routeFailoverPanel) routeFailoverPanel.style.display = 'none';
 
+      // Detect destination receiver IP
+      let detectedIp = '';
+      const matchingReaders = (d.readers || []).filter(r => r.stream_id === pub.stream_id);
+      if (matchingReaders.length > 0 && matchingReaders[0].remote_addr) {
+        let rawAddr = matchingReaders[0].remote_addr.split(':')[0].trim();
+        if (rawAddr && rawAddr !== '127.0.0.1' && rawAddr !== 'localhost') {
+          detectedIp = rawAddr;
+        }
+      }
+      if (!detectedIp) {
+        for (const r of (d.readers || [])) {
+          if (r.remote_addr && !r.remote_addr.startsWith('127.0.0.1')) {
+            detectedIp = r.remote_addr.split(':')[0].trim();
+            break;
+          }
+        }
+      }
+      if (!detectedIp) {
+        detectedIp = '125.163.29.40';
+      }
+
       const inboundDetails = document.getElementById('telem-inbound-details');
       if (inboundDetails) {
         inboundDetails.style.display = 'block';
-        inboundDetails.innerHTML = `
-          <div style="font-size:12px; display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
-            <div><span style="color:var(--muted);">Remote Ingest:</span> <b style="font-family:'JetBrains Mono';">${escapeHtml(pub.remote_addr)}</b></div>
-            <div><span style="color:var(--muted);">SRT Buffer:</span> <b>${pub.buffer_delay_ms || 1000} ms</b></div>
-            <div><span style="color:var(--muted);">Uptime:</span> <b>${formatSeconds(pub.duration_seconds || 0)}</b></div>
-            <div><span style="color:var(--muted);">Health:</span> <b style="color:${pub.health === 'Critical' ? '#ef4444' : (pub.health === 'Degraded' ? '#f59e0b' : '#22c55e')};">${pub.health}</b></div>
-          </div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--cyan); font-weight:600;" onclick="copyToClipboard('srt://${d.server_host || location.hostname}:${d.srt_port || 8890}?streamid=read:${encodeURIComponent(pub.stream_id)}&latency=2000000', 'SRT Read URL Copied!')">Copy Read URL</button>
-            ${!pub.routed ? `<button class="btn-icon" style="flex:1; font-size:11.5px; padding:6px 10px; color:var(--green); font-weight:600;" onclick="closeTelemetryModal(); adoptStreamToRoute('${escapeHtml(pub.stream_id)}')">Create Route</button>` : ''}
-          </div>
-        `;
+        if (!inboundDetails.dataset.initialized || inboundDetails.dataset.streamId !== pub.stream_id) {
+          inboundDetails.dataset.initialized = 'true';
+          inboundDetails.dataset.streamId = pub.stream_id;
+          currentPingTargetIp = detectedIp;
+
+          inboundDetails.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; gap:6px; align-items:center;">
+                <input type="text" id="ping-target-ip" value="${escapeHtml(detectedIp)}" placeholder="Target IP (e.g. 125.163.29.40)" style="font-family:'JetBrains Mono'; font-size:12px; padding:6px 10px; background:#0b1118; border:1px solid var(--border); border-radius:4px; color:#fff; flex:1;" onchange="currentPingTargetIp = this.value.trim()">
+                <button id="btn-run-ping" class="btn-icon" style="color:var(--cyan); font-weight:600; padding:6px 12px; font-size:11.5px; white-space:nowrap;" onclick="runDestinationPing()">Ping Now</button>
+                <button id="btn-auto-ping" class="btn-icon" style="font-size:11px; padding:6px 10px; color:var(--text-dim); white-space:nowrap;" onclick="toggleAutoPing()">Auto (5s): OFF</button>
+                <button class="btn-icon" style="font-size:11px; padding:6px 8px; color:var(--muted); white-space:nowrap;" onclick="clearPingLog()" title="Clear Log">Clear</button>
+              </div>
+              <div id="ping-stats-summary" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:4px; padding:6px 10px;">
+                <div style="color:var(--muted); font-size:11px; font-family:'JetBrains Mono';">Ready to ping destination IP <b style="color:var(--cyan);">${escapeHtml(detectedIp)}</b></div>
+              </div>
+              <div id="ping-terminal-log" style="font-family:'JetBrains Mono', monospace; font-size:11px; background:#070a0e; border:1px solid rgba(255,255,255,0.1); border-radius:4px; padding:8px 10px; height:110px; overflow-y:auto; line-height:1.45; box-shadow:inset 0 0 10px rgba(0,0,0,0.8);">
+                <div style="color:var(--muted);">&gt; Makasna Gateway ICMP diagnostics ready. Target: ${escapeHtml(detectedIp)}</div>
+              </div>
+            </div>
+          `;
+
+          // Automatically trigger first ping on modal open so the engineer sees real stats immediately
+          setTimeout(() => runDestinationPing(detectedIp), 200);
+        }
       }
 
       // Destination Box -> Active Readers
@@ -4430,24 +4589,146 @@ function toggleTelemVideoPlayback() {
   }
 }
 
-async function loadRoutePreview(routeId) {
-  const video = document.getElementById('telem-video');
-  const safeName = routeId.startsWith('route_') ? routeId : `route_${routeId}`;
-  currentPreviewStreamName = safeName;
+let telemPc = null;
+let telemEngine = 'webrtc';
+
+async function initTelemPlayer(video, streamName, preferredEngine = 'webrtc') {
+  if (!video || !streamName) return;
+  currentPreviewStreamName = streamName;
+  telemEngine = preferredEngine;
+
+  if (telemPc) {
+    try { telemPc.close(); } catch(e) {}
+    telemPc = null;
+  }
+  if (hlsInstance) {
+    try { hlsInstance.destroy(); } catch(e) {}
+    hlsInstance = null;
+  }
+  video.pause();
   try {
-    const d = await api(`/api/routes/${routeId}/preview`);
-    const streamUrl = d.hls_url || `/hls/${safeName}/index.m3u8`;
-    initHlsPlayer(video, streamUrl);
-  } catch(e) {
-    const streamUrl = `/hls/${safeName}/index.m3u8`;
+    video.srcObject = null;
+    video.src = '';
+  } catch(e) {}
+  video.muted = true;
+
+  const previewState = document.getElementById('preview-state');
+  const engineBadge = document.getElementById('preview-engine-badge');
+  const toggleBtn = document.getElementById('btn-toggle-engine');
+
+  if (telemEngine === 'webrtc') {
+    if (previewState) previewState.innerHTML = '<span style="color:var(--cyan); font-weight:600;">Connecting WebRTC WHEP...</span>';
+    if (engineBadge) {
+      engineBadge.className = 'tag tag-input';
+      engineBadge.style.color = 'var(--cyan)';
+      engineBadge.textContent = 'CONNECTING WEBRTC';
+    }
+    if (toggleBtn) toggleBtn.textContent = 'Switch to HLS';
+
+    try {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+      telemPc = pc;
+
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          video.srcObject = event.streams[0];
+          video.play().then(() => {
+            const btn = document.getElementById('telem-play-btn');
+            if (btn) btn.style.display = 'none';
+          }).catch(() => {});
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          if (previewState) previewState.innerHTML = '<span style="color:var(--green); font-weight:600;">● LIVE (WebRTC · sub-300ms)</span>';
+          if (engineBadge) {
+            engineBadge.className = 'tag';
+            engineBadge.style.background = 'rgba(34,197,94,0.15)';
+            engineBadge.style.color = '#22c55e';
+            engineBadge.style.border = '1px solid rgba(34,197,94,0.3)';
+            engineBadge.textContent = 'WEBRTC (<0.3s)';
+          }
+        } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          if (previewState) previewState.innerHTML = '<span style="color:#f59e0b; font-weight:600;">WebRTC standby. Retrying HLS...</span>';
+          initTelemPlayer(video, streamName, 'hls');
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const whepUrls = [
+        `/whep/${encodeURIComponent(streamName)}/whep`,
+        `http://${window.location.hostname}:8889/${encodeURIComponent(streamName)}/whep`
+      ];
+
+      let answerSdp = null;
+      let lastErr = null;
+      for (const url of whepUrls) {
+        try {
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/sdp' },
+            body: offer.sdp
+          });
+          if (resp.ok) {
+            answerSdp = await resp.text();
+            break;
+          } else {
+            lastErr = `HTTP ${resp.status}`;
+          }
+        } catch (e) {
+          lastErr = e.message;
+        }
+      }
+
+      if (!answerSdp) {
+        throw new Error(lastErr || 'WebRTC WHEP unavailable');
+      }
+
+      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+    } catch (err) {
+      console.warn('WebRTC WHEP failed, falling back to HLS:', err);
+      initTelemPlayer(video, streamName, 'hls');
+    }
+
+  } else {
+    // HLS Fallback Mode
+    if (toggleBtn) toggleBtn.textContent = 'Switch to WebRTC';
+    if (engineBadge) {
+      engineBadge.className = 'tag tag-input';
+      engineBadge.style.color = 'var(--cyan)';
+      engineBadge.textContent = 'HLS BUFFERED';
+    }
+    const streamUrl = `/hls/${streamName}/index.m3u8`;
     initHlsPlayer(video, streamUrl);
   }
 }
 
+function toggleTelemEngine() {
+  const video = document.getElementById('telem-video');
+  const newEngine = telemEngine === 'webrtc' ? 'hls' : 'webrtc';
+  initTelemPlayer(video, currentPreviewStreamName, newEngine);
+}
+
+async function loadRoutePreview(routeId) {
+  const video = document.getElementById('telem-video');
+  const safeName = routeId.startsWith('route_') ? routeId : `route_${routeId}`;
+  currentPreviewStreamName = safeName;
+  initTelemPlayer(video, safeName, 'webrtc');
+}
+
 function reloadPreview() {
   const video = document.getElementById('telem-video');
-  if (currentPreviewStreamUrl) {
-    initHlsPlayer(video, currentPreviewStreamUrl);
+  if (currentPreviewStreamName) {
+    initTelemPlayer(video, currentPreviewStreamName, telemEngine);
   } else if (activeTelemetryRouteId) {
     loadRoutePreview(activeTelemetryRouteId);
   }

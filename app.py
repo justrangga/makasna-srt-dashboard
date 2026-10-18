@@ -24,6 +24,7 @@ import atexit
 import uuid
 import logging
 import fcntl
+import ipaddress
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone, timedelta
 from functools import wraps
@@ -1921,14 +1922,126 @@ def proxy_hls(subpath):
             req_headers[h] = request.headers[h]
 
     try:
-        r = requests.get(target_url, headers=req_headers, stream=True, timeout=8)
+        r = requests.get(target_url, headers=req_headers, timeout=6)
         excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        headers = [(name, value) for (name, value) in r.headers.items() if name.lower() not in excluded_headers]
+        headers = []
+        for name, value in r.headers.items():
+            if name.lower() in excluded_headers:
+                continue
+            if name.lower() == "set-cookie":
+                # Strip Secure and SameSite=None so browsers accept it over plain HTTP
+                cleaned = re.sub(r';\s*Secure', '', value, flags=re.I)
+                cleaned = re.sub(r';\s*SameSite=None', '; SameSite=Lax', cleaned, flags=re.I)
+                cleaned = re.sub(r';\s*Partitioned', '', cleaned, flags=re.I)
+                headers.append((name, cleaned))
+            else:
+                headers.append((name, value))
         headers.append(('Access-Control-Allow-Origin', '*'))
         headers.append(('Access-Control-Allow-Headers', '*'))
-        return Response(r.raw.read(), r.status_code, headers)
+        return Response(r.content, r.status_code, headers)
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/diagnostics/ping", methods=["GET", "POST"])
+@login_required
+def api_diagnostics_ping():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or request.form
+        target_ip = (data.get("ip") or "").strip()
+        count = int(data.get("count", 3))
+    else:
+        target_ip = (request.args.get("ip") or "").strip()
+        count = int(request.args.get("count", 3))
+
+    if not target_ip:
+        return jsonify({"ok": False, "error": "Target IP address is required"}), 400
+
+    # Clean port if included (e.g. 125.163.29.40:63079)
+    if ":" in target_ip and not target_ip.startswith("["):
+        parts = target_ip.split(":")
+        if len(parts) == 2 and parts[1].isdigit():
+            target_ip = parts[0]
+
+    count = max(1, min(10, count))
+
+    # Validate IP address or valid hostname safely
+    is_valid = False
+    try:
+        ipaddress.ip_address(target_ip)
+        is_valid = True
+    except ValueError:
+        if re.match(r'^[a-zA-Z0-9.-]{1,253}$', target_ip) and not target_ip.startswith('-'):
+            is_valid = True
+
+    if not is_valid:
+        return jsonify({"ok": False, "error": f"Invalid IP address or hostname: '{target_ip}'"}), 400
+
+    try:
+        cmd = ["ping", "-c", str(count), "-W", "2", target_ip]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+        raw_output = (res.stdout or "") + (res.stderr or "")
+
+        lines = [line.strip() for line in raw_output.splitlines() if line.strip()]
+
+        loss_pct = 100.0
+        min_rtt = 0.0
+        avg_rtt = 0.0
+        max_rtt = 0.0
+        mdev_rtt = 0.0
+        transmitted = count
+        received = 0
+
+        for line in lines:
+            if "packets transmitted" in line:
+                m = re.search(r'(\d+)\s+(?:packets\s+)?transmitted.*?(\d+)\s+(?:packets\s+)?received.*?(\d+(?:\.\d+)?)%\s+packet\s+loss', line)
+                if m:
+                    transmitted = int(m.group(1))
+                    received = int(m.group(2))
+                    loss_pct = float(m.group(3))
+            elif "rtt min/avg/max/mdev" in line or "round-trip min/avg/max" in line:
+                m = re.search(r'=\s*([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+)', line)
+                if m:
+                    min_rtt = float(m.group(1))
+                    avg_rtt = float(m.group(2))
+                    max_rtt = float(m.group(3))
+                    mdev_rtt = float(m.group(4))
+
+        if received == 0:
+            quality = "Unreachable"
+        elif avg_rtt < 15 and loss_pct == 0:
+            quality = "Excellent"
+        elif avg_rtt < 50 and loss_pct < 1:
+            quality = "Good"
+        elif avg_rtt < 100 or loss_pct < 5:
+            quality = "Fair"
+        else:
+            quality = "Poor"
+
+        return jsonify({
+            "ok": True,
+            "target_ip": target_ip,
+            "packets_transmitted": transmitted,
+            "packets_received": received,
+            "packet_loss_pct": loss_pct,
+            "min_rtt_ms": min_rtt,
+            "avg_rtt_ms": avg_rtt,
+            "max_rtt_ms": max_rtt,
+            "mdev_rtt_ms": mdev_rtt,
+            "quality": quality,
+            "raw_output": raw_output,
+            "lines": lines
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            "ok": False,
+            "target_ip": target_ip,
+            "error": "Ping request timed out (destination host unreachable)",
+            "packet_loss_pct": 100.0,
+            "quality": "Timeout"
+        }), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/whep/<path:subpath>", methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
