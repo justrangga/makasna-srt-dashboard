@@ -624,7 +624,7 @@ form#route-form {
   width: 100%;
 }
 .modal-body {
-  padding: 20px;
+  padding: 20px 20px 36px 20px;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
@@ -786,10 +786,12 @@ video {
 
 /* Forms */
 .form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
   margin-bottom: 12px;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 .form-group label {
   font-size: 11px;
@@ -797,6 +799,7 @@ video {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  margin-bottom: 2px;
 }
 .form-control {
   background: var(--bg);
@@ -806,6 +809,8 @@ video {
   color: #fff;
   font-size: 13px;
   min-height: 40px;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 .form-control:focus { outline: none; border-color: var(--cyan); }
 .form-row {
@@ -3001,70 +3006,85 @@ html, body {
 
         <!-- Primary Source Config -->
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:14px;">
-          <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--cyan); margin-bottom:10px;">Primary Contribution Source</h4>
-          <div class="form-row">
-            <div class="form-group" style="flex:1;">
-              <label>Protocol / Mode</label>
-              <select id="rf-p-type" class="form-control" onchange="handleSourceTypeChange(this.value)">
-                <option value="srt_caller">1. SRT Caller</option>
-                <option value="direct_url">2. Direct Stream</option>
-                <option value="rtmp_server">3. Server RTMP</option>
-              </select>
-            </div>
-            <div class="form-group" id="rf-p-port-group" style="width:160px; flex:none;">
-              <label id="rf-p-port-label">Remote Port</label>
-              <input type="number" id="rf-p-port" class="form-control" value="9000">
-            </div>
+          <h4 style="font-size:11.5px; text-transform:uppercase; color:var(--cyan); margin-bottom:12px;">Primary Contribution Source</h4>
+          
+          <!-- Dropdown Protocol / Mode (Full Width on top) -->
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Protocol / Mode</label>
+            <select id="rf-p-type" class="form-control" onchange="handleSourceTypeChange(this.value)">
+              <option value="srt_caller">1. SRT Caller</option>
+              <option value="direct_url">2. Direct Stream</option>
+              <option value="rtmp_server">3. Server RTMP</option>
+            </select>
           </div>
-          <div class="form-group" id="rf-p-addr-group">
-            <label>Remote Server Address / Host (IP or Domain)</label>
-            <input type="text" id="rf-p-addr" class="form-control" placeholder="e.g. 103.120.45.10 or srt.remote-broadcaster.com">
-          </div>
-          <div class="form-group" id="rf-p-url-group" style="display:none;">
-            <label>Direct Stream URL (YouTube Live / Web Live / HLS / RTMP)</label>
-            <input type="text" id="rf-p-url" class="form-control" placeholder="https://www.youtube.com/watch?v=... or https://example.com/live/feed.m3u8">
-            <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Supports public YouTube Live, Twitch, and web live streams without requiring login, as well as direct HLS (.m3u8), RTMP, and RTSP feeds.</span>
-          </div>
-          <!-- RTMP Ingest Credentials Box for Primary -->
-          <div id="rf-p-rtmp-group" style="display:none; flex-direction:column; gap:10px; margin-bottom:12px;">
-            <div class="form-row">
-              <div class="form-group" style="flex:1; margin:0;">
-                <label>Stream Key (Unique Identifier)</label>
-                <div style="display:flex; gap:8px;">
-                  <input type="text" id="rf-p-rtmp-key" class="form-control" placeholder="e.g. live_98a7bc12" style="font-family:'JetBrains Mono'; font-weight:700;" oninput="updateRtmpDisplay('p')">
-                  <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); white-space:nowrap; padding:6px 12px;" onclick="generateRtmpKey('p')">Generate Key</button>
-                </div>
+
+          <!-- Mode 1: SRT Caller Container -->
+          <div id="rf-p-mode-srt" style="display:flex; flex-direction:column; gap:12px;">
+            <!-- Baris 1: Kotak IP lalu kotak Port -->
+            <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+              <div class="form-group" style="margin:0;">
+                <label>Server Address (IP / Domain)</label>
+                <input type="text" id="rf-p-addr" class="form-control" placeholder="e.g. 103.120.45.10">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Port</label>
+                <input type="number" id="rf-p-port" class="form-control" value="9000">
               </div>
             </div>
-            <div style="background:rgba(0,229,255,0.03); border:1px solid rgba(0,229,255,0.2); border-radius:6px; padding:10px 12px; font-size:11.5px;">
-              <div style="color:var(--cyan); font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;">Client Ingest Credentials (OBS / vMix / Hardware Encoder):</div>
-              <div style="display:grid; grid-template-columns:110px 1fr auto; gap:6px 10px; align-items:center; font-family:'JetBrains Mono';">
-                <span style="color:var(--text-dim);">Server URL:</span>
-                <span id="rf-p-rtmp-server-val" style="color:#fff;">rtmp://103.89.5.211:1935/live</span>
-                <button type="button" class="btn-icon" style="font-size:10.5px; padding:2px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-server-val').textContent)">Copy</button>
-                <span style="color:var(--text-dim);">Stream Key:</span>
-                <span id="rf-p-rtmp-key-val" style="color:#fff; font-weight:700;">--</span>
-                <button type="button" class="btn-icon" style="font-size:10.5px; padding:2px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-key-val').textContent)">Copy</button>
-                <span style="color:var(--text-dim);">Full Push URL:</span>
-                <span id="rf-p-rtmp-full-val" style="color:var(--cyan); word-break:break-all;">rtmp://103.89.5.211:1935/live/--</span>
-                <button type="button" class="btn-icon" style="font-size:10.5px; padding:2px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-full-val').textContent)">Copy</button>
+
+            <!-- Baris 2: Kotak Stream ID lalu kotak Pass -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+              <div class="form-group" style="margin:0;">
+                <label>Stream ID</label>
+                <input type="text" id="rf-p-streamid" class="form-control" value="venue_feed">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Passphrase (AES)</label>
+                <input type="password" id="rf-p-passphrase" class="form-control" placeholder="Leave empty for cleartext">
               </div>
             </div>
-          </div>
-          <div class="form-row" id="rf-p-details-row">
-            <div class="form-group">
-              <label>Stream ID / Path Name</label>
-              <input type="text" id="rf-p-streamid" class="form-control" value="venue_feed">
-            </div>
-            <div class="form-group">
-              <label>SRT Latency Buffer (ms)</label>
+
+            <!-- Baris 3: Kotak Latensi -->
+            <div class="form-group" style="margin:0;">
+              <label>Latency Buffer (ms)</label>
               <input type="number" id="rf-p-latency" class="form-control" value="200">
             </div>
           </div>
-          <div class="form-group" id="rf-p-passphrase-group">
-            <label>Passphrase (Optional AES encryption)</label>
-            <input type="password" id="rf-p-passphrase" class="form-control" placeholder="Leave empty for cleartext">
+
+          <!-- Mode 2: Direct Stream Container -->
+          <div id="rf-p-mode-direct" style="display:none; flex-direction:column; gap:12px;">
+            <div class="form-group" style="margin:0;">
+              <label>Direct Stream URL (YouTube Live / Web Live / HLS / RTMP)</label>
+              <input type="text" id="rf-p-url" class="form-control" placeholder="https://www.youtube.com/watch?v=... or https://example.com/live/feed.m3u8">
+              <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Supports public YouTube Live, Twitch, and web live streams without requiring login, as well as direct HLS (.m3u8), RTMP, and RTSP feeds.</span>
+            </div>
           </div>
+
+          <!-- Mode 3: Server RTMP Container -->
+          <div id="rf-p-mode-rtmp" style="display:none; flex-direction:column; gap:12px;">
+            <div class="form-group" style="margin:0;">
+              <label>Stream Key (Unique Identifier)</label>
+              <div style="display:flex; gap:8px;">
+                <input type="text" id="rf-p-rtmp-key" class="form-control" placeholder="e.g. live_98a7bc12" style="font-family:'JetBrains Mono'; font-weight:700;" oninput="updateRtmpDisplay('p')">
+                <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); white-space:nowrap; padding:6px 14px; min-height:40px;" onclick="generateRtmpKey('p')">Generate Key</button>
+              </div>
+            </div>
+            <div style="background:rgba(0,229,255,0.03); border:1px solid rgba(0,229,255,0.2); border-radius:6px; padding:12px; font-size:11.5px;">
+              <div style="color:var(--cyan); font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Client Ingest Credentials:</div>
+              <div style="display:grid; grid-template-columns:110px 1fr auto; gap:8px 10px; align-items:center; font-family:'JetBrains Mono';">
+                <span style="color:var(--text-dim);">Server URL:</span>
+                <span id="rf-p-rtmp-server-val" style="color:#fff;">rtmp://103.89.5.211:1935/live</span>
+                <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-server-val').textContent)">Copy</button>
+                <span style="color:var(--text-dim);">Stream Key:</span>
+                <span id="rf-p-rtmp-key-val" style="color:#fff; font-weight:700;">--</span>
+                <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-key-val').textContent)">Copy</button>
+                <span style="color:var(--text-dim);">Full Push URL:</span>
+                <span id="rf-p-rtmp-full-val" style="color:var(--cyan); word-break:break-all;">rtmp://103.89.5.211:1935/live/--</span>
+                <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-full-val').textContent)">Copy</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Stream Probe Button & Live Result Box -->
           <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -3086,69 +3106,83 @@ html, body {
             </label>
           </div>
           <div id="rf-secondary-fields" style="opacity:0.4; pointer-events:none;">
-            <div class="form-row">
-              <div class="form-group" style="flex:1;">
-                <label>Protocol / Mode</label>
-                <select id="rf-s-type" class="form-control" onchange="handleSecondarySourceTypeChange(this.value)">
-                  <option value="srt_caller">1. SRT Caller</option>
-                  <option value="direct_url">2. Direct Stream</option>
-                  <option value="rtmp_server">3. Server RTMP</option>
-                </select>
-              </div>
-              <div class="form-group" id="rf-s-port-group" style="width:160px; flex:none;">
-                <label id="rf-s-port-label">Remote Port</label>
-                <input type="number" id="rf-s-port" class="form-control" value="9000">
-              </div>
+            <!-- Dropdown Protocol / Mode (Full Width on top) -->
+            <div class="form-group" style="margin-bottom:12px;">
+              <label>Protocol / Mode</label>
+              <select id="rf-s-type" class="form-control" onchange="handleSecondarySourceTypeChange(this.value)">
+                <option value="srt_caller">1. SRT Caller</option>
+                <option value="direct_url">2. Direct Stream</option>
+                <option value="rtmp_server">3. Server RTMP</option>
+              </select>
             </div>
-            <div class="form-group" id="rf-s-addr-group">
-              <label>Remote Server Address / Host (IP or Domain)</label>
-              <input type="text" id="rf-s-addr" class="form-control" placeholder="e.g. 103.120.45.10 or srt.remote-broadcaster.com">
-            </div>
-            <div class="form-group" id="rf-s-url-group" style="display:none;">
-              <label>Direct Stream URL (YouTube Live / Web Live / HLS / RTMP)</label>
-              <input type="text" id="rf-s-url" class="form-control" placeholder="https://www.youtube.com/watch?v=... or https://example.com/live/backup.m3u8">
-              <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Supports public YouTube Live, Twitch, and web live streams without requiring login, as well as direct HLS (.m3u8), RTMP, and RTSP feeds.</span>
-            </div>
-            <!-- RTMP Ingest Credentials Box for Secondary -->
-            <div id="rf-s-rtmp-group" style="display:none; flex-direction:column; gap:10px; margin-bottom:12px;">
-              <div class="form-row">
-                <div class="form-group" style="flex:1; margin:0;">
-                  <label>Stream Key (Unique Identifier)</label>
-                  <div style="display:flex; gap:8px;">
-                    <input type="text" id="rf-s-rtmp-key" class="form-control" placeholder="e.g. live_backup_42b1" style="font-family:'JetBrains Mono'; font-weight:700;" oninput="updateRtmpDisplay('s')">
-                    <button type="button" class="btn-icon" style="color:var(--amber); border-color:rgba(245,158,11,0.3); white-space:nowrap; padding:6px 12px;" onclick="generateRtmpKey('s')">Generate Key</button>
-                  </div>
+
+            <!-- Mode 1: SRT Caller Container -->
+            <div id="rf-s-mode-srt" style="display:flex; flex-direction:column; gap:12px;">
+              <!-- Baris 1: Kotak IP lalu kotak Port -->
+              <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+                <div class="form-group" style="margin:0;">
+                  <label>Server Address (IP / Domain)</label>
+                  <input type="text" id="rf-s-addr" class="form-control" placeholder="e.g. 103.120.45.10">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label>Port</label>
+                  <input type="number" id="rf-s-port" class="form-control" value="9000">
                 </div>
               </div>
-              <div style="background:rgba(245,158,11,0.03); border:1px solid rgba(245,158,11,0.25); border-radius:6px; padding:10px 12px; font-size:11.5px;">
-                <div style="color:var(--amber); font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;">Client Ingest Credentials:</div>
-                <div style="display:grid; grid-template-columns:110px 1fr auto; gap:6px 10px; align-items:center; font-family:'JetBrains Mono';">
-                  <span style="color:var(--text-dim);">Server URL:</span>
-                  <span id="rf-s-rtmp-server-val" style="color:#fff;">rtmp://103.89.5.211:1935/live</span>
-                  <button type="button" class="btn-icon" style="font-size:10.5px; padding:2px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-server-val').textContent)">Copy</button>
-                  <span style="color:var(--text-dim);">Stream Key:</span>
-                  <span id="rf-s-rtmp-key-val" style="color:#fff; font-weight:700;">--</span>
-                  <button type="button" class="btn-icon" style="font-size:10.5px; padding:2px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-key-val').textContent)">Copy</button>
-                  <span style="color:var(--text-dim);">Full Push URL:</span>
-                  <span id="rf-s-rtmp-full-val" style="color:var(--amber); word-break:break-all;">rtmp://103.89.5.211:1935/live/--</span>
-                  <button type="button" class="btn-icon" style="font-size:10.5px; padding:2px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-full-val').textContent)">Copy</button>
+
+              <!-- Baris 2: Kotak Stream ID lalu kotak Pass -->
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <div class="form-group" style="margin:0;">
+                  <label>Stream ID</label>
+                  <input type="text" id="rf-s-streamid" class="form-control" value="venue_backup">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label>Passphrase (AES)</label>
+                  <input type="password" id="rf-s-passphrase" class="form-control" placeholder="Leave empty for cleartext">
                 </div>
               </div>
-            </div>
-            <div class="form-row" id="rf-s-details-row">
-              <div class="form-group">
-                <label>Stream ID / Path Name</label>
-                <input type="text" id="rf-s-streamid" class="form-control" value="venue_backup">
-              </div>
-              <div class="form-group">
-                <label>SRT Latency Buffer (ms)</label>
+
+              <!-- Baris 3: Kotak Latensi -->
+              <div class="form-group" style="margin:0;">
+                <label>Latency Buffer (ms)</label>
                 <input type="number" id="rf-s-latency" class="form-control" value="200">
               </div>
             </div>
-            <div class="form-group" id="rf-s-passphrase-group">
-              <label>Passphrase (Optional AES encryption)</label>
-              <input type="password" id="rf-s-passphrase" class="form-control" placeholder="Leave empty for cleartext">
+
+            <!-- Mode 2: Direct Stream Container -->
+            <div id="rf-s-mode-direct" style="display:none; flex-direction:column; gap:12px;">
+              <div class="form-group" style="margin:0;">
+                <label>Direct Stream URL (YouTube Live / Web Live / HLS / RTMP)</label>
+                <input type="text" id="rf-s-url" class="form-control" placeholder="https://www.youtube.com/watch?v=... or https://example.com/live/backup.m3u8">
+                <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Supports public YouTube Live, Twitch, and web live streams without requiring login, as well as direct HLS (.m3u8), RTMP, and RTSP feeds.</span>
+              </div>
             </div>
+
+            <!-- Mode 3: Server RTMP Container -->
+            <div id="rf-s-mode-rtmp" style="display:none; flex-direction:column; gap:12px;">
+              <div class="form-group" style="margin:0;">
+                <label>Stream Key (Unique Identifier)</label>
+                <div style="display:flex; gap:8px;">
+                  <input type="text" id="rf-s-rtmp-key" class="form-control" placeholder="e.g. live_backup_42b1" style="font-family:'JetBrains Mono'; font-weight:700;" oninput="updateRtmpDisplay('s')">
+                  <button type="button" class="btn-icon" style="color:var(--amber); border-color:rgba(245,158,11,0.3); white-space:nowrap; padding:6px 14px; min-height:40px;" onclick="generateRtmpKey('s')">Generate Key</button>
+                </div>
+              </div>
+              <div style="background:rgba(245,158,11,0.03); border:1px solid rgba(245,158,11,0.25); border-radius:6px; padding:12px; font-size:11.5px;">
+                <div style="color:var(--amber); font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Client Ingest Credentials:</div>
+                <div style="display:grid; grid-template-columns:110px 1fr auto; gap:8px 10px; align-items:center; font-family:'JetBrains Mono';">
+                  <span style="color:var(--text-dim);">Server URL:</span>
+                  <span id="rf-s-rtmp-server-val" style="color:#fff;">rtmp://103.89.5.211:1935/live</span>
+                  <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-server-val').textContent)">Copy</button>
+                  <span style="color:var(--text-dim);">Stream Key:</span>
+                  <span id="rf-s-rtmp-key-val" style="color:#fff; font-weight:700;">--</span>
+                  <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-key-val').textContent)">Copy</button>
+                  <span style="color:var(--text-dim);">Full Push URL:</span>
+                  <span id="rf-s-rtmp-full-val" style="color:var(--amber); word-break:break-all;">rtmp://103.89.5.211:1935/live/--</span>
+                  <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-full-val').textContent)">Copy</button>
+                </div>
+              </div>
+            </div>
+
             <!-- Stream Probe Button & Live Result Box -->
             <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
               <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -3806,9 +3840,11 @@ function previewIncomingStream(streamId) {
 function adoptStreamToRoute(streamId) {
   openAddRouteModal();
   document.getElementById('rf-name').value = `Live Ingest - ${streamId}`;
-  document.getElementById('rf-p-type').value = 'local_stream';
+  document.getElementById('rf-p-type').value = 'srt_caller';
+  document.getElementById('rf-p-addr').value = '127.0.0.1';
+  document.getElementById('rf-p-port').value = 8890;
   document.getElementById('rf-p-streamid').value = streamId;
-  handleSourceTypeChange('local_stream');
+  handleSourceTypeChange('srt_caller');
 }
 
 setInterval(pollInboundSrt, 2500);
@@ -4551,72 +4587,28 @@ function toggleSecondarySource(enabled) {
 }
 
 function handleSourceTypeChange(type) {
-  const addrGroup = document.getElementById('rf-p-addr-group');
-  const urlGroup = document.getElementById('rf-p-url-group');
-  const rtmpGroup = document.getElementById('rf-p-rtmp-group');
-  const portLabel = document.getElementById('rf-p-port-label');
-  const portGroup = document.getElementById('rf-p-port-group');
-  const detailsRow = document.getElementById('rf-p-details-row');
-  const passGroup = document.getElementById('rf-p-passphrase-group');
+  const srtBox = document.getElementById('rf-p-mode-srt');
+  const directBox = document.getElementById('rf-p-mode-direct');
+  const rtmpBox = document.getElementById('rf-p-mode-rtmp');
 
-  if (type === 'srt_caller') {
-    addrGroup.style.display = 'block';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = 'block';
-    portLabel.textContent = 'Remote Server Port';
-    detailsRow.style.display = 'grid';
-    if (passGroup) passGroup.style.display = 'block';
-  } else if (type === 'direct_url') {
-    addrGroup.style.display = 'none';
-    urlGroup.style.display = 'block';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = 'none';
-    detailsRow.style.display = 'none';
-    if (passGroup) passGroup.style.display = 'none';
-  } else if (type === 'rtmp_server') {
-    addrGroup.style.display = 'none';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'flex';
-    portGroup.style.display = 'none';
-    detailsRow.style.display = 'none';
-    if (passGroup) passGroup.style.display = 'none';
-    updateRtmpDisplay('p');
+  if (srtBox) srtBox.style.display = (type === 'srt_caller') ? 'flex' : 'none';
+  if (directBox) directBox.style.display = (type === 'direct_url') ? 'flex' : 'none';
+  if (rtmpBox) {
+    rtmpBox.style.display = (type === 'rtmp_server') ? 'flex' : 'none';
+    if (type === 'rtmp_server') updateRtmpDisplay('p');
   }
 }
 
 function handleSecondarySourceTypeChange(type) {
-  const addrGroup = document.getElementById('rf-s-addr-group');
-  const urlGroup = document.getElementById('rf-s-url-group');
-  const rtmpGroup = document.getElementById('rf-s-rtmp-group');
-  const portLabel = document.getElementById('rf-s-port-label');
-  const portGroup = document.getElementById('rf-s-port-group');
-  const detailsRow = document.getElementById('rf-s-details-row');
-  const passGroup = document.getElementById('rf-s-passphrase-group');
+  const srtBox = document.getElementById('rf-s-mode-srt');
+  const directBox = document.getElementById('rf-s-mode-direct');
+  const rtmpBox = document.getElementById('rf-s-mode-rtmp');
 
-  if (type === 'srt_caller') {
-    addrGroup.style.display = 'block';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = 'block';
-    portLabel.textContent = 'Remote Server Port';
-    detailsRow.style.display = 'grid';
-    if (passGroup) passGroup.style.display = 'block';
-  } else if (type === 'direct_url') {
-    addrGroup.style.display = 'none';
-    urlGroup.style.display = 'block';
-    if (rtmpGroup) rtmpGroup.style.display = 'none';
-    portGroup.style.display = 'none';
-    detailsRow.style.display = 'none';
-    if (passGroup) passGroup.style.display = 'none';
-  } else if (type === 'rtmp_server') {
-    addrGroup.style.display = 'none';
-    urlGroup.style.display = 'none';
-    if (rtmpGroup) rtmpGroup.style.display = 'flex';
-    portGroup.style.display = 'none';
-    detailsRow.style.display = 'none';
-    if (passGroup) passGroup.style.display = 'none';
-    updateRtmpDisplay('s');
+  if (srtBox) srtBox.style.display = (type === 'srt_caller') ? 'flex' : 'none';
+  if (directBox) directBox.style.display = (type === 'direct_url') ? 'flex' : 'none';
+  if (rtmpBox) {
+    rtmpBox.style.display = (type === 'rtmp_server') ? 'flex' : 'none';
+    if (type === 'rtmp_server') updateRtmpDisplay('s');
   }
 }
 
@@ -4816,8 +4808,9 @@ function addDestinationRow(data = {}) {
     </div>
 
     <!-- 1. SRT Caller Parameters -->
-    <div id="dest-fields-srt-caller-${destinationCount}" class="dest-proto-fields" style="display:${type==='srt_caller'?'flex':'none'}; flex-direction:column; gap:10px; background:rgba(0,229,255,0.03); border:1px solid rgba(0,229,255,0.15); border-radius:6px; padding:12px; margin-bottom:12px;">
-      <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">
+    <div id="dest-fields-srt-caller-${destinationCount}" class="dest-proto-fields" style="display:${type==='srt_caller'?'flex':'none'}; flex-direction:column; gap:12px; background:rgba(0,229,255,0.03); border:1px solid rgba(0,229,255,0.15); border-radius:6px; padding:12px; margin-bottom:12px;">
+      <!-- Baris 1: Kotak IP lalu kotak Port -->
+      <div style="display:grid; grid-template-columns:2fr 1fr; gap:12px;">
         <div class="form-group" style="margin:0;">
           <label>Server Address (IP / Domain)</label>
           <input type="text" class="form-control" name="dest_srt_addr" placeholder="e.g. 103.120.45.10" value="${escapeHtml(srtAddr)}">
@@ -4827,35 +4820,35 @@ function addDestinationRow(data = {}) {
           <input type="number" class="form-control" name="dest_srt_port" placeholder="9000" value="${srtPort}">
         </div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+      <!-- Baris 2: Kotak Stream ID lalu kotak Pass -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div class="form-group" style="margin:0;">
           <label>Stream ID</label>
           <input type="text" class="form-control" name="dest_srt_streamid" placeholder="publish:client_feed" value="${escapeHtml(srtSid)}">
         </div>
         <div class="form-group" style="margin:0;">
-          <label>Latency (ms)</label>
-          <input type="number" class="form-control" name="dest_srt_latency" value="${srtLat}">
-        </div>
-        <div class="form-group" style="margin:0;">
           <label>Passphrase (AES)</label>
-          <input type="password" class="form-control" name="dest_srt_passphrase" placeholder="AES Passphrase" value="${escapeHtml(srtPass)}">
+          <input type="password" class="form-control" name="dest_srt_passphrase" placeholder="Leave empty for cleartext" value="${escapeHtml(srtPass)}">
         </div>
+      </div>
+      <!-- Baris 3: Kotak Latensi -->
+      <div class="form-group" style="margin:0;">
+        <label>Latency Buffer (ms)</label>
+        <input type="number" class="form-control" name="dest_srt_latency" value="${srtLat}">
       </div>
     </div>
 
     <!-- 2. RTMP Push Parameters -->
-    <div id="dest-fields-rtmp-${destinationCount}" class="dest-proto-fields" style="display:${type==='rtmp'?'flex':'none'}; flex-direction:column; gap:10px; background:rgba(239,68,68,0.04); border:1px solid rgba(239,68,68,0.2); border-radius:6px; padding:12px; margin-bottom:12px;">
-      <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:10px;">
-        <div class="form-group" style="margin:0;">
-          <label>RTMP Target Server URL</label>
-          <input type="text" class="form-control" name="dest_rtmp_url" id="dest-rtmp-url-${destinationCount}" placeholder="rtmp://a.rtmp.youtube.com/live2" value="${escapeHtml(rtmpUrl)}">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label>Stream Key</label>
-          <div style="display:flex; gap:6px;">
-            <input type="password" class="form-control" name="dest_stream_key" id="dest-stream-key-${destinationCount}" placeholder="Stream key" value="${escapeHtml(rtmpKey)}" style="font-family:'JetBrains Mono';">
-            <button type="button" class="btn-icon" style="white-space:nowrap; padding:4px 8px;" onclick="togglePasswordVisibility('dest-stream-key-${destinationCount}')">Show</button>
-          </div>
+    <div id="dest-fields-rtmp-${destinationCount}" class="dest-proto-fields" style="display:${type==='rtmp'?'flex':'none'}; flex-direction:column; gap:12px; background:rgba(239,68,68,0.04); border:1px solid rgba(239,68,68,0.2); border-radius:6px; padding:12px; margin-bottom:12px;">
+      <div class="form-group" style="margin:0;">
+        <label>RTMP Target Server URL</label>
+        <input type="text" class="form-control" name="dest_rtmp_url" id="dest-rtmp-url-${destinationCount}" placeholder="rtmp://a.rtmp.youtube.com/live2" value="${escapeHtml(rtmpUrl)}">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Stream Key</label>
+        <div style="display:flex; gap:6px;">
+          <input type="password" class="form-control" name="dest_stream_key" id="dest-stream-key-${destinationCount}" placeholder="Stream key" value="${escapeHtml(rtmpKey)}" style="font-family:'JetBrains Mono';">
+          <button type="button" class="btn-icon" style="white-space:nowrap; padding:4px 10px; min-height:40px;" onclick="togglePasswordVisibility('dest-stream-key-${destinationCount}')">Show</button>
         </div>
       </div>
     </div>
