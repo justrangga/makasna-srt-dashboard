@@ -4429,7 +4429,6 @@ async function pollTelemetry() {
       }
 
       // Destination Box -> Active Readers
-      const matchingReaders = (d.readers || []).filter(r => r.stream_id === pub.stream_id);
       const destTitle = document.getElementById('telem-dest-title');
       if (destTitle) destTitle.textContent = 'Active Listeners (Readers)';
       document.getElementById('telem-dest-count').textContent = `${matchingReaders.length} LISTENERS`;
