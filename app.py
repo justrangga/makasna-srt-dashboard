@@ -477,15 +477,16 @@ def build_video_filters(dest, overlay_cfg=None, route_id=None, dest_idx=0):
     target_output = str(overlay_cfg.get("target_output", "none")).strip()
     if not target_output or target_output == "none":
         use_overlay = False
-    elif target_output != "all":
-        clean_target = target_output.replace("route_", "")
-        clean_rid = str(route_id or "").replace("route_", "")
-        matches = False
-        if clean_target == clean_rid:
-            matches = True
-        elif clean_target == f"{clean_rid}:{dest_idx}":
-            matches = True
-        if not matches:
+    else:
+        # Match strictly against selected final destination: "route_<id>:<dest_idx>"
+        parts = target_output.split(":")
+        if len(parts) == 2:
+            target_r = parts[0].replace("route_", "").strip()
+            target_didx = parts[1].strip()
+            clean_rid = str(route_id or "").replace("route_", "").strip()
+            if clean_rid != target_r or str(dest_idx) != str(target_didx):
+                use_overlay = False
+        else:
             use_overlay = False
 
     scale = dest.get("scale", "original")
@@ -1846,6 +1847,13 @@ def api_save_overlay():
         else:
             cfg[k] = v
     if save_overlay_config(cfg):
+        # Hot-restart active running routes so overlay changes take effect immediately on live streams
+        for rid in list(active_routes.keys()):
+            r = get_route(rid)
+            if r and r.get("running"):
+                stop_route_process(rid)
+                time.sleep(0.3)
+                start_route_process(r, source_type=r.get("active_source", "primary"))
         return jsonify({"ok": True, "message": "Overlay configuration saved successfully", "config": cfg})
     return jsonify({"ok": False, "error": "Failed to save overlay configuration"}), 500
 
@@ -1859,6 +1867,13 @@ def api_safety_off_overlay():
     for l in cfg.get("layers", []):
         l["enabled"] = False
     if save_overlay_config(cfg):
+        # Restart active running routes immediately to remove overlay from live streams
+        for rid in list(active_routes.keys()):
+            r = get_route(rid)
+            if r and r.get("running"):
+                stop_route_process(rid)
+                time.sleep(0.3)
+                start_route_process(r, source_type=r.get("active_source", "primary"))
         return jsonify({"ok": True, "message": "All overlays disabled for safety", "config": cfg})
     return jsonify({"ok": False, "error": "Failed to disable overlays"}), 500
 

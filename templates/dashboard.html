@@ -2549,8 +2549,7 @@ html, body {
           <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:200px;">
             <span style="font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">TARGET OUTPUT:</span>
             <select id="overlay-target-output" class="hd-select" style="width:100%; min-width:0; padding:4px 6px; font-size:11.5px;" onchange="onOverlayTargetChange()">
-              <option value="none">NONE (Overlay Disabled on All Outputs)</option>
-              <option value="all">ALL OUTPUTS (Global Master Burn-In)</option>
+              <option value="none">-- Nonaktif (Tanpa Overlay) --</option>
             </select>
           </div>
           <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:180px;">
@@ -3714,6 +3713,10 @@ async function fetchRoutes() {
       currentRoutes = d.routes;
       renderRoutes();
       syncHyperdeckRouteOptions();
+      const targetSel = document.getElementById('overlay-target-output');
+      if (targetSel && targetSel.options.length <= 1) {
+        populateOverlayTargetSelect();
+      }
     }
   } catch(e) {}
 }
@@ -6477,48 +6480,58 @@ function populateOverlayTargetSelect() {
 
   const optNone = document.createElement('option');
   optNone.value = 'none';
-  optNone.textContent = 'NONE (Overlay Disabled on All Outputs)';
+  optNone.textContent = '-- Nonaktif (Tanpa Overlay) --';
   if (currentVal === 'none' || !currentVal) optNone.selected = true;
   sel.appendChild(optNone);
 
-  const optAll = document.createElement('option');
-  optAll.value = 'all';
-  optAll.textContent = 'ALL OUTPUTS (Global Master Burn-In)';
-  if (currentVal === 'all') optAll.selected = true;
-  sel.appendChild(optAll);
-
   const routesList = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes)) ? currentRoutes : [];
+  let destCount = 0;
+
   routesList.forEach(r => {
-    const grp = document.createElement('optgroup');
-    grp.label = `Route: ${r.name || 'Route ' + r.id}`;
-
-    const optRoute = document.createElement('option');
-    optRoute.value = `route_${r.id}`;
-    optRoute.textContent = `[${r.name}] All Egress Outputs`;
-    if (currentVal === `route_${r.id}` || currentVal === `${r.id}`) optRoute.selected = true;
-    grp.appendChild(optRoute);
-
     const dests = Array.isArray(r.destinations) ? r.destinations : [];
     dests.forEach((d, dIdx) => {
+      destCount++;
       const optDest = document.createElement('option');
-      optDest.value = `route_${r.id}:${dIdx}`;
-      let dName = d.type === 'direct_srt_local' ? `Direct SRT Local (${d.stream_id || 'stream'})` :
-                  d.type === 'rtmp_push' ? `RTMP Push (${d.url || 'url'})` :
-                  d.type === 'srt_caller' ? `SRT Caller (${d.address || 'ip'}:${d.port || 'port'})` :
-                  `Destination #${dIdx + 1}`;
-      optDest.textContent = `[${r.name}] Output #${dIdx + 1}: ${dName}`;
-      if (currentVal === `route_${r.id}:${dIdx}` || currentVal === `${r.id}:${dIdx}`) optDest.selected = true;
-      grp.appendChild(optDest);
-    });
+      const cleanRid = String(r.id || '').replace(/^route_/, '');
+      const val = `route_${cleanRid}:${dIdx}`;
+      optDest.value = val;
 
-    sel.appendChild(grp);
+      let dLabel = '';
+      if (d.type === 'srt_local' || d.type === 'direct_srt_local') {
+        dLabel = `Direct SRT Local (${d.stream_id || 'publish:VIDEO'})`;
+      } else if (d.type === 'rtmp' || d.type === 'rtmp_push') {
+        const urlBrief = d.rtmp_url ? d.rtmp_url.replace(/^rtmps?:\/\//, '').split('/')[0] : (d.url ? d.url.replace(/^rtmps?:\/\//, '').split('/')[0] : 'RTMP');
+        dLabel = `RTMP Push (${urlBrief})`;
+      } else if (d.type === 'srt_caller') {
+        dLabel = `SRT Caller (${d.address || 'IP'}:${d.port || 9000})`;
+      } else {
+        dLabel = `Output #${dIdx + 1}`;
+      }
+
+      optDest.textContent = `${r.name || 'Route'} - Output #${dIdx + 1}: ${dLabel}`;
+
+      const cleanCur = String(currentVal).replace(/^route_/, '');
+      if (currentVal === val || cleanCur === `${cleanRid}:${dIdx}`) {
+        optDest.selected = true;
+      }
+      sel.appendChild(optDest);
+    });
   });
+
+  if (destCount === 0) {
+    const optEmpty = document.createElement('option');
+    optEmpty.value = 'none';
+    optEmpty.textContent = '-- Belum Ada Tujuan Output Terdaftar --';
+    optEmpty.disabled = true;
+    sel.appendChild(optEmpty);
+  }
 }
 
 function onOverlayTargetChange() {
   const sel = document.getElementById('overlay-target-output');
   if (sel) {
     overlayConfigState.target_output = sel.value;
+    updateFilterCodePreview();
   }
 }
 
