@@ -2848,10 +2848,8 @@ html, body {
           <div class="form-group">
             <label>Failover Switch Policy</label>
             <select id="rf-policy" class="form-control">
-              <option value="maintain_primary">Maintain Primary (Return on recovery)</option>
-              <option value="maintain_stability">Maintain Stability (Stay on active)</option>
-              <option value="manual_switchback">Manual Switchback (Auto failover)</option>
-              <option value="manual">Manual Selection</option>
+              <option value="auto_failover">Auto Failover</option>
+              <option value="manual">Manual Switch</option>
             </select>
           </div>
         </div>
@@ -3932,7 +3930,8 @@ async function inspectRoute(id) {
 
   document.getElementById('telem-route-name').textContent = route.name;
   document.getElementById('telem-route-id').textContent = `ID: ${route.id} | ${route.primary_source.type}:${route.primary_source.port || route.primary_source.stream_id}`;
-  document.getElementById('telem-failover-policy').textContent = route.failover_policy.replace('_', ' ');
+  const policyLabel = (route.failover_policy === 'manual') ? 'Manual Switch' : 'Auto Failover';
+  document.getElementById('telem-failover-policy').textContent = policyLabel;
 
   const failoverTitle = document.getElementById('telem-failover-title');
   if (failoverTitle) failoverTitle.textContent = 'Source Failover';
@@ -4685,7 +4684,8 @@ function editRoute(id) {
   document.getElementById('modal-route-title').textContent = `Edit: ${r.name}`;
   document.getElementById('rf-id').value = r.id;
   document.getElementById('rf-name').value = r.name;
-  document.getElementById('rf-policy').value = r.failover_policy || 'maintain_primary';
+  const policyVal = r.failover_policy || 'auto_failover';
+  document.getElementById('rf-policy').value = (policyVal === 'manual' ? 'manual' : 'auto_failover');
 
   // Primary
   const p = r.primary_source || {};

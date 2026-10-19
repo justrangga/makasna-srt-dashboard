@@ -149,7 +149,7 @@ active_recorders_lock = threading.Lock()
 events_lock = threading.Lock()
 
 # Failover policies
-FAILOVER_POLICIES = ("maintain_primary", "maintain_stability", "manual_switchback", "manual")
+FAILOVER_POLICIES = ("auto_failover", "manual", "maintain_primary", "maintain_stability", "manual_switchback")
 
 
 def now_iso():
@@ -235,7 +235,7 @@ def load_routes():
                     "id": rid,
                     "name": item.get("name", f"Route {rid}"),
                     "enabled": bool(item.get("enabled", True)),
-                    "failover_policy": "maintain_primary",
+                    "failover_policy": "auto_failover",
                     "active_source": "primary",
                     "primary_source": {
                         "type": "local_stream" if not item.get("source", "").startswith(("srt://", "udp://", "rtmp://")) else "srt_caller",
@@ -1135,11 +1135,11 @@ def supervisor_thread():
                         bo["next_retry"] = now + backoff
 
                         # Evaluate Failover
-                        policy = route.get("failover_policy", "maintain_primary")
+                        policy = route.get("failover_policy", "auto_failover")
                         sec_cfg = route.get("secondary_source", {})
                         has_sec = sec_cfg.get("enabled", False)
 
-                        if has_sec and info.get("active_source") == "primary" and policy in ("maintain_primary", "maintain_stability", "manual_switchback"):
+                        if has_sec and info.get("active_source") == "primary" and policy in ("auto_failover", "maintain_primary", "maintain_stability", "manual_switchback"):
                             log_event(rid, route["name"], "failover", f"Switching to secondary source under policy '{policy}'", "warning")
                             start_route_process(route, source_type="secondary")
                             bo["failures"] = 0
@@ -1536,7 +1536,7 @@ def api_create_route():
         "id": rid,
         "name": name,
         "enabled": True,
-        "failover_policy": data.get("failover_policy", "maintain_primary"),
+        "failover_policy": data.get("failover_policy", "auto_failover"),
         "active_source": "primary",
         "primary_source": primary_source,
         "secondary_source": secondary_source,
