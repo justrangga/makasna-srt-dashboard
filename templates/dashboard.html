@@ -2556,7 +2556,7 @@ html, body {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
             <span>OFF ALL OVERLAY</span>
           </button>
-          <button class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:700; padding:6px 14px; min-height:36px; white-space:nowrap; border-radius:6px; flex-shrink:0;">
+          <button type="button" id="btn-save-overlay-top" class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:700; padding:6px 14px; min-height:36px; white-space:nowrap; border-radius:6px; flex-shrink:0;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             <span>Save</span>
           </button>
@@ -3707,9 +3707,10 @@ async function fetchRoutes() {
       currentRoutes = d.routes;
       renderRoutes();
       syncHyperdeckRouteOptions();
-      const targetSel = document.getElementById('overlay-target-output');
-      if (targetSel && targetSel.options.length <= 1) {
-        populateOverlayTargetSelect();
+      populateOverlayTargetSelect();
+      const ovView = document.getElementById('view-recordings');
+      if (ovView && ovView.style.display !== 'none') {
+        updateOverlayMonitorBackground();
       }
     }
   } catch(e) {}
@@ -6371,6 +6372,60 @@ requestAnimationFrame(runHyperdeckAudioMeter);
 // =========================================================================
 // STATION ID & OVERLAY STUDIO JAVASCRIPT CONTROLLER
 // =========================================================================
+function showToast(msg, type = 'info') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:99999; display:flex; flex-direction:column; gap:8px; pointer-events:none; max-width:380px;';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  const colors = {
+    success: { bg: '#052e16', border: '#22c55e', text: '#86efac' },
+    error: { bg: '#450a0a', border: '#ef4444', text: '#fca5a5' },
+    warning: { bg: '#451a03', border: '#f59e0b', text: '#fde68a' },
+    info: { bg: '#082f49', border: '#0ea5e9', text: '#7dd3fc' }
+  };
+  const c = colors[type] || colors.info;
+
+  toast.style.cssText = `
+    background: ${c.bg};
+    border: 1px solid ${c.border};
+    color: ${c.text};
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  `;
+
+  toast.textContent = msg;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  });
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(12px)';
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 250);
+  }, 3500);
+}
+
 const LAYER_THEMES = [
   { id: 1, name: "Overlay 1", color: "#00e5ff", classDrag: "drag-cyan", classDot: "dot-cyan", classSlider: "range-slider", tag: "L1", defaultX: 80.0, defaultY: 5.0, defaultScale: 15.0 },
   { id: 2, name: "Overlay 2", color: "#ffb300", classDrag: "drag-amber", classDot: "dot-amber", classSlider: "range-slider range-slider-amber", tag: "L2", defaultX: 5.0, defaultY: 84.0, defaultScale: 18.0 },
@@ -6522,36 +6577,165 @@ function onOverlayTargetChange() {
   const sel = document.getElementById('overlay-target-output');
   if (sel) {
     overlayConfigState.target_output = sel.value;
+    currentOverlayStreamName = '';
     updateFilterCodePreview();
     updateOverlayMonitorBackground();
+  }
+}
+
+let overlayMonitorPc = null;
+let overlayMonitorHls = null;
+let currentOverlayStreamName = '';
+
+async function startOverlayMonitorStream(streamName) {
+  const video = document.getElementById('overlay-preview-video');
+  const noSignal = document.getElementById('overlay-no-signal');
+  if (!video) return;
+
+  if (currentOverlayStreamName === streamName && (overlayMonitorPc || overlayMonitorHls)) {
+    return;
+  }
+  currentOverlayStreamName = streamName;
+
+  if (overlayMonitorPc) {
+    try { overlayMonitorPc.close(); } catch(e) {}
+    overlayMonitorPc = null;
+  }
+  if (overlayMonitorHls) {
+    try { overlayMonitorHls.destroy(); } catch(e) {}
+    overlayMonitorHls = null;
+  }
+
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+
+  const safeStreamName = streamName.startsWith('route_') ? streamName : `route_${streamName}`;
+
+  try {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+    overlayMonitorPc = pc;
+
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+
+    pc.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        video.srcObject = event.streams[0];
+        if (noSignal) noSignal.style.display = 'none';
+        video.play().catch(() => {});
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        if (noSignal) noSignal.style.display = 'none';
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        fallbackOverlayToHls(video, safeStreamName, noSignal);
+      }
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const whepUrls = [
+      `/whep/${encodeURIComponent(safeStreamName)}/whep`,
+      `http://${window.location.hostname}:8889/${encodeURIComponent(safeStreamName)}/whep`
+    ];
+
+    let answerSdp = null;
+    for (const url of whepUrls) {
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/sdp' },
+          body: offer.sdp
+        });
+        if (resp.ok) {
+          answerSdp = await resp.text();
+          break;
+        }
+      } catch(e) {}
+    }
+
+    if (!answerSdp) {
+      throw new Error('WebRTC WHEP unavailable');
+    }
+
+    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+  } catch (err) {
+    console.warn('[Overlay Monitor] WebRTC fallback to HLS:', err);
+    fallbackOverlayToHls(video, safeStreamName, noSignal);
+  }
+}
+
+function fallbackOverlayToHls(video, streamName, noSignal) {
+  if (overlayMonitorHls) {
+    try { overlayMonitorHls.destroy(); } catch(e) {}
+    overlayMonitorHls = null;
+  }
+
+  const streamUrl = `/hls/${encodeURIComponent(streamName)}/index.m3u8`;
+  if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+      liveSyncDurationCount: 2,
+      maxBufferLength: 6
+    });
+    overlayMonitorHls = hls;
+    hls.loadSource(streamUrl);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (noSignal) noSignal.style.display = 'none';
+      video.play().catch(() => {});
+    });
+    hls.on(Hls.Events.ERROR, (ev, data) => {
+      if (data.fatal && noSignal) {
+        noSignal.style.display = 'flex';
+      }
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = streamUrl;
+    video.addEventListener('loadedmetadata', () => {
+      if (noSignal) noSignal.style.display = 'none';
+      video.play().catch(() => {});
+    }, { once: true });
   }
 }
 
 function updateOverlayMonitorBackground() {
   const video = document.getElementById('overlay-preview-video');
   const noSignal = document.getElementById('overlay-no-signal');
-  if (!video || !noSignal) return;
+  if (!video) return;
 
+  const routesList = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes)) ? currentRoutes : [];
   const targetVal = overlayConfigState.target_output || 'none';
-  if (!targetVal || targetVal === 'none') {
-    video.src = '';
-    noSignal.style.display = 'flex';
-    return;
+
+  let targetRoute = null;
+
+  if (targetVal && targetVal !== 'none') {
+    const parts = targetVal.split(':');
+    const routeId = parts[0].replace(/^route_/, '');
+    targetRoute = routesList.find(item => String(item.id).replace(/^route_/, '') === routeId);
   }
 
-  const parts = targetVal.split(':');
-  const routeId = parts[0].replace(/^route_/, '');
-  const r = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes))
-    ? currentRoutes.find(item => String(item.id).replace(/^route_/, '') === routeId)
-    : null;
+  // If no specific target output chosen or route not running, find any running route to display
+  if (!targetRoute || !targetRoute.running) {
+    targetRoute = routesList.find(r => r.running) || routesList[0];
+  }
 
-  if (r && r.running) {
-    noSignal.style.display = 'none';
-    const streamUrl = `/hls/route_${encodeURIComponent(routeId)}/index.m3u8`;
-    initHlsPlayer(video, streamUrl);
+  if (targetRoute && (targetRoute.running || routesList.length > 0)) {
+    const cleanRid = String(targetRoute.id || '').replace(/^route_/, '');
+    startOverlayMonitorStream(`route_${cleanRid}`);
   } else {
+    currentOverlayStreamName = '';
     video.src = '';
-    noSignal.style.display = 'flex';
+    video.srcObject = null;
+    if (noSignal) noSignal.style.display = 'flex';
   }
 }
 
@@ -6882,7 +7066,18 @@ function onLayerToggle(layerId) {
   if (!layer) return;
   const chk = document.getElementById(`cfg-ov${layer.id}-enabled`);
   if (chk) layer.enabled = chk.checked;
+
+  if (layer.enabled) {
+    const masterChk = document.getElementById('cfg-overlay-master');
+    if (masterChk && !masterChk.checked) {
+      masterChk.checked = true;
+      overlayConfigState.enabled = true;
+    }
+  }
+
   syncLayerDOM(layerId);
+  renderTelemetryCards();
+  updateFilterCodePreview();
 }
 
 function applyPreset(layerId, xPct, yPct) {
@@ -6900,6 +7095,17 @@ function onLayerAssetSelect(layerId) {
   if (!sel) return;
 
   layer.file = sel.value;
+  if (layer.file) {
+    layer.enabled = true;
+    const chk = document.getElementById(`cfg-ov${layer.id}-enabled`);
+    if (chk) chk.checked = true;
+
+    const masterChk = document.getElementById('cfg-overlay-master');
+    if (masterChk && !masterChk.checked) {
+      masterChk.checked = true;
+      overlayConfigState.enabled = true;
+    }
+  }
 
   const content = document.getElementById(`drag-content-${layer.id}`);
   const theme = LAYER_THEMES[layer.id - 1] || LAYER_THEMES[0];
@@ -6916,6 +7122,7 @@ function onLayerAssetSelect(layerId) {
     }
   }
 
+  syncLayerDOM(layerId);
   renderTelemetryCards();
   updateFilterCodePreview();
 }
@@ -7107,8 +7314,17 @@ async function safetyOffAllOverlays() {
 }
 
 async function saveOverlayConfig() {
-  const masterOn = document.getElementById('cfg-overlay-master')?.checked;
+  const masterChk = document.getElementById('cfg-overlay-master');
   const targetOutput = document.getElementById('overlay-target-output')?.value || "none";
+
+  // If user selected a destination output and has enabled layers, ensure master switch is on
+  const hasActiveLayers = overlayLayers.some(l => l.enabled && l.file);
+  let masterOn = Boolean(masterChk && masterChk.checked);
+  if (!masterOn && hasActiveLayers && targetOutput !== 'none') {
+    masterOn = true;
+    if (masterChk) masterChk.checked = true;
+    overlayConfigState.enabled = true;
+  }
 
   const payload = {
     enabled: Boolean(masterOn),
@@ -7126,6 +7342,11 @@ async function saveOverlayConfig() {
     }))
   };
 
+  const btnTop = document.getElementById('btn-save-overlay-top');
+  const btnBottom = document.getElementById('btn-save-overlay-bottom');
+  if (btnTop) { btnTop.disabled = true; btnTop.style.opacity = '0.6'; }
+  if (btnBottom) { btnBottom.disabled = true; btnBottom.style.opacity = '0.6'; }
+
   showToast("Menyimpan konfigurasi overlay...");
   try {
     const res = await fetch('/api/overlay/save', {
@@ -7137,11 +7358,16 @@ async function saveOverlayConfig() {
     if (data.ok) {
       showToast("Konfigurasi overlay berhasil disimpan!", "success");
       overlayConfigState = { ...overlayConfigState, ...payload };
+      updateFilterCodePreview();
+      updateOverlayMonitorBackground();
     } else {
       showToast(data.error || "Gagal menyimpan konfigurasi", "error");
     }
   } catch (err) {
     showToast(`Kesalahan jaringan: ${err.message}`, "error");
+  } finally {
+    if (btnTop) { btnTop.disabled = false; btnTop.style.opacity = '1'; }
+    if (btnBottom) { btnBottom.disabled = false; btnBottom.style.opacity = '1'; }
   }
 }
 
@@ -7167,6 +7393,8 @@ function resetOverlayDefaults() {
   if (targetSel) targetSel.value = 'none';
 
   renderAllOverlayLayers();
+  updateFilterCodePreview();
+  updateOverlayMonitorBackground();
   showToast("Reset ke kondisi awal (overlay dinonaktifkan, 1 layer kosong).");
 }
 

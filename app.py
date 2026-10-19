@@ -1669,6 +1669,14 @@ def api_start_route(route_id):
     ok, err = start_route_process(r, source_type=r.get("active_source", "primary"))
     if not ok:
         return jsonify({"ok": False, "error": err}), 500
+
+    all_routes = load_routes()
+    for item in all_routes:
+        if item["id"] == route_id:
+            item["running"] = True
+            item["status"] = "RUNNING"
+            break
+    save_routes(all_routes)
     return jsonify({"ok": True, "message": "Route started"})
 
 
@@ -1676,6 +1684,13 @@ def api_start_route(route_id):
 @login_required
 def api_stop_route(route_id):
     stop_route_process(route_id)
+    all_routes = load_routes()
+    for item in all_routes:
+        if item["id"] == route_id:
+            item["running"] = False
+            item["status"] = "STOPPED"
+            break
+    save_routes(all_routes)
     return jsonify({"ok": True, "message": "Route stopped"})
 
 
@@ -1690,6 +1705,14 @@ def api_restart_route(route_id):
     ok, err = start_route_process(r, source_type=r.get("active_source", "primary"))
     if not ok:
         return jsonify({"ok": False, "error": err}), 500
+
+    all_routes = load_routes()
+    for item in all_routes:
+        if item["id"] == route_id:
+            item["running"] = True
+            item["status"] = "RUNNING"
+            break
+    save_routes(all_routes)
     return jsonify({"ok": True, "message": "Route restarted"})
 
 
@@ -1847,12 +1870,19 @@ def api_save_overlay():
             cfg[k] = v
     if save_overlay_config(cfg):
         # Hot-restart active running routes so overlay changes take effect immediately on live streams
-        for rid in list(active_routes.keys()):
+        routes_to_restart = []
+        with active_routes_lock:
+            for rid, info in active_routes.items():
+                if info.get("proc") and info["proc"].poll() is None:
+                    src = info.get("active_source", "primary")
+                    routes_to_restart.append((rid, src))
+
+        for rid, src in routes_to_restart:
             r = get_route(rid)
-            if r and r.get("running"):
+            if r:
                 stop_route_process(rid)
-                time.sleep(0.3)
-                start_route_process(r, source_type=r.get("active_source", "primary"))
+                time.sleep(0.4)
+                start_route_process(r, source_type=src)
         return jsonify({"ok": True, "message": "Overlay configuration saved successfully", "config": cfg})
     return jsonify({"ok": False, "error": "Failed to save overlay configuration"}), 500
 
@@ -1867,12 +1897,19 @@ def api_safety_off_overlay():
         l["enabled"] = False
     if save_overlay_config(cfg):
         # Restart active running routes immediately to remove overlay from live streams
-        for rid in list(active_routes.keys()):
+        routes_to_restart = []
+        with active_routes_lock:
+            for rid, info in active_routes.items():
+                if info.get("proc") and info["proc"].poll() is None:
+                    src = info.get("active_source", "primary")
+                    routes_to_restart.append((rid, src))
+
+        for rid, src in routes_to_restart:
             r = get_route(rid)
-            if r and r.get("running"):
+            if r:
                 stop_route_process(rid)
-                time.sleep(0.3)
-                start_route_process(r, source_type=r.get("active_source", "primary"))
+                time.sleep(0.4)
+                start_route_process(r, source_type=src)
         return jsonify({"ok": True, "message": "All overlays disabled for safety", "config": cfg})
     return jsonify({"ok": False, "error": "Failed to disable overlays"}), 500
 
