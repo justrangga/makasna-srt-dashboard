@@ -67,7 +67,6 @@ DEFAULT_OVERLAY_CONFIG = {
     "enabled": False,
     "apply_to_egress": True,
     "target_output": "none",
-    "feed_source": "",
     "layers": [
         {
             "id": 1,

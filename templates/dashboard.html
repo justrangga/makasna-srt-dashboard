@@ -2546,16 +2546,10 @@ html, body {
           </div>
         </div>
         <div class="overlay-header-actions" style="display:flex; gap:8px; align-items:center; margin-top:8px; width:100%; flex-wrap:wrap;">
-          <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:200px;">
+          <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:240px;">
             <span style="font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">TARGET OUTPUT:</span>
             <select id="overlay-target-output" class="hd-select" style="width:100%; min-width:0; padding:4px 6px; font-size:11.5px;" onchange="onOverlayTargetChange()">
               <option value="none">-- Nonaktif (Tanpa Overlay) --</option>
-            </select>
-          </div>
-          <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:180px;">
-            <span style="font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">FEED:</span>
-            <select id="overlay-feed-select" class="hd-select" style="width:100%; min-width:0; padding:4px 6px; font-size:11.5px;" onchange="onOverlayFeedChange()">
-              <option value="">-- SELECT BROADCAST FEED --</option>
             </select>
           </div>
           <button type="button" id="btn-safety-off-top" class="btn-danger" onclick="safetyOffAllOverlays()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:11.5px; font-weight:800; padding:6px 14px; min-height:36px; white-space:nowrap; border-radius:6px; flex-shrink:0; background:rgba(239,68,68,0.18); border:1px solid #ef4444; color:#f87171; cursor:pointer;" title="Safety Killswitch: Turn off all overlays immediately across all outputs">
@@ -2600,7 +2594,7 @@ html, body {
                 </div>
                 <div class="hd-no-signal-text">
                   <span style="width:6px; height:6px; background:#ffb300; border-radius:50%; box-shadow:0 0 6px #ffb300; display:inline-block; flex-shrink:0;"></span>
-                  <span>STANDBY &middot; SELECT FEED SOURCE OR START STREAM</span>
+                  <span>STANDBY &middot; 1080p CONFIDENCE MONITOR</span>
                 </div>
               </div>
 
@@ -6388,7 +6382,6 @@ let overlayConfigState = {
   enabled: false,
   apply_to_egress: true,
   target_output: "none",
-  feed_source: "",
   layers: []
 };
 
@@ -6425,9 +6418,7 @@ async function loadOverlayStudio() {
 
   // Populate Target Output Select
   populateOverlayTargetSelect();
-
-  // Populate Feed Source Select from routes
-  populateOverlayFeedSelect();
+  updateOverlayMonitorBackground();
 
   // Parse layers from config (initial default: 1 layer, empty asset)
   if (Array.isArray(overlayConfigState.layers) && overlayConfigState.layers.length > 0) {
@@ -6532,47 +6523,36 @@ function onOverlayTargetChange() {
   if (sel) {
     overlayConfigState.target_output = sel.value;
     updateFilterCodePreview();
+    updateOverlayMonitorBackground();
   }
 }
 
-function populateOverlayFeedSelect() {
-  const sel = document.getElementById('overlay-feed-select');
-  if (!sel) return;
-  const currentVal = sel.value || overlayConfigState.feed_source;
-  sel.innerHTML = '<option value="">-- SELECT BROADCAST FEED --</option>';
+function updateOverlayMonitorBackground() {
+  const video = document.getElementById('overlay-preview-video');
+  const noSignal = document.getElementById('overlay-no-signal');
+  if (!video || !noSignal) return;
 
-  if (Array.isArray(latestInboundPublishers) && latestInboundPublishers.length > 0) {
-    const grp = document.createElement('optgroup');
-    grp.label = "Inbound SRT Publishers";
-    latestInboundPublishers.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.stream_id;
-      opt.textContent = `SRT Ingest: ${p.stream_id} (${p.mbps_rx || 0} Mbps)`;
-      if (currentVal === p.stream_id) opt.selected = true;
-      grp.appendChild(opt);
-    });
-    sel.appendChild(grp);
+  const targetVal = overlayConfigState.target_output || 'none';
+  if (!targetVal || targetVal === 'none') {
+    video.src = '';
+    noSignal.style.display = 'flex';
+    return;
   }
 
-  const routesList = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes)) ? currentRoutes : [];
-  if (routesList.length > 0) {
-    const grp = document.createElement('optgroup');
-    grp.label = "Gateway Routes";
-    routesList.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = `route_${r.id}`;
-      opt.textContent = `${r.name || 'Route ' + r.id} (${r.status || 'OFFLINE'})`;
-      if (currentVal === `route_${r.id}`) opt.selected = true;
-      grp.appendChild(opt);
-    });
-    sel.appendChild(grp);
-  }
+  const parts = targetVal.split(':');
+  const routeId = parts[0].replace(/^route_/, '');
+  const r = (typeof currentRoutes !== 'undefined' && Array.isArray(currentRoutes))
+    ? currentRoutes.find(item => String(item.id).replace(/^route_/, '') === routeId)
+    : null;
 
-  const optDefault = document.createElement('option');
-  optDefault.value = 'live/feed1';
-  optDefault.textContent = 'MediaMTX: live/feed1 (Default)';
-  if (currentVal === 'live/feed1') optDefault.selected = true;
-  sel.appendChild(optDefault);
+  if (r && r.running) {
+    noSignal.style.display = 'none';
+    const streamUrl = `/hls/route_${encodeURIComponent(routeId)}/index.m3u8`;
+    initHlsPlayer(video, streamUrl);
+  } else {
+    video.src = '';
+    noSignal.style.display = 'flex';
+  }
 }
 
 function renderAllOverlayLayers() {
@@ -7129,13 +7109,11 @@ async function safetyOffAllOverlays() {
 async function saveOverlayConfig() {
   const masterOn = document.getElementById('cfg-overlay-master')?.checked;
   const targetOutput = document.getElementById('overlay-target-output')?.value || "none";
-  const feedSource = document.getElementById('overlay-feed-select')?.value || "";
 
   const payload = {
     enabled: Boolean(masterOn),
     apply_to_egress: true,
     target_output: targetOutput,
-    feed_source: feedSource,
     layers: overlayLayers.map(l => ({
       id: l.id,
       name: l.name,
@@ -7190,24 +7168,6 @@ function resetOverlayDefaults() {
 
   renderAllOverlayLayers();
   showToast("Reset ke kondisi awal (overlay dinonaktifkan, 1 layer kosong).");
-}
-
-function onOverlayFeedChange() {
-  const sel = document.getElementById('overlay-feed-select');
-  const noSignal = document.getElementById('overlay-no-signal');
-  const video = document.getElementById('overlay-preview-video');
-  if (!sel || !video || !noSignal) return;
-
-  const val = sel.value;
-  if (!val) {
-    video.src = "";
-    noSignal.style.display = "flex";
-    return;
-  }
-
-  noSignal.style.display = "none";
-  const streamUrl = `/hls/${encodeURIComponent(val)}/index.m3u8`;
-  initHlsPlayer(video, streamUrl);
 }
 
 </script>

@@ -2,7 +2,6 @@
   "enabled": false,
   "apply_to_egress": true,
   "target_output": "none",
-  "feed_source": "",
   "layers": [
     {
       "id": 1,
