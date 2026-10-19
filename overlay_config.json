@@ -1,7 +1,7 @@
 {
-  "enabled": true,
+  "enabled": false,
   "apply_to_egress": true,
-  "target_output": "all",
+  "target_output": "none",
   "feed_source": "",
   "layers": [
     {
@@ -12,7 +12,7 @@
       "y_percent": 5.0,
       "scale_percent": 15.0,
       "opacity": 1.0,
-      "enabled": true
+      "enabled": false
     }
   ]
 }

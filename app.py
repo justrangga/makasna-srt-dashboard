@@ -64,9 +64,9 @@ if not logger.handlers:
     logger.addHandler(audit_handler)
 
 DEFAULT_OVERLAY_CONFIG = {
-    "enabled": True,
+    "enabled": False,
     "apply_to_egress": True,
-    "target_output": "all",
+    "target_output": "none",
     "feed_source": "",
     "layers": [
         {
@@ -77,7 +77,7 @@ DEFAULT_OVERLAY_CONFIG = {
             "y_percent": 5.0,
             "scale_percent": 15.0,
             "opacity": 1.0,
-            "enabled": True
+            "enabled": False
         }
     ]
 }
@@ -104,7 +104,7 @@ def load_overlay_config():
                 "y_percent": 5.0,
                 "scale_percent": 15.0,
                 "opacity": 1.0,
-                "enabled": True
+                "enabled": False
             }
         ]
     return cfg
@@ -473,9 +473,11 @@ def build_video_filters(dest, overlay_cfg=None, route_id=None, dest_idx=0):
 
     use_overlay = overlay_cfg.get("enabled", False)
 
-    # Output target selection check
-    target_output = str(overlay_cfg.get("target_output", "all")).strip()
-    if target_output and target_output != "all":
+    # Output target selection check (default 'none' ensures all outputs have no overlay initially)
+    target_output = str(overlay_cfg.get("target_output", "none")).strip()
+    if not target_output or target_output == "none":
+        use_overlay = False
+    elif target_output != "all":
         clean_target = target_output.replace("route_", "")
         clean_rid = str(route_id or "").replace("route_", "")
         matches = False
@@ -1846,6 +1848,19 @@ def api_save_overlay():
     if save_overlay_config(cfg):
         return jsonify({"ok": True, "message": "Overlay configuration saved successfully", "config": cfg})
     return jsonify({"ok": False, "error": "Failed to save overlay configuration"}), 500
+
+
+@app.route("/api/overlay/safety-off", methods=["POST"])
+@login_required
+def api_safety_off_overlay():
+    cfg = load_overlay_config()
+    cfg["enabled"] = False
+    cfg["target_output"] = "none"
+    for l in cfg.get("layers", []):
+        l["enabled"] = False
+    if save_overlay_config(cfg):
+        return jsonify({"ok": True, "message": "All overlays disabled for safety", "config": cfg})
+    return jsonify({"ok": False, "error": "Failed to disable overlays"}), 500
 
 
 @app.route("/api/overlay/upload", methods=["POST"])

@@ -2549,6 +2549,7 @@ html, body {
           <div style="display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border); padding:5px 10px; border-radius:8px; flex:1; min-width:200px;">
             <span style="font-size:10.5px; font-weight:800; color:var(--muted); letter-spacing:0.5px; white-space:nowrap;">TARGET OUTPUT:</span>
             <select id="overlay-target-output" class="hd-select" style="width:100%; min-width:0; padding:4px 6px; font-size:11.5px;" onchange="onOverlayTargetChange()">
+              <option value="none">NONE (Overlay Disabled on All Outputs)</option>
               <option value="all">ALL OUTPUTS (Global Master Burn-In)</option>
             </select>
           </div>
@@ -2558,6 +2559,10 @@ html, body {
               <option value="">-- SELECT BROADCAST FEED --</option>
             </select>
           </div>
+          <button type="button" id="btn-safety-off-top" class="btn-danger" onclick="safetyOffAllOverlays()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:11.5px; font-weight:800; padding:6px 14px; min-height:36px; white-space:nowrap; border-radius:6px; flex-shrink:0; background:rgba(239,68,68,0.18); border:1px solid #ef4444; color:#f87171; cursor:pointer;" title="Safety Killswitch: Turn off all overlays immediately across all outputs">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+            <span>OFF ALL OVERLAY</span>
+          </button>
           <button class="btn-primary" onclick="saveOverlayConfig()" style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:700; padding:6px 14px; min-height:36px; white-space:nowrap; border-radius:6px; flex-shrink:0;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             <span>Save</span>
@@ -2631,7 +2636,7 @@ html, body {
                 <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">Renders graphics into live video frames via libx264 zerolatency filter complex.</div>
               </div>
               <label class="toggle-switch-sm">
-                <input type="checkbox" id="cfg-overlay-master" checked onchange="updateFilterCodePreview()">
+                <input type="checkbox" id="cfg-overlay-master" onchange="onMasterOverlayToggle()">
                 <span class="toggle-slider-sm"></span>
               </label>
             </div>
@@ -2652,8 +2657,12 @@ html, body {
 
           <!-- Bottom Action Buttons & FFmpeg Filter String Inspection -->
           <div style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
-            <div style="display:flex; gap:10px;">
-              <button type="button" class="btn-primary" onclick="saveOverlayConfig()" style="flex:1; padding:10px; font-weight:700; font-size:13px; display:flex; justify-content:center; align-items:center; gap:6px;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button type="button" class="btn-danger" onclick="safetyOffAllOverlays()" style="padding:10px 16px; font-size:12.5px; font-weight:800; white-space:nowrap; background:rgba(239,68,68,0.18); border:1px solid #ef4444; color:#f87171; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:6px;" title="Safety Killswitch: Turn off all overlays immediately across all outputs">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                <span>OFF ALL OVERLAY</span>
+              </button>
+              <button type="button" class="btn-primary" onclick="saveOverlayConfig()" style="flex:1; min-width:180px; padding:10px; font-weight:700; font-size:13px; display:flex; justify-content:center; align-items:center; gap:6px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <span>SAVE OVERLAY CONFIGURATION</span>
               </button>
@@ -6373,9 +6382,9 @@ const LAYER_THEMES = [
 ];
 
 let overlayConfigState = {
-  enabled: true,
+  enabled: false,
   apply_to_egress: true,
-  target_output: "all",
+  target_output: "none",
   feed_source: "",
   layers: []
 };
@@ -6389,7 +6398,7 @@ let overlayLayers = [
     y_percent: 5.0,
     scale_percent: 15.0,
     opacity: 1.0,
-    enabled: true
+    enabled: false
   }
 ];
 
@@ -6429,7 +6438,7 @@ async function loadOverlayStudio() {
         y_percent: typeof l.y_percent === 'number' ? l.y_percent : theme.defaultY,
         scale_percent: typeof l.scale_percent === 'number' ? l.scale_percent : theme.defaultScale,
         opacity: typeof l.opacity === 'number' ? l.opacity : 1.0,
-        enabled: l.enabled !== false
+        enabled: Boolean(l.enabled)
       };
     });
   } else {
@@ -6442,22 +6451,35 @@ async function loadOverlayStudio() {
         y_percent: 5.0,
         scale_percent: 15.0,
         opacity: 1.0,
-        enabled: true
+        enabled: false
       }
     ];
   }
 
   const masterChk = document.getElementById('cfg-overlay-master');
-  if (masterChk) masterChk.checked = overlayConfigState.enabled !== false;
+  if (masterChk) masterChk.checked = Boolean(overlayConfigState.enabled);
 
   renderAllOverlayLayers();
+}
+
+function onMasterOverlayToggle() {
+  const masterChk = document.getElementById('cfg-overlay-master');
+  overlayConfigState.enabled = Boolean(masterChk && masterChk.checked);
+  renderCanvasBoxes();
+  updateFilterCodePreview();
 }
 
 function populateOverlayTargetSelect() {
   const sel = document.getElementById('overlay-target-output');
   if (!sel) return;
-  const currentVal = overlayConfigState.target_output || 'all';
+  const currentVal = overlayConfigState.target_output || 'none';
   sel.innerHTML = '';
+
+  const optNone = document.createElement('option');
+  optNone.value = 'none';
+  optNone.textContent = 'NONE (Overlay Disabled on All Outputs)';
+  if (currentVal === 'none' || !currentVal) optNone.selected = true;
+  sel.appendChild(optNone);
 
   const optAll = document.createElement('option');
   optAll.value = 'all';
@@ -7022,12 +7044,13 @@ function setupInteractiveDrag(elemId, onDragUpdate) {
 
 function updateFilterCodePreview() {
   const masterOn = document.getElementById('cfg-overlay-master')?.checked;
+  const targetOutput = document.getElementById('overlay-target-output')?.value || "none";
   const previewDiv = document.getElementById('filter-cmd-preview');
   if (!previewDiv) return;
 
   const activeLayers = overlayLayers.filter(l => l.enabled && l.file);
 
-  if (!masterOn || activeLayers.length === 0) {
+  if (!masterOn || activeLayers.length === 0 || targetOutput === "none") {
     previewDiv.textContent = "-c:v copy (Pure passthrough, no overlay active)";
     previewDiv.style.color = "#a1a1aa";
     return;
@@ -7056,9 +7079,43 @@ function updateFilterCodePreview() {
   previewDiv.textContent = `-vf "${parts.join(';')}"`;
 }
 
+async function safetyOffAllOverlays() {
+  const masterChk = document.getElementById('cfg-overlay-master');
+  if (masterChk) masterChk.checked = false;
+  overlayConfigState.enabled = false;
+  overlayConfigState.target_output = "none";
+
+  overlayLayers.forEach(l => {
+    l.enabled = false;
+  });
+
+  const targetSel = document.getElementById('overlay-target-output');
+  if (targetSel) targetSel.value = 'none';
+
+  renderAllOverlayLayers();
+  updateFilterCodePreview();
+
+  showToast("OFF ALL OVERLAY: Mematikan seluruh overlay siaran...", "warning");
+  try {
+    const res = await fetch('/api/overlay/safety-off', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast("SAFETY KILLSWITCH: Seluruh overlay berhasil dimatikan! Egress siaran kini murni passthrough.", "success");
+      overlayConfigState = { ...overlayConfigState, ...data.config };
+    } else {
+      showToast(data.error || "Gagal mematikan overlay", "error");
+    }
+  } catch (err) {
+    showToast(`Kesalahan jaringan: ${err.message}`, "error");
+  }
+}
+
 async function saveOverlayConfig() {
   const masterOn = document.getElementById('cfg-overlay-master')?.checked;
-  const targetOutput = document.getElementById('overlay-target-output')?.value || "all";
+  const targetOutput = document.getElementById('overlay-target-output')?.value || "none";
   const feedSource = document.getElementById('overlay-feed-select')?.value || "";
 
   const payload = {
@@ -7107,11 +7164,19 @@ function resetOverlayDefaults() {
       y_percent: 5.0,
       scale_percent: 15.0,
       opacity: 1.0,
-      enabled: true
+      enabled: false
     }
   ];
+  const masterChk = document.getElementById('cfg-overlay-master');
+  if (masterChk) masterChk.checked = false;
+  overlayConfigState.enabled = false;
+  overlayConfigState.target_output = "none";
+
+  const targetSel = document.getElementById('overlay-target-output');
+  if (targetSel) targetSel.value = 'none';
+
   renderAllOverlayLayers();
-  showToast("Reset ke kondisi awal (1 overlay layer kosong).");
+  showToast("Reset ke kondisi awal (overlay dinonaktifkan, 1 layer kosong).");
 }
 
 function onOverlayFeedChange() {
