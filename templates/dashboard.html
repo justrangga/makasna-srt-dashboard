@@ -3146,12 +3146,30 @@ html, body {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">OBS Studio (Stream Output)</b>
-            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-obs-sender')">Copy URL</button>
+            <button type="button" class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-obs-sender', 'OBS Stream URL')">Copy URL</button>
           </div>
           <div style="display:flex; gap:8px;">
             <input type="text" id="url-obs-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan); width:100%;" value="" onclick="this.select()">
           </div>
-          <div style="font-size:11px; color:var(--muted); margin-top:5px;">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Mode: </span><b style="color:#fff;">caller</b></div>
+              <button type="button" onclick="copyTextDirect('caller', 'Mode')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">IP: </span><b id="ep-obs-ip-text" style="color:var(--cyan);">103.89.5.211</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-obs-ip-text').textContent, 'IP')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Port: </span><b id="ep-obs-port-text" style="color:#fff;">8890</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-obs-port-text').textContent, 'Port')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="color:var(--muted); font-size:10.5px;">StreamID: </span><b id="ep-obs-sid-text" style="color:var(--green);">publish:MAKASNA</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-obs-sid-text').textContent, 'Stream ID')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:6px;">
             Instruction: In OBS open <b>Settings &gt; Stream</b>. Select Service: <b>Custom...</b>, paste the URL above into Server, and leave Stream Key empty.
           </div>
         </div>
@@ -3160,16 +3178,32 @@ html, body {
         <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#fff; font-size:13px;">vMix &amp; Hardware Encoder Parameter</b>
-            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vmix-sender')">Copy String</button>
+            <button type="button" class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vmix-sender', 'vMix String')">Copy String</button>
           </div>
           <div style="display:flex; gap:8px;">
             <input type="text" id="url-vmix-sender" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; width:100%;" value="" onclick="this.select()">
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Mode: <b style="color:#fff;">Caller</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">IP: <b id="ep-ip-text" style="color:var(--cyan);">103.89.5.211</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Port: <b id="ep-port-text" style="color:#fff;">8890</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">StreamID: <b id="ep-sid-send-text" style="color:var(--green);">publish:MAKASNA</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Mode: </span><b style="color:#fff;">Caller</b></div>
+              <button type="button" onclick="copyTextDirect('Caller', 'Mode')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">IP: </span><b id="ep-ip-text" style="color:var(--cyan);">103.89.5.211</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-ip-text').textContent, 'IP')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Port: </span><b id="ep-port-text" style="color:#fff;">8890</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-port-text').textContent, 'Port')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="color:var(--muted); font-size:10.5px;">StreamID: </span><b id="ep-sid-send-text" style="color:var(--green);">publish:MAKASNA</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-sid-send-text').textContent, 'Stream ID')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Latency: </span><b style="color:#fff;">200 ms</b></div>
+              <button type="button" onclick="copyTextDirect('200', 'Latency')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
           </div>
         </div>
 
@@ -3189,16 +3223,28 @@ html, body {
         <div style="background:var(--panel-elevated); border:1px solid rgba(59,130,246,0.35); border-radius:8px; padding:12px 14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="color:#60a5fa; font-size:13px;">vMix &amp; Studio Downstream Receiver (SRT Caller Pull)</b>
-            <button class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vmix-receiver')">Copy SRT URL</button>
+            <button type="button" class="btn-icon" style="color:var(--cyan); font-weight:600;" onclick="copyInputVal('url-vmix-receiver', 'vMix SRT URL')">Copy SRT URL</button>
           </div>
           <div style="display:flex; gap:8px;">
             <input type="text" id="url-vmix-receiver" class="form-control" readonly style="font-family:'JetBrains Mono'; font-size:12px; color:#93c5fd; width:100%;" value="" onclick="this.select()">
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; margin-top:8px; font-size:11px; font-family:'JetBrains Mono';">
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Type: <b style="color:#fff;">Caller</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Hostname: <b id="ep-ip-recv-text" style="color:var(--cyan);">103.89.5.211</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Port: <b id="ep-port-recv-text" style="color:#fff;">8890</b></div>
-            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border);">Stream ID: <b id="ep-sid-recv-text" style="color:#60a5fa;">read:MAKASNA</b></div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Type/Mode: </span><b style="color:#fff;">Caller</b></div>
+              <button type="button" onclick="copyTextDirect('Caller', 'Type/Mode')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Hostname: </span><b id="ep-ip-recv-text" style="color:var(--cyan);">103.89.5.211</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-ip-recv-text').textContent, 'Hostname')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div><span style="color:var(--muted); font-size:10.5px;">Port: </span><b id="ep-port-recv-text" style="color:#fff;">8890</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-port-recv-text').textContent, 'Port')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
+            <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="color:var(--muted); font-size:10.5px;">Stream ID: </span><b id="ep-sid-recv-text" style="color:#60a5fa;">read:MAKASNA</b></div>
+              <button type="button" onclick="copyTextDirect(document.getElementById('ep-sid-recv-text').textContent, 'Stream ID')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
+            </div>
           </div>
           <div style="font-size:11px; color:var(--muted); margin-top:6px; line-height:1.4;">
             <span style="color:var(--amber); font-weight:600;">Important for vMix:</span> Open <i>Add Input &gt; Stream / SRT &gt; Type: SRT (Caller)</i>. Enter the <b>Stream ID</b> as <b id="ep-sid-recv-note" style="color:#fff;">read:MAKASNA</b> (do NOT prefix with <code>streamid=</code>).
@@ -3538,7 +3584,11 @@ function copyTextDirect(text, label) {
   if (!text) return;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(text).then(() => {
-      alert(`${label || 'Text'} copied to clipboard:\n${text}`);
+      if (typeof showToast === 'function') {
+        showToast(`${label || 'Text'} copied: ${text}`, 'success');
+      } else {
+        alert(`${label || 'Text'} copied to clipboard:\n${text}`);
+      }
     }).catch(() => {
       prompt('Copy this text:', text);
     });
@@ -3593,9 +3643,9 @@ function refreshEndpointUrls(rawName) {
   const srtHost = SERVER_PUBLIC_IP;
   const port = latestSrtPort || 8890;
 
-  // 1. Sender URLs
-  const obsSend = `srt://${srtHost}:${port}?streamid=publish:${name}`;
-  const vmixSend = `srt://${srtHost}:${port}?streamid=publish:${name}&latency=200000`;
+  // 1. Sender URLs (include mode=caller for direct one-click copying)
+  const obsSend = `srt://${srtHost}:${port}?mode=caller&streamid=publish:${name}`;
+  const vmixSend = `srt://${srtHost}:${port}?mode=caller&streamid=publish:${name}&latency=200000`;
   const ffmpegSend = `ffmpeg -re -i input.mp4 -c copy -f mpegts "srt://${srtHost}:${port}?mode=caller&streamid=publish:${name}&latency=200000"`;
 
   const elObsSend = document.getElementById('url-obs-sender');
@@ -3605,6 +3655,13 @@ function refreshEndpointUrls(rawName) {
   if (elVmixSend) elVmixSend.value = vmixSend;
   if (elFfmpegSend) elFfmpegSend.value = ffmpegSend;
 
+  const elObsIpText = document.getElementById('ep-obs-ip-text');
+  const elObsPortText = document.getElementById('ep-obs-port-text');
+  const elObsSidText = document.getElementById('ep-obs-sid-text');
+  if (elObsIpText) elObsIpText.textContent = srtHost;
+  if (elObsPortText) elObsPortText.textContent = port;
+  if (elObsSidText) elObsSidText.textContent = `publish:${name}`;
+
   const elIpText = document.getElementById('ep-ip-text');
   const elPortText = document.getElementById('ep-port-text');
   const elSidText = document.getElementById('ep-sid-send-text');
@@ -3612,10 +3669,10 @@ function refreshEndpointUrls(rawName) {
   if (elPortText) elPortText.textContent = port;
   if (elSidText) elSidText.textContent = `publish:${name}`;
 
-  // 2. Receiver URLs
-  const vmixRecv = `srt://${srtHost}:${port}?streamid=read:${name}&latency=200000`;
-  const vlcRecv = `srt://${srtHost}:${port}?streamid=read:${name}`;
-  const obsRecv = `srt://${srtHost}:${port}?streamid=read:${name}`;
+  // 2. Receiver URLs (include mode=caller)
+  const vmixRecv = `srt://${srtHost}:${port}?mode=caller&streamid=read:${name}&latency=200000`;
+  const vlcRecv = `srt://${srtHost}:${port}?mode=caller&streamid=read:${name}`;
+  const obsRecv = `srt://${srtHost}:${port}?mode=caller&streamid=read:${name}`;
   const hlsRecv = `http://${srtHost}:8888/${name}/index.m3u8`;
   const rtspRecv = `rtsp://${srtHost}:8554/${name}`;
 
@@ -3640,12 +3697,16 @@ function refreshEndpointUrls(rawName) {
   if (elSidNote) elSidNote.textContent = `read:${name}`;
 }
 
-function copyInputVal(id) {
+function copyInputVal(id, label) {
   const el = document.getElementById(id);
   if (!el || !el.value) return;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(el.value).then(() => {
-      alert(`Copied to clipboard:\n${el.value}`);
+      if (typeof showToast === 'function') {
+        showToast(`${label || 'Copied'}: ${el.value}`, 'success');
+      } else {
+        alert(`${label || 'Copied'}:\n${el.value}`);
+      }
     }).catch(() => {
       prompt('Copy this URL:', el.value);
     });
