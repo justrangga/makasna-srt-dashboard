@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0a0c10" />
-  <title>Preview: {{ stream_name }} | Makasna Live Gateway</title>
+  <meta name="theme-color" content="#06070a" />
+  <title>Confidence Monitor · {{ stream_name }} | Makasna Broadcast Gateway</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
     * {
       box-sizing: border-box;
       margin: 0;
@@ -18,118 +19,143 @@
     body, html {
       width: 100%;
       height: 100%;
-      background-color: #050608;
-      color: #e2e8f0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #050609;
+      color: #f1f5f9;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
     }
     .top-bar {
-      min-height: 48px;
-      background: rgba(13, 16, 23, 0.95);
-      backdrop-filter: blur(10px);
+      min-height: 50px;
+      background: rgba(10, 13, 19, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 6px 14px;
+      padding: 6px 16px;
       z-index: 20;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 10px;
     }
     .brand-title {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 13px;
+      gap: 9px;
+      font-size: 13.5px;
       font-weight: 700;
-      letter-spacing: 0.5px;
+      letter-spacing: -0.01em;
+      color: #fff;
     }
     .engine-switcher {
       display: flex;
       align-items: center;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 6px;
-      padding: 2px;
-      gap: 2px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 7px;
+      padding: 2.5px;
+      gap: 3px;
     }
     .btn-engine {
       background: transparent;
-      border: none;
+      border: 1px solid transparent;
       color: #94a3b8;
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 4px;
+      padding: 4px 11px;
+      border-radius: 5px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      transition: all 0.2s ease;
+      gap: 5px;
+      transition: all 0.15s cubic-bezier(0.22, 1, 0.36, 1);
       touch-action: manipulation;
     }
     .btn-engine.active-webrtc {
-      background: rgba(0, 229, 255, 0.2);
+      background: rgba(0, 229, 255, 0.16);
       color: #00e5ff;
-      border: 1px solid rgba(0, 229, 255, 0.4);
-      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
     }
     .btn-engine.active-hls {
-      background: rgba(0, 230, 118, 0.2);
-      color: #00e676;
-      border: 1px solid rgba(0, 230, 118, 0.4);
-      box-shadow: 0 0 10px rgba(0, 230, 118, 0.25);
+      background: rgba(16, 185, 129, 0.16);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
     }
     .badge-live {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      background: rgba(0, 230, 118, 0.15);
-      color: #00e676;
-      border: 1px solid rgba(0, 230, 118, 0.4);
-      padding: 3px 8px;
-      border-radius: 12px;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 3.5px 10px;
+      border-radius: 99px;
       font-size: 11px;
       font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
     .badge-standby {
-      background: rgba(245, 158, 11, 0.15);
-      color: #f59e0b;
-      border-color: rgba(245, 158, 11, 0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      padding: 3.5px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
     .badge-error {
-      background: rgba(244, 63, 94, 0.15);
-      color: #f43f5e;
-      border-color: rgba(244, 63, 94, 0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      padding: 3.5px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
     .pulse-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
       background: currentColor;
-      box-shadow: 0 0 6px currentColor;
-      animation: pulse 1.5s infinite;
+      box-shadow: 0 0 8px currentColor;
+      animation: pulse 1.6s infinite ease-in-out;
     }
     @keyframes pulse {
       0% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
+      50% { opacity: 0.35; transform: scale(0.8); }
       100% { opacity: 1; transform: scale(1); }
     }
     .stream-label {
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
+      font-weight: 600;
       color: #38bdf8;
-      max-width: 140px;
+      max-width: 160px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
     .btn-action {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #fff;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f1f5f9;
       padding: 6px 12px;
       border-radius: 6px;
       font-size: 12px;
@@ -137,8 +163,13 @@
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
+      transition: all 0.15s ease;
       touch-action: manipulation;
+    }
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
     }
     .btn-action:active {
       background: rgba(255, 255, 255, 0.2);
