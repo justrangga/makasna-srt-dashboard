@@ -164,11 +164,7 @@ python app.py
 | `/api/routes/<id>/start` | `POST` | Start route ingestion and fan-out pipelines |
 | `/api/routes/<id>/stop` | `POST` | Stop active route execution cleanly |
 | `/api/srt/inbound` | `GET` | List active inbound SRT publishers and connected readers |
-| `/api/recordings` | `GET` | List recorded ISO files and cloud upload statuses |
-| `/api/recorder/active` | `GET` | Get live status of Master ISO Recorder engine |
-| `/api/recorder/start` | `POST` | Start ISO recording with feed, format, bitrate, and duration |
-| `/api/recorder/stop` | `POST` | Stop active ISO recording with graceful file closure |
-| `/api/gdrive/status` | `GET` | Check Google Drive authentication and upload queue |
+| `/api/recordings` | `GET` | List recorded ISO files and storage usage |
 | `/download/apk` | `GET` | Download latest Makasna Remote Android APK |
 
 ---

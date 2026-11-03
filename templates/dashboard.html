@@ -5584,146 +5584,15 @@ function switchTab(tab) {
 }
 
 // =========================================================================
-// Google Drive & Recording UI Functions
+// Google Drive & Recording UI Functions (Cleaned)
 // =========================================================================
-async function fetchGdriveStatus() {
-  try {
-    const d = await api('/api/gdrive/status');
-    const desc = document.getElementById('gdrive-status-desc');
-    const btnConnect = document.getElementById('btn-gdrive-connect');
-    const btnDisconnect = document.getElementById('btn-gdrive-disconnect');
-
-    if (d.connected) {
-      desc.innerHTML = `<span style="color:var(--green); font-weight:600;">Tersambung: ${escapeHtml(d.email || 'Google Account')}</span> · Folder: ${escapeHtml(d.target_folder)}`;
-      if (btnConnect) btnConnect.style.display = 'none';
-      if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
-
-      const slot2Acc = document.getElementById('hd-slot2-acc');
-      const slot2Status = document.getElementById('hd-slot2-status');
-      const slot2Led = document.getElementById('hd-slot2-led');
-      const slot2Mode = document.getElementById('hd-slot2-mode');
-      if (slot2Acc) slot2Acc.textContent = d.email || 'Google Drive Sync';
-      if (slot2Status) {
-        slot2Status.textContent = 'SYNCED';
-        slot2Status.className = 'hd-slot-badge hd-badge-cyan';
-      }
-      if (slot2Led) slot2Led.className = 'hd-slot-led active';
-      if (slot2Mode) slot2Mode.textContent = d.auto_upload !== false ? 'Auto-Archive ON' : 'Manual Sync';
-    } else {
-      desc.innerHTML = `<span style="color:var(--muted);">Belum tersambung ke Google Drive</span>`;
-      if (btnConnect) btnConnect.style.display = 'inline-flex';
-      if (btnDisconnect) btnDisconnect.style.display = 'none';
-
-      const slot2Acc = document.getElementById('hd-slot2-acc');
-      const slot2Status = document.getElementById('hd-slot2-status');
-      const slot2Led = document.getElementById('hd-slot2-led');
-      const slot2Mode = document.getElementById('hd-slot2-mode');
-      if (slot2Acc) slot2Acc.textContent = 'Google Drive Disconnected';
-      if (slot2Status) {
-        slot2Status.textContent = 'OFFLINE';
-        slot2Status.className = 'hd-slot-badge';
-      }
-      if (slot2Led) slot2Led.className = 'hd-slot-led';
-      if (slot2Mode) slot2Mode.textContent = 'Standby';
-    }
-    const folderInput = document.getElementById('cfg-gdrive-folder');
-    if (folderInput) folderInput.value = d.target_folder || 'Makasna Video Archive';
-    const clientInput = document.getElementById('cfg-gdrive-client-id');
-    if (clientInput) clientInput.value = d.client_id || '';
-    const autoUpCheck = document.getElementById('cfg-gdrive-auto-upload');
-    if (autoUpCheck) autoUpCheck.checked = d.auto_upload !== false;
-    const delCheck = document.getElementById('cfg-gdrive-delete-after');
-    if (delCheck) delCheck.checked = Boolean(d.delete_after_upload);
-  } catch(e) {}
-}
-
-function toggleGdriveSettings() {
-  const p = document.getElementById('gdrive-settings-panel');
-  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
-}
-
-async function saveGdriveSettings() {
-  const client_id = document.getElementById('cfg-gdrive-client-id').value.trim();
-  const client_secret = document.getElementById('cfg-gdrive-client-secret').value.trim();
-  const target_folder_name = document.getElementById('cfg-gdrive-folder').value.trim();
-  const auto_upload = document.getElementById('cfg-gdrive-auto-upload').checked;
-  const delete_after_upload = document.getElementById('cfg-gdrive-delete-after').checked;
-
-  try {
-    await api('/api/gdrive/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id, client_secret, target_folder_name, auto_upload, delete_after_upload })
-    });
-    alert('Google Cloud settings saved successfully!');
-    fetchGdriveStatus();
-  } catch(e) { alert(e.message); }
-}
-
-async function connectGoogleDrive() {
-  try {
-    const d = await api('/api/gdrive/auth-url');
-    if (d.auth_url) {
-      window.location.href = d.auth_url;
-    }
-  } catch(e) {
-    alert('Failed to initiate Google login: ' + e.message + '\n\nCheck Client ID & Client Secret in Settings / Custom App.');
-    toggleGdriveSettings();
-  }
-}
-
-async function submitManualGdriveCode() {
-  const code = document.getElementById('gdrive-manual-code').value.trim();
-  if (!code) {
-    alert('Please enter authorization code from Google');
-    return;
-  }
-  try {
-    const res = await api('/api/gdrive/manual-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
-    });
-    alert(res.message);
-    document.getElementById('gdrive-manual-code').value = '';
-    fetchGdriveStatus();
-    toggleGdriveSettings();
-  } catch(e) { alert(e.message); }
-}
-
-async function submitServiceAccountJson() {
-  const text = document.getElementById('gdrive-sa-json').value.trim();
-  if (!text) {
-    alert('Please paste the Service Account JSON Key content first');
-    return;
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch(e) {
-    alert('Invalid JSON format: ' + e.message);
-    return;
-  }
-  try {
-    const res = await api('/api/gdrive/service-account', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ json_content: parsed })
-    });
-    alert(res.message);
-    document.getElementById('gdrive-sa-json').value = '';
-    fetchGdriveStatus();
-    toggleGdriveSettings();
-  } catch(e) { alert(e.message); }
-}
-
-async function disconnectGoogleDrive() {
-  if (!confirm('Disconnect Google Drive? Automatic cloud upload will be paused.')) return;
-  try {
-    await api('/api/gdrive/disconnect', { method: 'POST' });
-    fetchGdriveStatus();
-  } catch(e) { alert(e.message); }
-}
+async function fetchGdriveStatus() {}
+function toggleGdriveSettings() {}
+async function saveGdriveSettings() {}
+async function connectGoogleDrive() {}
+async function submitManualGdriveCode() {}
+async function submitServiceAccountJson() {}
+async function disconnectGoogleDrive() {}
 
 let recordingsList = [];
 async function fetchRecordings() {
