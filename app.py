@@ -796,7 +796,7 @@ def build_ffmpeg_cmd(route, source_config):
                 "-pix_fmt", "yuv420p"
             ])
         else:
-            cmd.extend(["-c:v", "copy"])
+            cmd.extend(["-c:v", "copy", "-bsf:v", "dump_extra"])
 
         # Audio multi-channel mapping and encoding
         af_filters = []
