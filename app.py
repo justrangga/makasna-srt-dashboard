@@ -1255,6 +1255,7 @@ def supervisor_thread():
             _last_known_publishers = current_pubs
             _last_known_readers = current_rdrs
 
+            routes_to_start = []
             with active_routes_lock:
                 # Ensure all enabled & running routes are active in supervisor
                 for r in routes:
@@ -1262,8 +1263,12 @@ def supervisor_thread():
                     if r.get("enabled", True) and r.get("running", True) and rid not in active_routes:
                         bo = route_backoffs.setdefault(rid, {"failures": 0, "next_retry": 0, "last_code": None})
                         if now >= bo["next_retry"]:
-                            start_route_process(r, source_type=r.get("active_source", "primary"))
+                            routes_to_start.append((r, r.get("active_source", "primary")))
 
+            for r, src_type in routes_to_start:
+                start_route_process(r, source_type=src_type)
+
+            with active_routes_lock:
                 for rid, info in list(active_routes.items()):
                     proc = info.get("proc")
                     route = routes_map.get(rid)
@@ -1295,11 +1300,10 @@ def supervisor_thread():
 
                         if has_sec and info.get("active_source") == "primary" and policy in ("auto_failover", "maintain_primary", "maintain_stability", "manual_switchback"):
                             log_event(rid, route["name"], "failover", f"Switching to secondary source under policy '{policy}'", "warning")
-                            start_route_process(route, source_type="secondary")
+                            routes_to_start.append((route, "secondary"))
                             bo["failures"] = 0
                             bo["last_code"] = None
                         elif not has_sec and policy in ("auto_failover", "maintain_primary") and info.get("active_source") == "primary":
-                            # Standby idle slate fallback when primary is offline
                             slate_sec = {
                                 "type": "srt_caller",
                                 "address": "127.0.0.1",
@@ -1311,14 +1315,13 @@ def supervisor_thread():
                             route_with_slate = dict(route)
                             route_with_slate["secondary_source"] = slate_sec
                             log_event(rid, route["name"], "failover", "Primary offline, switching to STANDBY SLATE fallback", "info")
-                            start_route_process(route_with_slate, source_type="secondary")
+                            routes_to_start.append((route_with_slate, "secondary"))
                             bo["failures"] = 0
                             bo["last_code"] = None
                         elif route.get("enabled", True) and route.get("running", True):
                             info["status"] = f"WAITING FOR SOURCE ({bo['failures']})"
                             info["stats"]["health"] = "Disconnected"
                             if now >= bo["next_retry"]:
-                                # Always ensure standby slate is tried if secondary
                                 if info.get("active_source") == "secondary":
                                     slate_sec = {
                                         "type": "srt_caller",
@@ -1330,9 +1333,9 @@ def supervisor_thread():
                                     }
                                     route_with_slate = dict(route)
                                     route_with_slate["secondary_source"] = slate_sec
-                                    start_route_process(route_with_slate, source_type="secondary")
+                                    routes_to_start.append((route_with_slate, "secondary"))
                                 else:
-                                    start_route_process(route, source_type=info.get("active_source", "primary"))
+                                    routes_to_start.append((route, info.get("active_source", "primary")))
                         continue
 
                     # Collect metrics for active route
@@ -1360,7 +1363,7 @@ def supervisor_thread():
                             primary_ready = True
                         if primary_ready:
                             log_event(rid, route["name"], "switchback", "Primary contribution source is online, switching back from STANDBY", "info")
-                            start_route_process(route, source_type="primary")
+                            routes_to_start.append((route, "primary"))
                             continue
 
                     # Check MediaMTX SRT publisher
