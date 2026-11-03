@@ -3777,6 +3777,21 @@ function previewIncomingStream(streamId) {
   telemTimer = setInterval(pollTelemetry, 2500);
 }
 
+function getNextAvailableFanoutPort(startPort = 12105) {
+  const used = new Set();
+  (currentRoutes || []).forEach(r => {
+    (r.destinations || []).forEach(d => {
+      const p = parseInt(d.port);
+      if (p) used.add(p);
+    });
+  });
+  let port = startPort;
+  while (used.has(port) && port < 12150) {
+    port++;
+  }
+  return port;
+}
+
 function adoptStreamToRoute(streamId) {
   openAddRouteModal();
   document.getElementById('rf-name').value = `Live Ingest - ${streamId}`;
@@ -3785,6 +3800,9 @@ function adoptStreamToRoute(streamId) {
   document.getElementById('rf-p-port').value = 8890;
   document.getElementById('rf-p-streamid').value = streamId;
   handleSourceTypeChange('srt_caller');
+
+  const firstLabel = document.querySelector('#dest-card-1 [name="dest_label"]');
+  if (firstLabel) firstLabel.value = `Fan-Out ${streamId}`;
 }
 
 setInterval(pollInboundSrt, 2500);
@@ -4751,6 +4769,16 @@ function openAddRouteModal() {
   document.getElementById('rf-id').value = '';
   document.getElementById('destinations-container').innerHTML = '';
   destinationCount = 0;
+
+  // Otomatis siapkan 1 output Multi-Destination Fan-out
+  const port = getNextAvailableFanoutPort(12105);
+  addDestinationRow({
+    label: 'Output 1',
+    type: 'srt_listener',
+    port: port,
+    latency: 200
+  });
+
   updateDestinationsEmptyState();
   document.getElementById('rf-p-type').value = 'srt_caller';
   handleSourceTypeChange('srt_caller');
@@ -5347,7 +5375,7 @@ async function handleRouteFormSubmit(e) {
 
       if (srtAddr) {
         let qs = `mode=caller&latency=${srtLat * 1000}`;
-        if (srtSid) qs += `&streamid=${encodeURIComponent(srtSid)}`;
+        if (srtSid) qs += `&streamid=${srtSid}`;
         if (srtPass) qs += `&passphrase=${encodeURIComponent(srtPass)}`;
         url = `srt://${srtAddr}:${srtPort}?${qs}`;
       }
@@ -5373,7 +5401,7 @@ async function handleRouteFormSubmit(e) {
       srtPass = (row.querySelector('[name="dest_srt_local_passphrase"]') ? row.querySelector('[name="dest_srt_local_passphrase"]').value : '').trim();
 
       const effectiveSid = srtSid || `feed_${destinations.length + 1}`;
-      let qs = `streamid=publish:${encodeURIComponent(effectiveSid)}&latency=${srtLat * 1000}`;
+      let qs = `streamid=publish:${effectiveSid}&latency=${srtLat * 1000}`;
       if (srtPass) qs += `&passphrase=${encodeURIComponent(srtPass)}`;
       url = `srt://127.0.0.1:8890?${qs}`;
     }
@@ -5426,7 +5454,7 @@ async function handleRouteFormSubmit(e) {
       }
     }
     let qs = `mode=caller&latency=${pLatency * 1000}`;
-    if (effectiveStreamId) qs += `&streamid=${encodeURIComponent(effectiveStreamId)}`;
+    if (effectiveStreamId) qs += `&streamid=${effectiveStreamId}`;
     if (pPass) qs += `&passphrase=${encodeURIComponent(pPass)}`;
     pUrl = `srt://${pAddr}:${pPort}?${qs}`;
   }
@@ -5450,7 +5478,7 @@ async function handleRouteFormSubmit(e) {
       }
     }
     let qs = `mode=caller&latency=${sLatency * 1000}`;
-    if (effectiveStreamId) qs += `&streamid=${encodeURIComponent(effectiveStreamId)}`;
+    if (effectiveStreamId) qs += `&streamid=${effectiveStreamId}`;
     if (sPass) qs += `&passphrase=${encodeURIComponent(sPass)}`;
     sUrl = `srt://${sAddr}:${sPort}?${qs}`;
   }

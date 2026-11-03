@@ -426,6 +426,8 @@ def build_source_url(source_config):
     for key in ("url", "address", "stream_id"):
         val = str(source_config.get(key) or "").strip()
         if val.startswith(("srt://", "udp://", "rtmp://", "rtsp://", "http://", "https://")):
+            if "read%3A" in val or "publish%3A" in val:
+                val = val.replace("read%3A", "read:").replace("publish%3A", "publish:")
             return resolve_direct_stream_url(val)
 
     stream_id = str(source_config.get("stream_id") or "live").strip()
@@ -1159,15 +1161,11 @@ def supervisor_thread():
                             start_route_process(route, source_type="secondary")
                             bo["failures"] = 0
                             bo["last_code"] = None
-                        elif route.get("enabled", True):
-                            if bo["failures"] <= 4:
-                                info["status"] = f"RECONNECTING IN {int(backoff)}s"
-                                info["stats"]["health"] = "Disconnected"
-                                if now >= bo["next_retry"]:
-                                    start_route_process(route, source_type=info.get("active_source", "primary"))
-                            else:
-                                info["status"] = "OFFLINE (Peer Unreachable)"
-                                info["stats"]["health"] = "Disconnected"
+                        elif route.get("enabled", True) and route.get("running", True):
+                            info["status"] = f"WAITING FOR SOURCE ({bo['failures']})"
+                            info["stats"]["health"] = "Disconnected"
+                            if now >= bo["next_retry"]:
+                                start_route_process(route, source_type=info.get("active_source", "primary"))
                         continue
 
                     # Collect metrics for active route
@@ -1607,6 +1605,8 @@ def api_create_route():
         "updated_at": now_iso()
     }
 
+    new_route["running"] = True
+    new_route["status"] = "RUNNING"
     routes.append(new_route)
     save_routes(routes)
 
@@ -1680,17 +1680,17 @@ def api_update_route(route_id):
     if "delete_after_upload" in data:
         r["delete_after_upload"] = bool(data["delete_after_upload"])
     r["updated_at"] = now_iso()
+    r["running"] = True
+    r["status"] = "RUNNING"
 
     routes[idx] = r
     save_routes(routes)
 
-    # If running, restart to apply new parameters
-    was_running = route_id in active_routes
-    if was_running:
-        stop_route_process(route_id)
-        start_route_process(r, source_type=r.get("active_source", "primary"))
+    # Immediately restart/start process with new parameters
+    stop_route_process(route_id)
+    start_route_process(r, source_type=r.get("active_source", "primary"))
 
-    log_event(route_id, r["name"], "updated", "Route configuration updated")
+    log_event(route_id, r["name"], "updated", "Route configuration updated and started")
     return jsonify({"ok": True, "route": r})
 
 
