@@ -1317,7 +1317,21 @@ def supervisor_thread():
                             info["status"] = f"WAITING FOR SOURCE ({bo['failures']})"
                             info["stats"]["health"] = "Disconnected"
                             if now >= bo["next_retry"]:
-                                start_route_process(route, source_type=info.get("active_source", "primary"))
+                                # Always ensure standby slate is tried if secondary
+                                if info.get("active_source") == "secondary":
+                                    slate_sec = {
+                                        "type": "srt_caller",
+                                        "address": "127.0.0.1",
+                                        "port": 8890,
+                                        "stream_id": "read:STANDBY_SLATE",
+                                        "latency": 200,
+                                        "enabled": True
+                                    }
+                                    route_with_slate = dict(route)
+                                    route_with_slate["secondary_source"] = slate_sec
+                                    start_route_process(route_with_slate, source_type="secondary")
+                                else:
+                                    start_route_process(route, source_type=info.get("active_source", "primary"))
                         continue
 
                     # Collect metrics for active route
@@ -1426,7 +1440,7 @@ if try_acquire_supervisor_lock():
 
     # Auto-start enabled routes on service startup
     def auto_start_enabled_routes():
-        time.sleep(2)
+        time.sleep(5)
         try:
             routes = load_routes()
             for r in routes:
