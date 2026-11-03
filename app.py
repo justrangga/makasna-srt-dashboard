@@ -662,14 +662,26 @@ def build_ffmpeg_cmd(route, source_config):
                 port = p.port or 8890
                 qs = parse_qs(p.query)
                 qs["mode"] = ["listener"]
-                if "latency" not in qs:
-                    qs["latency"] = ["2000000"]
+                lat_raw = qs.get("latency", ["1000000"])[0]
+                try:
+                    lat_int = int(lat_raw)
+                    # Convert ms to us if user entered e.g. 1000 or 200
+                    if lat_int < 10000:
+                        lat_int = lat_int * 1000
+                    # Minimum 1000ms (1000000 us) buffer for internet stability
+                    if lat_int < 1000000:
+                        lat_int = 1000000
+                    qs["latency"] = [str(lat_int)]
+                except Exception:
+                    qs["latency"] = ["1000000"]
+                qs["pkt_size"] = ["1316"]
+                qs["tlpktdrop"] = ["0"]
                 query_str = urlencode({k: v[0] for k, v in qs.items()})
                 durl = f"srt://0.0.0.0:{port}?{query_str}"
             except Exception:
                 if "mode=listener" not in durl:
                     sep = "&" if "?" in durl else "?"
-                    durl = f"{durl}{sep}mode=listener"
+                    durl = f"{durl}{sep}mode=listener&latency=1000000&pkt_size=1316&tlpktdrop=0"
 
         v_mode = dest.get("video_mode", dest.get("mode", "copy"))
         a_mode = dest.get("audio_mode", dest.get("audio_codec", "copy"))
@@ -751,20 +763,18 @@ def build_ffmpeg_cmd(route, source_config):
             cmd.extend(["-f", "flv", durl])
         elif durl.startswith("udp://"):
             cmd.extend([
-                "-bsf:v", "dump_extra",
-                "-mpegts_flags", "+resend_headers+pat_pmt_at_frames",
+                "-pat_period", "0.2",
+                "-sdt_period", "0.5",
                 "-pcr_period", "20",
-                "-pat_period", "0.1",
                 "-f", "mpegts",
                 "-pkt_size", "1316",
                 durl
             ])
         elif durl.startswith("srt://"):
             cmd.extend([
-                "-bsf:v", "dump_extra",
-                "-mpegts_flags", "+resend_headers+pat_pmt_at_frames",
+                "-pat_period", "0.2",
+                "-sdt_period", "0.5",
                 "-pcr_period", "20",
-                "-pat_period", "0.1",
                 "-f", "mpegts",
                 durl
             ])
