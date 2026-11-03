@@ -588,17 +588,19 @@ def build_ffmpeg_cmd(route, source_config):
 
     cmd.extend(["-i", input_url])
 
-    # 1. Local Preview Sink -> Publish to MediaMTX RTMP (FLV) with AAC audio for universal browser compatibility
-    cmd.extend([
-        "-map", "0:v:0?",
-        "-map", "0:a:0?",
-        "-c:v", "copy",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-ar", "48000",
-        "-f", "flv",
-        f"rtmp://127.0.0.1:1935/{stream_path}"
-    ])
+    dests = [d for d in route.get("destinations", []) if d.get("url", "").strip() or d.get("address", "").strip()]
+    if not dests:
+        # Local Preview Sink -> Publish to MediaMTX RTMP (FLV) with AAC audio when no external fan-out is configured
+        cmd.extend([
+            "-map", "0:v:0?",
+            "-map", "0:a:0?",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ar", "48000",
+            "-f", "flv",
+            f"rtmp://127.0.0.1:1935/{stream_path}"
+        ])
 
     overlay_cfg = load_overlay_config()
 
@@ -1172,8 +1174,8 @@ def supervisor_thread():
                             bo["last_code"] = exit_code
 
                         bo["failures"] += 1
-                        # Backoff delay: 5s, 10s, 20s, 30s
-                        backoff = min(30, 5 * (2 ** min(bo["failures"] - 1, 3)))
+                        # Backoff delay: fast retry (2s to max 5s) for broadcast responsiveness
+                        backoff = min(5, 2 + min(bo["failures"] - 1, 3))
                         bo["next_retry"] = now + backoff
 
                         # Evaluate Failover
