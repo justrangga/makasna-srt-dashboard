@@ -1154,6 +1154,14 @@ def supervisor_thread():
             _last_known_readers = current_rdrs
 
             with active_routes_lock:
+                # Ensure all enabled & running routes are active in supervisor
+                for r in routes:
+                    rid = r.get("id")
+                    if r.get("enabled", True) and r.get("running", True) and rid not in active_routes:
+                        bo = route_backoffs.setdefault(rid, {"failures": 0, "next_retry": 0, "last_code": None})
+                        if now >= bo["next_retry"]:
+                            start_route_process(r, source_type=r.get("active_source", "primary"))
+
                 for rid, info in list(active_routes.items()):
                     proc = info.get("proc")
                     route = routes_map.get(rid)
@@ -2618,7 +2626,7 @@ def api_srt_inbound():
                     consolidated_pubs[route_id] = {
                         "id": c.get("id"),
                         "stream_id": path_name,
-                        "preview_stream_id": route_id,
+                        "preview_stream_id": path_name,
                         "remote_addr": client_disp,
                         "state": "publish",
                         "mbps_rate": rx_rate,
@@ -2714,7 +2722,7 @@ def api_srt_inbound():
             consolidated_pubs[route_id] = {
                 "id": source.get("id", p_name),
                 "stream_id": p_name,
-                "preview_stream_id": route_id,
+                "preview_stream_id": p_name,
                 "remote_addr": "127.0.0.1 (Route Engine)",
                 "state": "publish",
                 "mbps_rate": 0.0,
