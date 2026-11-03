@@ -2074,7 +2074,7 @@ html, body {
           <div id="readers-empty-notice" style="background:var(--panel-elevated); border:1px dashed var(--border); border-radius:8px; padding:12px 14px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <div>
               <span>No downstream client listeners are currently pulling stream feeds from this gateway.</span>
-              <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Listener Pull URL: srt://103.89.5.211:8890?streamid=read:STREAM_NAME</a>
+              <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Listener Pull URL: srt://{{ server_public_ip or '103.89.5.211' }}:8890?streamid=read:STREAM_NAME</a>
             </div>
             <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
           </div>
@@ -2945,13 +2945,13 @@ html, body {
               <div style="color:var(--cyan); font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Client Ingest Credentials:</div>
               <div style="display:grid; grid-template-columns:110px 1fr auto; gap:8px 10px; align-items:center; font-family:'JetBrains Mono';">
                 <span style="color:var(--text-dim);">Server URL:</span>
-                <span id="rf-p-rtmp-server-val" style="color:#fff;">rtmp://103.89.5.211:1935/live</span>
+                <span id="rf-p-rtmp-server-val" style="color:#fff;">rtmp://{{ server_public_ip or '103.89.5.211' }}:1935/live</span>
                 <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-server-val').textContent)">Copy</button>
                 <span style="color:var(--text-dim);">Stream Key:</span>
                 <span id="rf-p-rtmp-key-val" style="color:#fff; font-weight:700;">--</span>
                 <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-key-val').textContent)">Copy</button>
                 <span style="color:var(--text-dim);">Full Push URL:</span>
-                <span id="rf-p-rtmp-full-val" style="color:var(--cyan); word-break:break-all;">rtmp://103.89.5.211:1935/live/--</span>
+                <span id="rf-p-rtmp-full-val" style="color:var(--cyan); word-break:break-all;">rtmp://{{ server_public_ip or '103.89.5.211' }}:1935/live/--</span>
                 <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-p-rtmp-full-val').textContent)">Copy</button>
               </div>
             </div>
@@ -3043,13 +3043,13 @@ html, body {
                 <div style="color:var(--amber); font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Client Ingest Credentials:</div>
                 <div style="display:grid; grid-template-columns:110px 1fr auto; gap:8px 10px; align-items:center; font-family:'JetBrains Mono';">
                   <span style="color:var(--text-dim);">Server URL:</span>
-                  <span id="rf-s-rtmp-server-val" style="color:#fff;">rtmp://103.89.5.211:1935/live</span>
+                  <span id="rf-s-rtmp-server-val" style="color:#fff;">rtmp://{{ server_public_ip or '103.89.5.211' }}:1935/live</span>
                   <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-server-val').textContent)">Copy</button>
                   <span style="color:var(--text-dim);">Stream Key:</span>
                   <span id="rf-s-rtmp-key-val" style="color:#fff; font-weight:700;">--</span>
                   <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-key-val').textContent)">Copy</button>
                   <span style="color:var(--text-dim);">Full Push URL:</span>
-                  <span id="rf-s-rtmp-full-val" style="color:var(--amber); word-break:break-all;">rtmp://103.89.5.211:1935/live/--</span>
+                  <span id="rf-s-rtmp-full-val" style="color:var(--amber); word-break:break-all;">rtmp://{{ server_public_ip or '103.89.5.211' }}:1935/live/--</span>
                   <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px;" onclick="copyToClipboard(document.getElementById('rf-s-rtmp-full-val').textContent)">Copy</button>
                 </div>
               </div>
@@ -3150,7 +3150,7 @@ html, body {
         <div style="display:flex; flex-direction:column; gap:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <label style="color:var(--cyan); margin:0; font-size:12px; font-weight:700;">Target Stream ID / Name</label>
-            <span style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono';">Server IP: <b style="color:#fff;">103.89.5.211</b> · Port: <b style="color:#fff;">8890</b></span>
+            <span style="font-size:11px; color:var(--muted); font-family:'JetBrains Mono';">Server IP: <b id="ep-header-ip-text" style="color:#fff;">{{ server_public_ip or '103.89.5.211' }}</b> · Port: <b style="color:#fff;">8890</b></span>
           </div>
           <div style="display:flex; gap:10px; align-items:center;">
             <input type="text" id="ep-stream-name" class="form-control" style="max-width:320px; font-family:'JetBrains Mono'; font-weight:700;" value="MAKASNA" placeholder="e.g. MAKASNA" oninput="refreshEndpointUrls(this.value)">
@@ -3186,7 +3186,7 @@ html, body {
               <button type="button" onclick="copyTextDirect('caller', 'Mode')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
             </div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
-              <div><span style="color:var(--muted); font-size:10.5px;">IP: </span><b id="ep-obs-ip-text" style="color:var(--cyan);">103.89.5.211</b></div>
+              <div><span style="color:var(--muted); font-size:10.5px;">IP: </span><b id="ep-obs-ip-text" style="color:var(--cyan);">{{ server_public_ip or '103.89.5.211' }}</b></div>
               <button type="button" onclick="copyTextDirect(document.getElementById('ep-obs-ip-text').textContent, 'IP')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
             </div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
@@ -3218,7 +3218,7 @@ html, body {
               <button type="button" onclick="copyTextDirect('Caller', 'Mode')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
             </div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
-              <div><span style="color:var(--muted); font-size:10.5px;">IP: </span><b id="ep-ip-text" style="color:var(--cyan);">103.89.5.211</b></div>
+              <div><span style="color:var(--muted); font-size:10.5px;">IP: </span><b id="ep-ip-text" style="color:var(--cyan);">{{ server_public_ip or '103.89.5.211' }}</b></div>
               <button type="button" onclick="copyTextDirect(document.getElementById('ep-ip-text').textContent, 'IP')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
             </div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
@@ -3263,7 +3263,7 @@ html, body {
               <button type="button" onclick="copyTextDirect('Caller', 'Type/Mode')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
             </div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
-              <div><span style="color:var(--muted); font-size:10.5px;">Hostname: </span><b id="ep-ip-recv-text" style="color:var(--cyan);">103.89.5.211</b></div>
+              <div><span style="color:var(--muted); font-size:10.5px;">Hostname: </span><b id="ep-ip-recv-text" style="color:var(--cyan);">{{ server_public_ip or '103.89.5.211' }}</b></div>
               <button type="button" onclick="copyTextDirect(document.getElementById('ep-ip-recv-text').textContent, 'Hostname')" style="padding:2px 7px; font-size:10px; font-weight:700; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); border-radius:4px; cursor:pointer;">Copy</button>
             </div>
             <div style="background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:6px;">
@@ -3397,7 +3397,7 @@ pollSystemStats();
 
 // Inbound SRT Ingest & Listeners Poller
 let latestSrtPort = 8890;
-const SERVER_PUBLIC_IP = '103.89.5.211';
+const SERVER_PUBLIC_IP = '{{ server_public_ip or "103.89.5.211" }}';
 let serverHostName = SERVER_PUBLIC_IP;
 let latestInboundPublishers = [];
 let latestInboundReaders = [];
@@ -4698,7 +4698,7 @@ function updateRtmpDisplay(prefix) {
   const keyVal = inputEl ? inputEl.value.trim() : '';
   const keyDisplay = document.getElementById(`rf-${prefix}-rtmp-key-val`);
   const fullDisplay = document.getElementById(`rf-${prefix}-rtmp-full-val`);
-  const server = 'rtmp://103.89.5.211:1935/live';
+  const server = `rtmp://${SERVER_PUBLIC_IP}:1935/live`;
   if (keyDisplay) keyDisplay.textContent = keyVal || '--';
   if (fullDisplay) fullDisplay.textContent = keyVal ? `${server}/${keyVal}` : `${server}/--`;
 }
@@ -4999,7 +4999,7 @@ function updateLocalSrtDisplay(inputEl, id) {
   const readSid = `read:${sid}`;
   if (sidEl) sidEl.textContent = readSid;
 
-  let pullUrl = `srt://103.89.5.211:8890?streamid=${readSid}&latency=${lat * 1000}`;
+  let pullUrl = `srt://${SERVER_PUBLIC_IP}:8890?streamid=${readSid}&latency=${lat * 1000}`;
   if (pass) pullUrl += `&passphrase=${encodeURIComponent(pass)}`;
   if (urlEl) urlEl.textContent = pullUrl;
 }
@@ -5167,8 +5167,8 @@ function addDestinationRow(data = {}) {
       <!-- Receiver Pull Box -->
       <div style="background:rgba(0,0,0,0.35); border:1px dashed rgba(16,185,129,0.3); border-radius:6px; padding:10px 12px; font-size:11.5px; font-family:'JetBrains Mono', monospace; line-height:1.7;">
         <div style="color:#10b981; font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Receiver Pull Parameters (Diberikan ke Penerima):</div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:6px 14px; margin-bottom:8px;">
-          <div><span style="color:var(--text-dim);">Server IP:</span> <b style="color:#fff;">103.89.5.211</b></div>
+        <div style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:6px 14px; margin-bottom:8px;">
+          <div><span style="color:var(--text-dim);">Server IP:</span> <b style="color:#fff;">${SERVER_PUBLIC_IP}</b></div>
           <div><span style="color:var(--text-dim);">Port:</span> <b style="color:#fff;">8890</b></div>
           <div><span style="color:var(--text-dim);">Mode:</span> <b style="color:#fff;">Caller</b></div>
           <div><span style="color:var(--text-dim);">Stream ID:</span> <b class="dest-local-sid-val-${destinationCount}" style="color:#10b981;">read:${escapeHtml(srtSid || 'client_feed_1')}</b></div>
@@ -5176,7 +5176,7 @@ function addDestinationRow(data = {}) {
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; background:rgba(0,0,0,0.5); padding:6px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.07);">
           <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
             <span style="color:var(--text-dim);">Pull URL: </span>
-            <span class="dest-local-url-val-${destinationCount}" style="color:#34d399;">srt://103.89.5.211:8890?streamid=read:${escapeHtml(srtSid || 'client_feed_1')}&amp;latency=${srtLat * 1000}</span>
+            <span class="dest-local-url-val-${destinationCount}" style="color:#34d399;">srt://${SERVER_PUBLIC_IP}:8890?streamid=read:${escapeHtml(srtSid || 'client_feed_1')}&amp;latency=${srtLat * 1000}</span>
           </div>
           <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px; white-space:nowrap;" onclick="copyToClipboard(this.previousElementSibling.querySelector('.dest-local-url-val-${destinationCount}').textContent)">Copy URL</button>
         </div>

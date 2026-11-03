@@ -1396,10 +1396,32 @@ def logout():
     return redirect(url_for("login"))
 
 
+_cached_public_ip = None
+
+def get_server_public_ip():
+    global _cached_public_ip
+    if _cached_public_ip:
+        return _cached_public_ip
+    env_ip = os.environ.get("SERVER_PUBLIC_IP", "").strip()
+    if env_ip:
+        _cached_public_ip = env_ip
+        return _cached_public_ip
+    try:
+        r = requests.get("https://api.ipify.org", timeout=2)
+        if r.status_code == 200 and r.text.strip():
+            _cached_public_ip = r.text.strip()
+            return _cached_public_ip
+    except Exception:
+        pass
+    _cached_public_ip = "127.0.0.1"
+    return _cached_public_ip
+
+
 @app.route("/")
 @login_required
 def index():
-    return render_template("dashboard.html", user=session.get("username", "admin"))
+    pub_ip = get_server_public_ip()
+    return render_template("dashboard.html", user=session.get("username", "admin"), server_public_ip=pub_ip)
 
 
 @app.route("/download/booklet")
