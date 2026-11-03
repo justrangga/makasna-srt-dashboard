@@ -1248,6 +1248,20 @@ if try_acquire_supervisor_lock():
     supervisor.start()
     logger.info("Supervisor background thread started on primary worker")
 
+    # Auto-start enabled routes on service startup
+    def auto_start_enabled_routes():
+        time.sleep(2)
+        try:
+            routes = load_routes()
+            for r in routes:
+                if r.get("enabled") and r.get("running"):
+                    logger.info(f"Auto-resuming previously running route '{r.get('name')}' ({r['id']})")
+                    start_route_process(r, source_type=r.get("active_source", "primary"))
+        except Exception as e:
+            logger.error(f"Failed to auto-resume enabled routes: {e}")
+
+    threading.Thread(target=auto_start_enabled_routes, daemon=True).start()
+
 
 def gdrive_uploader_worker():
     while True:
