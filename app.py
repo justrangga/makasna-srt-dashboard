@@ -1083,8 +1083,39 @@ def stop_route_recording(route_id):
 
 
 
+def stop_route_process(route_id):
+    stop_route_recording(route_id)
+    with active_routes_lock:
+        info = active_routes.get(route_id)
+        if not info:
+            return True
+        proc = info.get("proc")
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        log_fp = info.get("log_fp")
+        if log_fp:
+            try:
+                log_fp.close()
+            except Exception:
+                pass
+        del active_routes[route_id]
+
+    r = get_route(route_id)
+    name = r["name"] if r else route_id
+    log_event(route_id, name, "stopped", "Route process stopped")
+    return True
+
+
 def start_route_process(route, source_type="primary"):
     route_id = route["id"]
+    stop_route_process(route_id)
     source_cfg = route["primary_source"] if source_type == "primary" else route.get("secondary_source", {})
     actual_source = source_type
     # If source is primary and offline, fallback to STANDBY_SLATE
@@ -1169,36 +1200,6 @@ def start_route_process(route, source_type="primary"):
         threading.Thread(target=auto_start_rec, args=(route_id,), daemon=True).start()
 
     return True, None
-
-
-def stop_route_process(route_id):
-    stop_route_recording(route_id)
-    with active_routes_lock:
-        info = active_routes.get(route_id)
-        if not info:
-            return True
-        proc = info.get("proc")
-        if proc and proc.poll() is None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=3)
-            except Exception:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-        log_fp = info.get("log_fp")
-        if log_fp:
-            try:
-                log_fp.close()
-            except Exception:
-                pass
-        del active_routes[route_id]
-
-    r = get_route(route_id)
-    name = r["name"] if r else route_id
-    log_event(route_id, name, "stopped", "Route process stopped")
-    return True
 
 
 # =========================================================================
@@ -1440,13 +1441,14 @@ if try_acquire_supervisor_lock():
 
     # Auto-start enabled routes on service startup
     def auto_start_enabled_routes():
-        time.sleep(5)
+        time.sleep(3)
         try:
             routes = load_routes()
             for r in routes:
                 if r.get("enabled") and r.get("running"):
                     logger.info(f"Auto-resuming previously running route '{r.get('name')}' ({r['id']})")
-                    start_route_process(r, source_type=r.get("active_source", "primary"))
+                    ok, err = start_route_process(r, source_type=r.get("active_source", "primary"))
+                    logger.info(f"Auto-resume result for '{r.get('name')}': ok={ok}, err={err}")
         except Exception as e:
             logger.error(f"Failed to auto-resume enabled routes: {e}")
 
