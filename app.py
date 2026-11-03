@@ -750,6 +750,7 @@ def build_ffmpeg_cmd(route, source_config):
                     qs["latency"] = ["1000000"]
                 qs["pkt_size"] = ["1316"]
                 qs["tlpktdrop"] = ["0"]
+                qs["listen_timeout"] = ["-1"]
                 query_str = urlencode({k: v[0] for k, v in qs.items()})
                 durl = f"srt://0.0.0.0:{port}?{query_str}"
             except Exception:
@@ -1085,6 +1086,34 @@ def stop_route_recording(route_id):
 def start_route_process(route, source_type="primary"):
     route_id = route["id"]
     source_cfg = route["primary_source"] if source_type == "primary" else route.get("secondary_source", {})
+    actual_source = source_type
+    # If source is primary and offline, fallback to STANDBY_SLATE
+    if source_type == "primary":
+        p_sid = route.get("primary_source", {}).get("stream_id", "").strip()
+        p_clean = p_sid.replace("read:", "").replace("publish:", "").strip()
+        is_ready = False
+        try:
+            r = requests.get(f"{MEDIAMTX_API}/v3/paths/list", timeout=1.5)
+            if r.status_code == 200:
+                for it in r.json().get("items", []):
+                    if it.get("name") == p_clean and it.get("ready"):
+                        is_ready = True
+                        break
+        except Exception:
+            pass
+
+        if not is_ready:
+            # Fallback to local STANDBY_SLATE so TV Pool socket stays alive with idle graphics
+            source_cfg = {
+                "type": "srt_caller",
+                "address": "127.0.0.1",
+                "port": 8890,
+                "stream_id": "read:STANDBY_SLATE",
+                "latency": 200,
+                "enabled": True
+            }
+            actual_source = "secondary"
+
     cmd = build_ffmpeg_cmd(route, source_cfg)
 
     log_file_path = os.path.join(LOGS_DIR, f"route_{route_id}.log")
@@ -1110,7 +1139,7 @@ def start_route_process(route, source_type="primary"):
         active_routes[route_id] = {
             "proc": proc,
             "started_at": time.time(),
-            "active_source": source_type,
+            "active_source": actual_source,
             "log_file": log_file_path,
             "log_fp": log_fp,
             "status": "RUNNING",
