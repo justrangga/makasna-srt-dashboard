@@ -1268,6 +1268,22 @@ def supervisor_thread():
                             start_route_process(route, source_type="secondary")
                             bo["failures"] = 0
                             bo["last_code"] = None
+                        elif not has_sec and policy in ("auto_failover", "maintain_primary") and info.get("active_source") == "primary":
+                            # Standby idle slate fallback when primary is offline
+                            slate_sec = {
+                                "type": "srt_caller",
+                                "address": "127.0.0.1",
+                                "port": 8890,
+                                "stream_id": "read:STANDBY_SLATE",
+                                "latency": 200,
+                                "enabled": True
+                            }
+                            route_with_slate = dict(route)
+                            route_with_slate["secondary_source"] = slate_sec
+                            log_event(rid, route["name"], "failover", "Primary offline, switching to STANDBY SLATE fallback", "info")
+                            start_route_process(route_with_slate, source_type="secondary")
+                            bo["failures"] = 0
+                            bo["last_code"] = None
                         elif route.get("enabled", True) and route.get("running", True):
                             info["status"] = f"WAITING FOR SOURCE ({bo['failures']})"
                             info["stats"]["health"] = "Disconnected"
@@ -1291,6 +1307,17 @@ def supervisor_thread():
                     route_stream_ids.add(rid)
                     if not rid.startswith("route_"):
                         route_stream_ids.add(f"route_{rid}")
+
+                    # If currently on secondary / standby slate and primary source is healthy again, switch back
+                    if info.get("active_source") == "secondary":
+                        primary_ready = False
+                        p_sid_clean = p_sid.replace("read:", "").replace("publish:", "").strip()
+                        if p_sid_clean and p_sid_clean in paths_map and paths_map[p_sid_clean].get("ready"):
+                            primary_ready = True
+                        if primary_ready:
+                            log_event(rid, route["name"], "switchback", "Primary contribution source is online, switching back from STANDBY", "info")
+                            start_route_process(route, source_type="primary")
+                            continue
 
                     # Check MediaMTX SRT publisher
                     matched_conn = None
