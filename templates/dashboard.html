@@ -3558,13 +3558,16 @@ async function pollInboundSrt() {
         rdrTbody.innerHTML = readers.map(rdr => {
           const dotClass = rdr.health === 'Healthy' ? 'dot-green' : rdr.health === 'Degraded' ? 'dot-amber' : 'dot-red';
           const durationFormatted = formatSeconds(rdr.duration_seconds);
-          const readUrl = `srt://${SERVER_PUBLIC_IP}:${latestSrtPort}?streamid=read:${encodeURIComponent(rdr.stream_id)}`;
+          const isSls = (rdr.stream_id || '').startsWith('HUB_SLS:');
+          const sidLabel = isSls ? escapeHtml(rdr.stream_id) : `read:${escapeHtml(rdr.stream_id)}`;
+          const sidTagClass = isSls ? 'tag' : 'tag tag-reader';
+          const sidTagStyle = isSls ? 'background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3); font-weight:700; font-size:12px;' : 'font-weight:700; font-size:12px;';
 
           return `
             <tr>
               <td>
                 <div style="display:flex; align-items:center; gap:6px;">
-                  <span class="tag tag-reader" style="font-weight:700; font-size:12px;">read:${escapeHtml(rdr.stream_id)}</span>
+                  <span class="${sidTagClass}" style="${sidTagStyle}">${sidLabel}</span>
                 </div>
                 <div style="font-size:11px; color:var(--text-dim); margin-top:3px; overflow:hidden; text-overflow:ellipsis;">
                   ${rdr.tracks && rdr.tracks.length ? rdr.tracks.join(', ') : 'Live SRT Egress'}
@@ -3868,6 +3871,14 @@ function renderRoutes() {
     const destTags = (r.destinations || []).map(d => {
       let label = d.type.toUpperCase();
       try {
+        if (d.type === 'srt_listener') {
+          const port = d.port || (d.url.includes('://') ? (new URL(d.url).port) : '12105');
+          if (parseInt(port) === 12105) {
+            return `<span class="tag" style="background:rgba(16,185,129,0.2); color:#34d399; border:1px solid rgba(16,185,129,0.4);" title="SLS Hub Multi-Client TV Pool (Simultaneous Callers)">HUB_SLS:12105</span>`;
+          } else {
+            return `<span class="tag" style="background:rgba(245,158,11,0.2); color:#fbbf24; border:1px solid rgba(245,158,11,0.4);" title="Single Dedicated Listener (1:1)">SRT_DEDICATED:${port}</span>`;
+          }
+        }
         if (d.url.includes('://')) {
           const u = new URL(d.url);
           label = `${d.type.toUpperCase()}:${u.port || u.hostname}`;
@@ -4787,6 +4798,9 @@ function openAddRouteModal() {
   });
 
   updateDestinationsEmptyState();
+  if (destinationCount > 0) {
+    updateDedicatedListenerDisplay(document.getElementById(`dest-card-1`), 1);
+  }
   document.getElementById('rf-p-type').value = 'srt_caller';
   handleSourceTypeChange('srt_caller');
   document.getElementById('rf-s-type').value = 'srt_caller';
@@ -4859,6 +4873,15 @@ function editRoute(id) {
     addDestinationRow(d);
   });
   updateDestinationsEmptyState();
+
+  // Trigger update displays for all added destination cards
+  for (let i = 1; i <= destinationCount; i++) {
+    const card = document.getElementById(`dest-card-${i}`);
+    if (card) {
+      updateDedicatedListenerDisplay(card, i);
+      updateLocalSrtDisplay(card, i);
+    }
+  }
 
   document.getElementById('modal-route').classList.remove('hidden');
 }
@@ -5035,8 +5058,17 @@ function updateDedicatedListenerDisplay(inputEl, id) {
 
   const portEl = card.querySelector(`.dest-listener-port-val-${id}`);
   const urlEl = card.querySelector(`.dest-listener-url-val-${id}`);
+  const badgeEl = card.querySelector(`.dest-listener-badge-${id}`);
 
   if (portEl) portEl.textContent = port;
+
+  if (badgeEl) {
+    if (port === 12105) {
+      badgeEl.innerHTML = '<span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:10.5px; font-weight:700; background:rgba(16,185,129,0.2); color:#34d399; border:1px solid rgba(16,185,129,0.4);">⚡ HUB MULTI-CLIENT (SLS TV POOL) &mdash; Puluhan Decoder Simultan</span>';
+    } else {
+      badgeEl.innerHTML = '<span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:10.5px; font-weight:700; background:rgba(245,158,11,0.2); color:#fbbf24; border:1px solid rgba(245,158,11,0.4);">🔒 SINGLE RECEIVER (1:1 DEDICATED) &mdash; Hanya 1 Decoder Khusus</span>';
+    }
+  }
 
   let pullUrl = `srt://${SERVER_PUBLIC_IP}:${port}?mode=caller&latency=${lat * 1000}`;
   if (pass) pullUrl += `&passphrase=${encodeURIComponent(pass)}`;
@@ -5106,7 +5138,7 @@ function addDestinationRow(data = {}) {
   let rtmpKey = data.stream_key || '';
 
   if (data.url) {
-    if (data.url.startsWith('srt://') && (type === 'srt_listener' || data.url.includes('mode=listener'))) {
+    if (data.url.startsWith('srt://') && (type === 'srt_listener' || data.url.includes('mode=listener') || data.url.includes('12105'))) {
       try {
         const u = new URL(data.url);
         srtPort = u.port || 12105;
@@ -5162,7 +5194,7 @@ function addDestinationRow(data = {}) {
         <select class="form-control" name="dest_type" onchange="handleDestTypeChange(this, ${destinationCount})" style="font-weight:600;">
           <option value="srt_caller" ${type==='srt_caller'?'selected':''}>1. SRT Caller (Push ke IP Luar)</option>
           <option value="rtmp" ${type==='rtmp'?'selected':''}>2. RTMP Push</option>
-          <option value="srt_listener" ${type==='srt_listener'?'selected':''}>3. SRT Dedicated Port (Pull Tanpa Stream ID)</option>
+          <option value="srt_listener" ${type==='srt_listener'?'selected':''}>3. SRT Listener / Egress Port (Port 12105 = Multi-Client SLS Hub | Port Lain = Single)</option>
           <option value="srt_local" ${type==='srt_local'?'selected':''}>4. Direct SRT Local (Port 8890 Multi-Stream)</option>
         </select>
       </div>
@@ -5218,9 +5250,30 @@ function addDestinationRow(data = {}) {
     <div id="dest-fields-srt-listener-${destinationCount}" class="dest-proto-fields" style="display:${type==='srt_listener'?'flex':'none'}; flex-direction:column; gap:12px; background:rgba(168,85,247,0.04); border:1px solid rgba(168,85,247,0.25); border-radius:6px; padding:12px; margin-bottom:12px;">
       <!-- Baris 1: Kotak Port -->
       <div class="form-group" style="margin:0;">
-        <label style="color:#c084fc; font-weight:700;">Dedicated Listener Port (UDP)</label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <label style="color:#c084fc; font-weight:700; margin:0;">Egress Listener Port (UDP)</label>
+          <span class="dest-listener-badge-${destinationCount}">
+            ${parseInt(type==='srt_listener' ? srtPort : (12104 + destinationCount)) === 12105 
+              ? '<span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:10.5px; font-weight:700; background:rgba(16,185,129,0.2); color:#34d399; border:1px solid rgba(16,185,129,0.4);">⚡ HUB MULTI-CLIENT (SLS TV POOL) &mdash; Puluhan Decoder Simultan</span>' 
+              : '<span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:10.5px; font-weight:700; background:rgba(245,158,11,0.2); color:#fbbf24; border:1px solid rgba(245,158,11,0.4);">🔒 SINGLE RECEIVER (1:1 DEDICATED) &mdash; Hanya 1 Decoder Khusus</span>'}
+          </span>
+        </div>
         <input type="number" class="form-control" name="dest_srt_listener_port" placeholder="12105" value="${type==='srt_listener' ? srtPort : (12104 + destinationCount)}" oninput="updateDedicatedListenerDisplay(this, ${destinationCount})">
-        <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Server gateway akan membuka port ini khusus untuk rute ini. Penerima menarik siaran murni via IP:Port tanpa Stream ID.</span>
+        
+        <!-- Kotak Keterangan Port: SLS vs Single -->
+        <div style="margin-top:8px; padding:10px 12px; background:rgba(0,0,0,0.4); border-radius:6px; border:1px solid rgba(192,132,252,0.2); font-size:11.5px; line-height:1.6;">
+          <div style="color:#e2e8f0; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+            <span>📋 KETERANGAN PEMILIHAN PORT (PULL TANPA STREAM ID):</span>
+          </div>
+          <div style="margin-bottom:6px;">
+            <b style="color:#34d399;">• Port 12105 (SLS Hub Multi-Client TV Pool):</b>
+            <span style="color:var(--text-dim);"> Menggunakan SRT Live Server (SLS). <b>Bisa ditarik oleh puluhan decoder / stasiun TV sekaligus secara simultan</b> tanpa perlu Stream ID. Cocok untuk pooling siaran publik.</span>
+          </div>
+          <div>
+            <b style="color:#fbbf24;">• Port 12106, 12107, dst (Single Dedicated 1:1):</b>
+            <span style="color:var(--text-dim);"> Listener terisolasi point-to-point. <b>Hanya untuk 1 decoder khusus</b> pada port tersebut (decoder kedua akan bentrok/ditolak jika konek ke port yang sama).</span>
+          </div>
+        </div>
       </div>
 
       <!-- Baris 2: Kotak Passphrase lalu Kotak Latensi -->
@@ -5391,9 +5444,14 @@ async function handleRouteFormSubmit(e) {
       srtLat = parseInt(row.querySelector('[name="dest_srt_listener_latency"]') ? row.querySelector('[name="dest_srt_listener_latency"]').value : 200) || 200;
       srtPass = (row.querySelector('[name="dest_srt_listener_passphrase"]') ? row.querySelector('[name="dest_srt_listener_passphrase"]').value : '').trim();
 
-      let qs = `mode=listener&latency=${srtLat * 1000}`;
-      if (srtPass) qs += `&passphrase=${encodeURIComponent(srtPass)}`;
-      url = `srt://0.0.0.0:${srtPort}?${qs}`;
+      if (srtPort === 12105) {
+        // SLS Multi-Client Hub ingest URL
+        url = `srt://127.0.0.1:12105?mode=caller&latency=${srtLat * 1000}&streamid=uplive/live/stream&pkt_size=1316`;
+      } else {
+        let qs = `mode=listener&latency=${srtLat * 1000}`;
+        if (srtPass) qs += `&passphrase=${encodeURIComponent(srtPass)}`;
+        url = `srt://0.0.0.0:${srtPort}?${qs}`;
+      }
     } else if (type === 'rtmp') {
       rtmpUrl = (row.querySelector('[name="dest_rtmp_url"]') ? row.querySelector('[name="dest_rtmp_url"]').value : '').trim();
       streamKey = (row.querySelector('[name="dest_stream_key"]') ? row.querySelector('[name="dest_stream_key"]').value : '').trim();

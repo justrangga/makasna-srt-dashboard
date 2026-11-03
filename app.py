@@ -696,15 +696,23 @@ def build_ffmpeg_cmd(route, source_config):
                     opts.append(f"passphrase={d_pass}")
                 durl = f"srt://{d_addr}:{d_port}?" + "&".join(opts)
 
-        # SRT Dedicated Listener (No Stream ID needed, custom port for receivers to pull directly)
+        # SRT Dedicated Listener / SLS Hub (No Stream ID needed, custom port for receivers to pull directly)
         if dtype == "srt_listener" and (not durl or not durl.startswith("srt://")):
             d_port = int(dest.get("port", 12105))
             d_lat = int(dest.get("latency", 200))
             d_pass = dest.get("passphrase", "").strip()
-            opts = ["mode=listener", f"latency={d_lat * 1000}"]
-            if d_pass:
-                opts.append(f"passphrase={d_pass}")
-            durl = f"srt://0.0.0.0:{d_port}?" + "&".join(opts)
+
+            if d_port == 12105:
+                # Port 12105 is the SLS Multi-Client Hub
+                # Route engine pushes to local SLS ingest so SLS can serve dozens of concurrent callers
+                opts = ["mode=caller", f"latency={d_lat * 1000}", "streamid=uplive/live/stream", "pkt_size=1316"]
+                durl = f"srt://127.0.0.1:12105?" + "&".join(opts)
+            else:
+                # Other ports (12106, 12107, etc.) run as single 1:1 dedicated SRT listeners
+                opts = ["mode=listener", f"latency={d_lat * 1000}"]
+                if d_pass:
+                    opts.append(f"passphrase={d_pass}")
+                durl = f"srt://0.0.0.0:{d_port}?" + "&".join(opts)
 
         # Direct SRT Local: Ingest to local MediaMTX SRT server for receivers to pull
         if dtype == "srt_local":
@@ -729,34 +737,38 @@ def build_ffmpeg_cmd(route, source_config):
             continue
 
         # Normalize SRT Listener destinations: must bind to 0.0.0.0 and have mode=listener
+        # Note: Do NOT normalize port 12105 if it targets local SLS ingest (mode=caller)
         if durl.startswith("srt://") and (dtype == "srt_listener" or "mode=listener" in durl):
-            try:
-                from urllib.parse import urlparse, parse_qs, urlencode
-                p = urlparse(durl)
-                port = p.port or 8890
-                qs = parse_qs(p.query)
-                qs["mode"] = ["listener"]
-                lat_raw = qs.get("latency", ["1000000"])[0]
+            if "127.0.0.1:12105" in durl or ":12105?streamid=uplive" in durl:
+                pass
+            else:
                 try:
-                    lat_int = int(lat_raw)
-                    # Convert ms to us if user entered e.g. 1000 or 200
-                    if lat_int < 10000:
-                        lat_int = lat_int * 1000
-                    # Minimum 1000ms (1000000 us) buffer for internet stability
-                    if lat_int < 1000000:
-                        lat_int = 1000000
-                    qs["latency"] = [str(lat_int)]
+                    from urllib.parse import urlparse, parse_qs, urlencode
+                    p = urlparse(durl)
+                    port = p.port or 8890
+                    qs = parse_qs(p.query)
+                    qs["mode"] = ["listener"]
+                    lat_raw = qs.get("latency", ["1000000"])[0]
+                    try:
+                        lat_int = int(lat_raw)
+                        # Convert ms to us if user entered e.g. 1000 or 200
+                        if lat_int < 10000:
+                            lat_int = lat_int * 1000
+                        # Minimum 1000ms (1000000 us) buffer for internet stability
+                        if lat_int < 1000000:
+                            lat_int = 1000000
+                        qs["latency"] = [str(lat_int)]
+                    except Exception:
+                        qs["latency"] = ["1000000"]
+                    qs["pkt_size"] = ["1316"]
+                    qs["tlpktdrop"] = ["0"]
+                    qs["listen_timeout"] = ["-1"]
+                    query_str = urlencode({k: v[0] for k, v in qs.items()})
+                    durl = f"srt://0.0.0.0:{port}?{query_str}"
                 except Exception:
-                    qs["latency"] = ["1000000"]
-                qs["pkt_size"] = ["1316"]
-                qs["tlpktdrop"] = ["0"]
-                qs["listen_timeout"] = ["-1"]
-                query_str = urlencode({k: v[0] for k, v in qs.items()})
-                durl = f"srt://0.0.0.0:{port}?{query_str}"
-            except Exception:
-                if "mode=listener" not in durl:
-                    sep = "&" if "?" in durl else "?"
-                    durl = f"{durl}{sep}mode=listener&latency=1000000&pkt_size=1316&tlpktdrop=0"
+                    if "mode=listener" not in durl:
+                        sep = "&" if "?" in durl else "?"
+                        durl = f"{durl}{sep}mode=listener&latency=1000000&pkt_size=1316&tlpktdrop=0"
 
         v_mode = dest.get("video_mode", dest.get("mode", "copy"))
         a_mode = dest.get("audio_mode", dest.get("audio_codec", "copy"))
@@ -1106,6 +1118,13 @@ def stop_route_process(route_id):
             except Exception:
                 pass
         del active_routes[route_id]
+
+    # Clear SLS telemetry buffer if no other SLS route is active
+    with active_routes_lock:
+        has_other_sls = any("12105" in str(v) for v in active_routes.values())
+    if not has_other_sls:
+        with sls_stats_lock:
+            sls_stats_data.clear()
 
     r = get_route(route_id)
     name = r["name"] if r else route_id
@@ -2547,6 +2566,38 @@ def api_srt_port():
         return jsonify({"ok": True, "port": 8890})
 
 
+# =========================================================================
+# SRT Live Server (SLS) Telemetry Collector
+# =========================================================================
+sls_stats_data = []
+sls_stats_lock = threading.Lock()
+sls_stats_last_update = 0
+
+@app.route("/api/sls/stat", methods=["POST"])
+def api_sls_stat():
+    global sls_stats_data, sls_stats_last_update
+    raw = request.get_data(as_text=True) or ""
+    items = []
+    if raw.strip():
+        # SLS stat payload is formatted as concatenated JSON objects: {...}{...}{...}
+        cleaned = re.sub(r'\}\s*\{', '},{', raw.strip())
+        if not cleaned.startswith('['):
+            cleaned = '[' + cleaned + ']'
+        try:
+            items = json.loads(cleaned)
+        except Exception:
+            matches = re.findall(r'\{[^{}]+\}', raw)
+            for m in matches:
+                try:
+                    items.append(json.loads(m))
+                except Exception:
+                    pass
+    with sls_stats_lock:
+        sls_stats_data = items
+        sls_stats_last_update = time.time()
+    return "ok\n", 200
+
+
 @app.route("/api/srt/inbound", methods=["GET"])
 @login_required
 def api_srt_inbound():
@@ -2826,6 +2877,66 @@ def api_srt_inbound():
                 }
 
     publishers = list(consolidated_pubs.values())
+
+    # Merge SLS Connected Players into readers list ONLY when there is an active route feeding SLS
+    # or if SLS actually has active players streaming data
+    active_sls_route_running = False
+    with active_routes_lock:
+        for rid, rinfo in active_routes.items():
+            if rinfo.get("proc") and rinfo["proc"].poll() is None:
+                rdata = rinfo.get("route") or get_route(rid) or {}
+                for dst in rdata.get("destinations", []):
+                    dst_url = str(dst.get("url", ""))
+                    dst_type = str(dst.get("type", ""))
+                    if dst_type == "srt_listener" and str(dst.get("port", "")) == "12105":
+                        active_sls_route_running = True
+                        break
+                    if "12105" in dst_url:
+                        active_sls_route_running = True
+                        break
+            if active_sls_route_running:
+                break
+
+    now_ts = time.time()
+    with sls_stats_lock:
+        if active_sls_route_running and (now_ts - sls_stats_last_update) <= 15:
+            for item in sls_stats_data:
+                role = str(item.get("role", "")).lower()
+                if "player" in role:
+                    r_ip = item.get("remote_ip", "0.0.0.0")
+                    r_port = item.get("remote_port", 0)
+                    r_listen = item.get("port", "12105")
+                    try:
+                        kbps = float(item.get("kbitrate", 0))
+                    except Exception:
+                        kbps = 0.0
+                    mbps = round(kbps / 1000.0, 2)
+                    total_tx_rate += mbps
+                    readers.append({
+                        "id": f"sls_{r_ip}_{r_port}",
+                        "stream_id": f"HUB_SLS:{r_listen}",
+                        "remote_addr": f"{r_ip}:{r_port}",
+                        "state": "read",
+                        "mbps_rate": mbps,
+                        "mbps_rx": 0.0,
+                        "mbps_tx": mbps,
+                        "rtt_ms": 0.0,
+                        "loss_pct": 0.0,
+                        "dropped_packets": 0,
+                        "retransmitted_packets": 0,
+                        "packet_loss_count": 0,
+                        "buffer_delay_ms": 200,
+                        "buffer_current_ms": 200,
+                        "bytes_mb": 0.0,
+                        "bytes_received_mb": 0.0,
+                        "link_capacity_mbps": 0.0,
+                        "duration_seconds": 0,
+                        "health": "Healthy",
+                        "tracks": ["H264", "MPEG-4 Audio"],
+                        "routed": True,
+                        "route_id": "sls_hub",
+                        "route_name": f"SLS TV Pool (Port {r_listen})"
+                    })
 
     port_info = {"port": 8890}
     try:
