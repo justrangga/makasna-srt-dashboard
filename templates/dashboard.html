@@ -4676,7 +4676,14 @@ function toggleTelemEngine() {
 
 async function loadRoutePreview(routeId) {
   const video = document.getElementById('telem-video');
-  const safeName = routeId.startsWith('route_') ? routeId : `route_${routeId}`;
+  const route = currentRoutes.find(r => r.id === routeId);
+  let safeName = routeId.startsWith('route_') ? routeId : `route_${routeId}`;
+  if (route && route.primary_source) {
+    const sid = (route.primary_source.stream_id || '').replace(/^read:/, '').replace(/^publish:/, '').trim();
+    if (sid) {
+      safeName = sid;
+    }
+  }
   currentPreviewStreamName = safeName;
   initTelemPlayer(video, safeName, 'webrtc');
 }
