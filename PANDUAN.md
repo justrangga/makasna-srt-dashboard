@@ -91,7 +91,29 @@ Tim studio menarik (*pull/listen*) feed siaran dari server ke PC switcher atau l
    ```
 3. Klik **Play**.
 
-### C. Membuka Live Preview di Browser
+### C. Menerima Menggunakan Hardware Decoder / TV Pool (Multi-Client Tanpa Stream ID)
+Banyak perangkat keras decoder siaran lama tidak memiliki opsi pengisian `Stream ID`. Untuk skenario ini, gunakan **Port 12105 (SLS Multi-Client Hub)**:
+1. Konfigurasi pada Decoder Klien / Downstream TV:
+   * **Protocol / Type:** `SRT (Caller)`
+   * **Hostname / IP:** `IP_SERVER`
+   * **Port:** `12105`
+   * **Stream ID:** *(Kosongkan / Biarkan Default)*
+   * **Passphrase:** *(Kosongkan)*
+   * **Latency:** `200` ms (atau disesuaikan kondisi koneksi)
+2. Keunggulan Port 12105:
+   * Mendukung **puluhan receiver / stasiun TV menarik secara bersamaan** (*simultaneous callers*) tanpa saling mengunci socket.
+   * Setiap decoder yang terhubung otomatis terdeteksi IP dan bitrate-nya di monitor **Active Listeners (Receivers)** pada dashboard dengan label `HUB_SLS:12105`.
+
+### D. Menerima Menggunakan Dedicated Listener 1:1 (Port 12106, 12107, dst.)
+Jika satu decoder khusus memerlukan port independen point-to-point tanpa bercampur dengan stasiun TV lain:
+1. Pada Route Dashboard, pilih destination port misal `12106`.
+2. Pada decoder klien, masukkan:
+   * **Type:** `Caller`
+   * **Hostname:** `IP_SERVER`
+   * **Port:** `12106`
+   * **Stream ID:** *(Kosongkan)*
+
+### E. Membuka Live Preview di Browser
 * **HLS Preview:** `http://IP_SERVER:8080/hls/NAMA_STREAM/index.m3u8`
 * **WebRTC Ultra-Low Latency:** `http://IP_SERVER:8889/NAMA_STREAM/`
 
@@ -168,7 +190,8 @@ Aplikasi Android mandiri (*Makasna Remote*) memungkinkan operator dan kru lapang
 | **8554** | TCP | MediaMTX RTSP Server | Port RTSP server internal |
 | **8888** | TCP | MediaMTX HLS Server | Engine pemutar fMP4 internal |
 | **8889** | TCP | WebRTC Signaler | Pemutar WebRTC latensi rendah di browser |
-| **12100–12150**| UDP | Dynamic Route Ports | Port SRT listener untuk rute redundan |
+| **12105** | UDP | SLS Multi-Client Hub | Port egress TV Pool (simultaneous pull tanpa Stream ID) |
+| **12106–12150**| UDP | Dedicated Route Listeners | Port SRT listener 1:1 untuk decoder khusus / rute redundan |
 
 ### Troubleshooting Umum:
 * **Video Blank / Buffering:** Pastikan encoder lapangan menggunakan *Strict Closed GOP* (1-2 detik) dan B-Frames = 0.

@@ -80,6 +80,13 @@
   * **RTSP / HTTP-TS**.
 * **Zero-Copy Passthrough:** Native `-c copy` default ensures 0% CPU overhead and zero bitstream loss.
 * **Automated Audio Remuxing:** Automatically transcodes legacy broadcast MPEG-1 Layer II (MP2) or AC3 audio to AAC (`128k/160k`) on FLV/RTMP destinations to prevent muxer crashes without re-encoding video streams.
+* **SRT Live Server (SLS) Multi-Client Hub (Port 12105):**
+  * Solves hardware decoder limitations where legacy receivers do not support SRT `streamid`.
+  * Allows dozens of simultaneous downstream clients/decoders to pull from a single egress port (`srt://SERVER:12105`) without requiring stream keys or Stream IDs.
+  * Native real-time telemetry forwarding (`/api/sls/stat`): dynamically monitors connected client IPs, egress bitrate, and health inside the Active Listeners panel.
+  * Synchronized route lifecycle: listener telemetry automatically activates only when the route is running and clears when stopped.
+* **Single Dedicated Listeners (Ports 12106, 12107, etc.):**
+  * Point-to-point 1:1 dedicated SRT listener sockets for specialized downlinks and independent studio receivers.
 
 ### 3. Master Deck ISO Recorder Console
 * **Broadcast Rack-Mount Style Console:**
@@ -119,7 +126,8 @@
 | **8888** | TCP | MediaMTX HLS Native Engine | Low-latency fMP4 HLS player engine |
 | **8889** | TCP | MediaMTX WebRTC Server | Sub-second browser monitoring |
 | **9997** | TCP | MediaMTX Control API | Internal telemetry and active session listing |
-| **12100–12150**| UDP | Dynamic Route Listeners | Primary and Secondary Failover SRT ports |
+| **12105** | UDP | SRT Live Server (SLS) Multi-Client Hub | Simultaneous pull for decoders without Stream ID (TV Pool) |
+| **12106–12150**| UDP | Dedicated Route Listeners | 1:1 dedicated SRT listener sockets for specific receivers |
 
 ---
 
@@ -163,15 +171,20 @@ python app.py
 | `/api/routes/<id>` | `PUT`, `DELETE` | Update route configuration or delete an existing route |
 | `/api/routes/<id>/start` | `POST` | Start route ingestion and fan-out pipelines |
 | `/api/routes/<id>/stop` | `POST` | Stop active route execution cleanly |
-| `/api/srt/inbound` | `GET` | List active inbound SRT publishers and connected readers |
+| `/api/srt/inbound` | `GET` | List active inbound SRT publishers and connected readers (including SLS) |
+| `/api/sls/stat` | `POST` | Webhook endpoint for SLS daemon live player statistics |
 | `/api/recordings` | `GET` | List recorded ISO files and storage usage |
 | `/download/apk` | `GET` | Download latest Makasna Remote Android APK |
 
 ---
 
-## Operational Guide
+## Operational Guide & Wiki
 
-For comprehensive broadcast operations in Indonesian, please consult **[PANDUAN.md](PANDUAN.md)**.
+* Comprehensive broadcast operations in Indonesian: **[PANDUAN.md](PANDUAN.md)**.
+* Complete Technical Wiki: **[docs/wiki/Home.md](docs/wiki/Home.md)**:
+  * **[Playout & Distribution (SLS TV Pool vs Dedicated)](docs/wiki/Playout-and-Distribution.md)**
+  * **[Ingest Contribution Guide (OBS, vMix, Hardware Encoders)](docs/wiki/Ingest-Contribution-Guide.md)**
+  * **[Port Reference & Firewall Guide](docs/wiki/Port-Reference-and-Firewall.md)**
 
 ## License
 
