@@ -2907,8 +2907,9 @@ html, body {
             <!-- Baris 2: Kotak Stream ID lalu kotak Pass -->
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
               <div class="form-group" style="margin:0;">
-                <label>Stream ID</label>
-                <input type="text" id="rf-p-streamid" class="form-control" value="venue_feed">
+                <label>Stream ID / Stream Name</label>
+                <input type="text" id="rf-p-streamid" class="form-control" value="venue_feed" placeholder="e.g. AMI2026 atau venue_feed">
+                <span style="font-size:11px; color:var(--text-dim); margin-top:3px;">Jika menarik dari MediaMTX lokal (127.0.0.1:8890), sistem otomatis menambahkan prefix <code>read:</code>.</span>
               </div>
               <div class="form-group" style="margin:0;">
                 <label>Passphrase (AES)</label>
@@ -5418,8 +5419,14 @@ async function handleRouteFormSubmit(e) {
   if (pType === 'rtmp_server') {
     pUrl = `rtmp://127.0.0.1:1935/live/${pRtmpKey || pStreamId || 'live'}`;
   } else if (pType === 'srt_caller') {
+    let effectiveStreamId = pStreamId;
+    if ((pAddr === '127.0.0.1' || pAddr === 'localhost') && pPort === 8890) {
+      if (effectiveStreamId && !effectiveStreamId.startsWith('read:') && !effectiveStreamId.startsWith('publish:')) {
+        effectiveStreamId = 'read:' + effectiveStreamId;
+      }
+    }
     let qs = `mode=caller&latency=${pLatency * 1000}`;
-    if (pStreamId) qs += `&streamid=${encodeURIComponent(pStreamId)}`;
+    if (effectiveStreamId) qs += `&streamid=${encodeURIComponent(effectiveStreamId)}`;
     if (pPass) qs += `&passphrase=${encodeURIComponent(pPass)}`;
     pUrl = `srt://${pAddr}:${pPort}?${qs}`;
   }
@@ -5436,8 +5443,14 @@ async function handleRouteFormSubmit(e) {
   if (sType === 'rtmp_server') {
     sUrl = `rtmp://127.0.0.1:1935/live/${sRtmpKey || sStreamId || 'backup'}`;
   } else if (sType === 'srt_caller') {
+    let effectiveStreamId = sStreamId;
+    if ((sAddr === '127.0.0.1' || sAddr === 'localhost') && sPort === 8890) {
+      if (effectiveStreamId && !effectiveStreamId.startsWith('read:') && !effectiveStreamId.startsWith('publish:')) {
+        effectiveStreamId = 'read:' + effectiveStreamId;
+      }
+    }
     let qs = `mode=caller&latency=${sLatency * 1000}`;
-    if (sStreamId) qs += `&streamid=${encodeURIComponent(sStreamId)}`;
+    if (effectiveStreamId) qs += `&streamid=${encodeURIComponent(effectiveStreamId)}`;
     if (sPass) qs += `&passphrase=${encodeURIComponent(sPass)}`;
     sUrl = `srt://${sAddr}:${sPort}?${qs}`;
   }

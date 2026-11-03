@@ -447,10 +447,15 @@ def build_source_url(source_config):
             opts.append(f"passphrase={passphrase}")
         return f"srt://{bind_addr}:{port}?" + "&".join(opts)
     elif stype == "srt_caller":
-        # Connect / pull from remote external SRT server
+        # Connect / pull from remote external SRT server or local MediaMTX
         opts = [f"mode=caller", f"latency={int(latency) * 1000}"]
         if stream_id:
-            opts.append(f"streamid={stream_id}")
+            # If pulling from local MediaMTX (127.0.0.1:8890) and prefix not supplied, prefix with read:
+            effective_sid = stream_id
+            if addr in ("127.0.0.1", "localhost") and int(port) == 8890:
+                if not effective_sid.startswith(("read:", "publish:")):
+                    effective_sid = f"read:{effective_sid}"
+            opts.append(f"streamid={effective_sid}")
         if passphrase:
             opts.append(f"passphrase={passphrase}")
         return f"srt://{addr}:{port}?" + "&".join(opts)
