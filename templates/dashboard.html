@@ -4971,14 +4971,40 @@ function handleDestTypeChange(selectEl, id) {
   const type = selectEl.value;
   const srtBox = document.getElementById(`dest-fields-srt-caller-${id}`);
   const rtmpBox = document.getElementById(`dest-fields-rtmp-${id}`);
+  const listenerBox = document.getElementById(`dest-fields-srt-listener-${id}`);
   const localBox = document.getElementById(`dest-fields-srt-local-${id}`);
 
   if (srtBox) srtBox.style.display = (type === 'srt_caller') ? 'flex' : 'none';
   if (rtmpBox) rtmpBox.style.display = (type === 'rtmp') ? 'flex' : 'none';
+  if (listenerBox) {
+    listenerBox.style.display = (type === 'srt_listener') ? 'flex' : 'none';
+    if (type === 'srt_listener') updateDedicatedListenerDisplay(selectEl, id);
+  }
   if (localBox) {
     localBox.style.display = (type === 'srt_local') ? 'flex' : 'none';
     if (type === 'srt_local') updateLocalSrtDisplay(selectEl, id);
   }
+}
+
+function updateDedicatedListenerDisplay(inputEl, id) {
+  const card = document.getElementById(`dest-card-${id}`);
+  if (!card) return;
+  const portInput = card.querySelector('[name="dest_srt_listener_port"]');
+  const passInput = card.querySelector('[name="dest_srt_listener_passphrase"]');
+  const latInput = card.querySelector('[name="dest_srt_listener_latency"]');
+
+  const port = portInput ? parseInt(portInput.value) || 12105 : 12105;
+  const pass = passInput ? passInput.value.trim() : '';
+  const lat = latInput ? parseInt(latInput.value) || 200 : 200;
+
+  const portEl = card.querySelector(`.dest-listener-port-val-${id}`);
+  const urlEl = card.querySelector(`.dest-listener-url-val-${id}`);
+
+  if (portEl) portEl.textContent = port;
+
+  let pullUrl = `srt://${SERVER_PUBLIC_IP}:${port}?mode=caller&latency=${lat * 1000}`;
+  if (pass) pullUrl += `&passphrase=${encodeURIComponent(pass)}`;
+  if (urlEl) urlEl.textContent = pullUrl;
 }
 
 function updateLocalSrtDisplay(inputEl, id) {
@@ -5044,7 +5070,15 @@ function addDestinationRow(data = {}) {
   let rtmpKey = data.stream_key || '';
 
   if (data.url) {
-    if (data.url.startsWith('srt://') && (type === 'srt_local' || data.url.includes('streamid=publish:'))) {
+    if (data.url.startsWith('srt://') && (type === 'srt_listener' || data.url.includes('mode=listener'))) {
+      try {
+        const u = new URL(data.url);
+        srtPort = u.port || 12105;
+        const lat = u.searchParams.get('latency');
+        if (lat) srtLat = Math.round(parseInt(lat) / 1000);
+        srtPass = u.searchParams.get('passphrase') || '';
+      } catch(e) {}
+    } else if (data.url.startsWith('srt://') && (type === 'srt_local' || data.url.includes('streamid=publish:'))) {
       try {
         const u = new URL(data.url);
         let sid = u.searchParams.get('streamid') || '';
@@ -5090,9 +5124,10 @@ function addDestinationRow(data = {}) {
       <div class="form-group" style="flex:1;">
         <label style="font-weight:700; color:var(--text-bright);">Protocol</label>
         <select class="form-control" name="dest_type" onchange="handleDestTypeChange(this, ${destinationCount})" style="font-weight:600;">
-          <option value="srt_caller" ${type==='srt_caller'?'selected':''}>1. SRT Caller</option>
+          <option value="srt_caller" ${type==='srt_caller'?'selected':''}>1. SRT Caller (Push ke IP Luar)</option>
           <option value="rtmp" ${type==='rtmp'?'selected':''}>2. RTMP Push</option>
-          <option value="srt_local" ${type==='srt_local'?'selected':''}>3. Direct SRT Local</option>
+          <option value="srt_listener" ${type==='srt_listener'?'selected':''}>3. SRT Dedicated Port (Pull Tanpa Stream ID)</option>
+          <option value="srt_local" ${type==='srt_local'?'selected':''}>4. Direct SRT Local (Port 8890 Multi-Stream)</option>
         </select>
       </div>
     </div>
@@ -5143,7 +5178,47 @@ function addDestinationRow(data = {}) {
       </div>
     </div>
 
-    <!-- 3. Direct SRT Local Parameters -->
+    <!-- 3. SRT Dedicated Port (Pull Tanpa Stream ID) -->
+    <div id="dest-fields-srt-listener-${destinationCount}" class="dest-proto-fields" style="display:${type==='srt_listener'?'flex':'none'}; flex-direction:column; gap:12px; background:rgba(168,85,247,0.04); border:1px solid rgba(168,85,247,0.25); border-radius:6px; padding:12px; margin-bottom:12px;">
+      <!-- Baris 1: Kotak Port -->
+      <div class="form-group" style="margin:0;">
+        <label style="color:#c084fc; font-weight:700;">Dedicated Listener Port (UDP)</label>
+        <input type="number" class="form-control" name="dest_srt_listener_port" placeholder="12105" value="${type==='srt_listener' ? srtPort : (12104 + destinationCount)}" oninput="updateDedicatedListenerDisplay(this, ${destinationCount})">
+        <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Server gateway akan membuka port ini khusus untuk rute ini. Penerima menarik siaran murni via IP:Port tanpa Stream ID.</span>
+      </div>
+
+      <!-- Baris 2: Kotak Passphrase lalu Kotak Latensi -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>Passphrase (AES - Optional)</label>
+          <input type="password" class="form-control" name="dest_srt_listener_passphrase" placeholder="Leave empty for cleartext" value="${escapeHtml(srtPass)}" oninput="updateDedicatedListenerDisplay(this, ${destinationCount})">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Latency Buffer (ms)</label>
+          <input type="number" class="form-control" name="dest_srt_listener_latency" value="${srtLat}" oninput="updateDedicatedListenerDisplay(this, ${destinationCount})">
+        </div>
+      </div>
+
+      <!-- Receiver Pull Box -->
+      <div style="background:rgba(0,0,0,0.35); border:1px dashed rgba(168,85,247,0.3); border-radius:6px; padding:10px 12px; font-size:11.5px; font-family:'JetBrains Mono', monospace; line-height:1.7;">
+        <div style="color:#c084fc; font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Receiver Pull Parameters (Tanpa Stream ID):</div>
+        <div style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:6px 14px; margin-bottom:8px;">
+          <div><span style="color:var(--text-dim);">Server IP:</span> <b style="color:#fff;">${SERVER_PUBLIC_IP}</b></div>
+          <div><span style="color:var(--text-dim);">Port:</span> <b class="dest-listener-port-val-${destinationCount}" style="color:#c084fc;">${type==='srt_listener' ? srtPort : (12104 + destinationCount)}</b></div>
+          <div><span style="color:var(--text-dim);">Mode:</span> <b style="color:#fff;">Caller</b></div>
+          <div><span style="color:var(--text-dim);">Stream ID:</span> <b style="color:var(--text-dim);">(None / Tidak Perlu)</b></div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; background:rgba(0,0,0,0.5); padding:6px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.07);">
+          <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+            <span style="color:var(--text-dim);">Pull URL: </span>
+            <span class="dest-listener-url-val-${destinationCount}" style="color:#c084fc;">srt://${SERVER_PUBLIC_IP}:${type==='srt_listener' ? srtPort : (12104 + destinationCount)}?mode=caller&amp;latency=${srtLat * 1000}</span>
+          </div>
+          <button type="button" class="btn-icon" style="font-size:10.5px; padding:3px 8px; white-space:nowrap;" onclick="copyToClipboard(this.previousElementSibling.querySelector('.dest-listener-url-val-${destinationCount}').textContent)">Copy URL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Direct SRT Local Parameters -->
     <div id="dest-fields-srt-local-${destinationCount}" class="dest-proto-fields" style="display:${type==='srt_local'?'flex':'none'}; flex-direction:column; gap:12px; background:rgba(16,185,129,0.04); border:1px solid rgba(16,185,129,0.25); border-radius:6px; padding:12px; margin-bottom:12px;">
       <!-- Baris 1: Kotak Stream ID -->
       <div class="form-group" style="margin:0;">
@@ -5275,6 +5350,14 @@ async function handleRouteFormSubmit(e) {
         if (srtPass) qs += `&passphrase=${encodeURIComponent(srtPass)}`;
         url = `srt://${srtAddr}:${srtPort}?${qs}`;
       }
+    } else if (type === 'srt_listener') {
+      srtPort = parseInt(row.querySelector('[name="dest_srt_listener_port"]') ? row.querySelector('[name="dest_srt_listener_port"]').value : 12105) || 12105;
+      srtLat = parseInt(row.querySelector('[name="dest_srt_listener_latency"]') ? row.querySelector('[name="dest_srt_listener_latency"]').value : 200) || 200;
+      srtPass = (row.querySelector('[name="dest_srt_listener_passphrase"]') ? row.querySelector('[name="dest_srt_listener_passphrase"]').value : '').trim();
+
+      let qs = `mode=listener&latency=${srtLat * 1000}`;
+      if (srtPass) qs += `&passphrase=${encodeURIComponent(srtPass)}`;
+      url = `srt://0.0.0.0:${srtPort}?${qs}`;
     } else if (type === 'rtmp') {
       rtmpUrl = (row.querySelector('[name="dest_rtmp_url"]') ? row.querySelector('[name="dest_rtmp_url"]').value : '').trim();
       streamKey = (row.querySelector('[name="dest_stream_key"]') ? row.querySelector('[name="dest_stream_key"]').value : '').trim();
@@ -5305,9 +5388,9 @@ async function handleRouteFormSubmit(e) {
         label: label || `Output ${destinations.length + 1}`,
         type,
         url,
-        address: (type === 'srt_local') ? '127.0.0.1' : srtAddr,
+        address: (type === 'srt_local') ? '127.0.0.1' : (type === 'srt_listener' ? '0.0.0.0' : srtAddr),
         port: (type === 'srt_local') ? 8890 : srtPort,
-        stream_id: srtSid,
+        stream_id: (type === 'srt_listener') ? '' : srtSid,
         latency: srtLat,
         passphrase: srtPass,
         rtmp_url: rtmpUrl,

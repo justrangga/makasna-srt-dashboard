@@ -615,6 +615,16 @@ def build_ffmpeg_cmd(route, source_config):
                     opts.append(f"passphrase={d_pass}")
                 durl = f"srt://{d_addr}:{d_port}?" + "&".join(opts)
 
+        # SRT Dedicated Listener (No Stream ID needed, custom port for receivers to pull directly)
+        if dtype == "srt_listener" and (not durl or not durl.startswith("srt://")):
+            d_port = int(dest.get("port", 12105))
+            d_lat = int(dest.get("latency", 200))
+            d_pass = dest.get("passphrase", "").strip()
+            opts = ["mode=listener", f"latency={d_lat * 1000}"]
+            if d_pass:
+                opts.append(f"passphrase={d_pass}")
+            durl = f"srt://0.0.0.0:{d_port}?" + "&".join(opts)
+
         # Direct SRT Local: Ingest to local MediaMTX SRT server for receivers to pull
         if dtype == "srt_local":
             d_sid = dest.get("stream_id", "").strip() or f"route_{route_id}"
@@ -1543,13 +1553,14 @@ def api_create_route():
     # Destinations (Fan-out)
     destinations = []
     for d in data.get("destinations", []):
+        dest_type = d.get("type", "srt_caller")
         destinations.append({
-            "id": d.get("id") or f"dest-{str(uuid.uuid4())[:6]}",
-            "label": d.get("label", "Destination"),
-            "type": d.get("type", "srt_caller"),
+            "id": d.get("id", f"dest_{uuid.uuid4().hex[:8]}"),
+            "label": d.get("label", "").strip(),
+            "type": dest_type,
             "url": d.get("url", "").strip(),
             "address": d.get("address", "").strip(),
-            "port": int(d.get("port", 9000)) if d.get("port") else 9000,
+            "port": int(d.get("port", 12105 if dest_type == "srt_listener" else 9000)) if d.get("port") else (12105 if dest_type == "srt_listener" else 9000),
             "stream_id": d.get("stream_id", "").strip(),
             "latency": int(d.get("latency", 200)) if d.get("latency") else 200,
             "passphrase": d.get("passphrase", "").strip(),
