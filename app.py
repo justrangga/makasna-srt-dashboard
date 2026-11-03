@@ -750,9 +750,24 @@ def build_ffmpeg_cmd(route, source_config):
         if is_rtmp:
             cmd.extend(["-f", "flv", durl])
         elif durl.startswith("udp://"):
-            cmd.extend(["-f", "mpegts", "-pkt_size", "1316", durl])
+            cmd.extend([
+                "-bsf:v", "dump_extra",
+                "-mpegts_flags", "+resend_headers+pat_pmt_at_frames",
+                "-pcr_period", "20",
+                "-pat_period", "0.1",
+                "-f", "mpegts",
+                "-pkt_size", "1316",
+                durl
+            ])
         elif durl.startswith("srt://"):
-            cmd.extend(["-f", "mpegts", durl])
+            cmd.extend([
+                "-bsf:v", "dump_extra",
+                "-mpegts_flags", "+resend_headers+pat_pmt_at_frames",
+                "-pcr_period", "20",
+                "-pat_period", "0.1",
+                "-f", "mpegts",
+                durl
+            ])
         else:
             cmd.extend([durl])
 
