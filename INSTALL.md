@@ -176,7 +176,13 @@ SLS adalah komponen terpisah dari repository dashboard. Gunakan bagian ini hanya
 - Dedicated: UDP `12106`, `12107`, dan seterusnya, 1:1.
 - Webhook telemetri: `http://127.0.0.1:8080/api/sls/stat`.
 
-Binary SLS, konfigurasi `/etc/sls/sls.conf`, dan service SLS harus disiapkan terpisah. Jangan menyalin binary dari server lain tanpa memeriksa arsitektur, library SRT, konfigurasi, dan asal binary. Lihat [Wiki SLS](docs/wiki/Playout-and-Distribution.md).
+Binary SLS harus dibuild dari source dengan patch khusus. Jalankan:
+
+```bash
+sudo bash scripts/patch-sls.sh
+```
+
+Script ini meng-clone `Edward-Wu/srt-live-server`, menerapkan patch (port hingga `65535`, empty Stream ID fallback `live/live/stream`, kompatibilitas GCC), build, dan memasang `/usr/local/bin/sls`. Konfigurasi `/etc/sls/sls.conf` dan unit systemd: ikuti [SLS Hub Setup](docs/wiki/SLS-Hub-Setup.md). Jangan menyalin binary dari server lain tanpa memeriksa arsitektur dan library SRT.
 
 ## 11. Backup dan update
 
