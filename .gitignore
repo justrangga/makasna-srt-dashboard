@@ -11,6 +11,11 @@ __pycache__/
 *.log
 logs/
 forwards.json
+routes.json
+routes.json.lock
+events.json
+events.json.lock
+overlay_config.json
 recordings/
 graphify/
 graphify-output/

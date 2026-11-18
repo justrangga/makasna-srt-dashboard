@@ -7,6 +7,7 @@ failover policies, real-time SRT/IP telemetry, and process supervision.
 
 import os
 import sys
+import secrets
 
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
@@ -33,12 +34,16 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "makasna-srt-secret-2026")
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_urlsafe(32)
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=60)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "admin")
-DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS", "@linux1234")
+DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS")
+if not os.environ.get("SECRET_KEY"):
+    logging.getLogger(__name__).warning("SECRET_KEY is not set; sessions will be invalidated on restart.")
+if not DASHBOARD_PASS:
+    logging.getLogger(__name__).warning("DASHBOARD_PASS is not set; dashboard login is disabled.")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROUTES_FILE = os.path.join(BASE_DIR, "routes.json")

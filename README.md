@@ -141,24 +141,27 @@
 
 ### Installation Steps
 
+For a clean server installation, follow **[INSTALL.md](INSTALL.md)** from top to bottom. It covers Ubuntu prerequisites, MediaMTX API configuration, FFmpeg, the Python virtual environment, secret environment variables, systemd, firewall rules, health checks, backups, updates, and troubleshooting.
+
+Quick start after cloning:
+
 ```bash
-# Clone the repository
-git clone https://github.com/justrangga/makasna-srt-dashboard.git
-cd makasna-srt-dashboard
-
-# Create Python virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start MediaMTX service
-sudo systemctl start mediamtx
-
-# Run Makasna Dashboard Gateway
-python app.py
+git clone https://github.com/justrangga/makasna-srt-dashboard.git /srv/makasna-dashboard
+cd /srv/makasna-dashboard
+sudo bash scripts/install.sh
+sudoedit /etc/makasna-dashboard.env
+sudo systemctl restart makasna-dashboard
 ```
+
+Do not expose the dashboard before replacing `DASHBOARD_PASS` and setting a unique `SECRET_KEY`. Do not expose the MediaMTX API on the public interface.
+
+The repository also includes:
+
+* `systemd/makasna-dashboard.service`: production systemd unit.
+* `config/mediamtx.yml.example`: MediaMTX API/SRT baseline.
+* `.env.example`: environment variable template with no real credentials.
+* `scripts/install.sh`: repeatable dependency and service setup.
+* `Makefile`: local syntax check and smoke-test commands.
 
 ---
 

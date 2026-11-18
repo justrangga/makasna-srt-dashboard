@@ -6,6 +6,8 @@
 
 Dokumen ini merupakan panduan teknis operasional resmi untuk **Makasna Live Video Transport Gateway**, mencakup konfigurasi encoder lapangan, penerimaan di studio siaran, failover redundan, perekaman ISO mandiri, sinkronisasi Google Drive, serta pengoperasian aplikasi remote controller Android.
 
+> **Instalasi server baru:** mulai dari [INSTALL.md](INSTALL.md). Dokumen tersebut menjelaskan dependensi Ubuntu, MediaMTX, FFmpeg, virtual environment, environment secret, systemd, firewall, health check, backup, update, dan troubleshooting. Panduan ini berfokus pada operasi siaran setelah instalasi.
+
 ---
 
 ## Daftar Isi
