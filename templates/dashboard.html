@@ -4496,7 +4496,7 @@ function initHlsPlayer(video, streamUrl) {
             const isNotFound = data.response && (data.response.code === 404 || data.response.code === 0);
             if (previewState) {
               if (isNotFound) {
-                previewState.innerHTML = '<span style="color:#f59e0b; font-weight:600;"><span class="pulse-indicator" style="background:#f59e0b; width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:5px; box-shadow:0 0 6px #f59e0b;"></span>STANDBY &middot; Menunggu Sinyal Masuk</span>';
+                previewState.innerHTML = '<span style="color:#f59e0b; font-weight:600;"><span class="pulse-indicator" style="background:#f59e0b; width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:5px; box-shadow:0 0 6px #f59e0b;"></span>STANDBY &middot; Waiting for Signal</span>';
               } else {
                 previewState.innerHTML = '<span style="color:var(--amber);">Reconnecting feed...</span>';
               }
@@ -5267,11 +5267,11 @@ function addDestinationRow(data = {}) {
           </div>
           <div style="margin-bottom:6px;">
             <b style="color:#34d399;">• Port 12105 (SLS Hub Multi-Client TV Pool):</b>
-            <span style="color:var(--text-dim);"> Menggunakan SRT Live Server (SLS). <b>Bisa ditarik oleh puluhan decoder / stasiun TV sekaligus secara simultan</b> tanpa perlu Stream ID. Cocok untuk pooling siaran publik.</span>
+            <span style="color:var(--text-dim);"> Powered by SRT Live Server (SLS). <b>Dozens of decoders / TV stations can pull simultaneously</b> without a Stream ID. Ideal for public TV pooling.</span>
           </div>
           <div>
             <b style="color:#fbbf24;">• Port 12106, 12107, dst (Single Dedicated 1:1):</b>
-            <span style="color:var(--text-dim);"> Listener terisolasi point-to-point. <b>Hanya untuk 1 decoder khusus</b> pada port tersebut (decoder kedua akan bentrok/ditolak jika konek ke port yang sama).</span>
+            <span style="color:var(--text-dim);"> Isolated point-to-point listener. <b>Only 1 dedicated decoder</b> on this port (a second decoder will be rejected if it connects to the same port).</span>
           </div>
         </div>
       </div>
@@ -5313,7 +5313,7 @@ function addDestinationRow(data = {}) {
       <div class="form-group" style="margin:0;">
         <label style="color:#10b981; font-weight:700;">Stream ID (Receiver Pull Identifier)</label>
         <input type="text" class="form-control" name="dest_srt_local_streamid" id="dest-local-sid-input-${destinationCount}" placeholder="e.g. client_feed_1" value="${escapeHtml(srtSid)}" oninput="updateLocalSrtDisplay(this, ${destinationCount})">
-        <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Stream ID unik yang akan digunakan oleh penerima untuk menarik siaran langsung dari server gateway kita.</span>
+        <span style="font-size:11px; color:var(--text-dim); margin-top:4px;">Unique Stream ID receivers use to pull the live broadcast from this gateway.</span>
       </div>
 
       <!-- Baris 2: Kotak Passphrase lalu Kotak Latensi -->
@@ -6936,7 +6936,7 @@ function addOverlayLayer() {
   });
 
   renderAllOverlayLayers();
-  showToast(`Overlay Layer ${newId} berhasil ditambahkan. Silakan upload aset grafis.`, "success");
+  showToast(`Overlay Layer ${newId} added. Upload the graphic asset to continue.`, "success");
 }
 
 function removeOverlayLayer(id) {
@@ -6952,7 +6952,7 @@ function removeOverlayLayer(id) {
   });
 
   renderAllOverlayLayers();
-  showToast("Overlay Layer telah dihapus.", "info");
+  showToast("Overlay Layer removed.", "info");
 }
 
 function renderCanvasBoxes() {
@@ -7033,8 +7033,8 @@ function renderControlPanels() {
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           ${canDelete ? `
-            <button type="button" class="btn-mini" onclick="removeOverlayLayer(${layer.id})" style="padding:2px 8px; font-size:10.5px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#ef4444; border-radius:4px; cursor:pointer;" title="Hapus Layer ${layer.id}">
-              Hapus
+            <button type="button" class="btn-mini" onclick="removeOverlayLayer(${layer.id})" style="padding:2px 8px; font-size:10.5px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#ef4444; border-radius:4px; cursor:pointer;" title="Remove Layer ${layer.id}">
+              Remove
             </button>
           ` : ''}
           <label class="toggle-switch-sm">
@@ -7292,7 +7292,7 @@ async function uploadOverlayFile(layerId) {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast(`Aset ${file.name} berhasil diunggah!`, 'success');
+      showToast(`Asset ${file.name} uploaded!`, 'success');
       if (Array.isArray(data.assets)) {
         availableOverlayAssets = data.assets;
       }
@@ -7306,10 +7306,10 @@ async function uploadOverlayFile(layerId) {
       renderTelemetryCards();
       updateFilterCodePreview();
     } else {
-      showToast(data.error || 'Upload gagal', 'error');
+      showToast(data.error || 'Upload failed', 'error');
     }
   } catch (err) {
-    showToast(`Kesalahan upload: ${err.message}`, 'error');
+    showToast(`Upload error: ${err.message}`, 'error');
   }
 }
 
@@ -7443,7 +7443,7 @@ async function safetyOffAllOverlays() {
   renderAllOverlayLayers();
   updateFilterCodePreview();
 
-  showToast("OFF ALL OVERLAY: Mematikan seluruh overlay siaran...", "warning");
+  showToast("OFF ALL OVERLAY: Disabling all broadcast overlays...", "warning");
   try {
     const res = await fetch('/api/overlay/safety-off', {
       method: 'POST',
@@ -7451,13 +7451,13 @@ async function safetyOffAllOverlays() {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast("SAFETY KILLSWITCH: Seluruh overlay berhasil dimatikan! Egress siaran kini murni passthrough.", "success");
+      showToast("SAFETY KILLSWITCH: All overlays disabled! Broadcast egress is now pure passthrough.", "success");
       overlayConfigState = { ...overlayConfigState, ...data.config };
     } else {
-      showToast(data.error || "Gagal mematikan overlay", "error");
+      showToast(data.error || "Failed to disable overlays", "error");
     }
   } catch (err) {
-    showToast(`Kesalahan jaringan: ${err.message}`, "error");
+    showToast(`Network error: ${err.message}`, "error");
   }
 }
 
@@ -7495,7 +7495,7 @@ async function saveOverlayConfig() {
   if (btnTop) { btnTop.disabled = true; btnTop.style.opacity = '0.6'; }
   if (btnBottom) { btnBottom.disabled = true; btnBottom.style.opacity = '0.6'; }
 
-  showToast("Menyimpan konfigurasi overlay...");
+  showToast("Saving overlay configuration...");
   try {
     const res = await fetch('/api/overlay/save', {
       method: 'POST',
@@ -7504,15 +7504,15 @@ async function saveOverlayConfig() {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast("Konfigurasi overlay berhasil disimpan!", "success");
+      showToast("Overlay configuration saved!", "success");
       overlayConfigState = { ...overlayConfigState, ...payload };
       updateFilterCodePreview();
       updateOverlayMonitorBackground();
     } else {
-      showToast(data.error || "Gagal menyimpan konfigurasi", "error");
+      showToast(data.error || "Failed to save configuration", "error");
     }
   } catch (err) {
-    showToast(`Kesalahan jaringan: ${err.message}`, "error");
+    showToast(`Network error: ${err.message}`, "error");
   } finally {
     if (btnTop) { btnTop.disabled = false; btnTop.style.opacity = '1'; }
     if (btnBottom) { btnBottom.disabled = false; btnBottom.style.opacity = '1'; }

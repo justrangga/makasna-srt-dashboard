@@ -183,8 +183,8 @@ The repository also includes:
 
 ## Operational Guide & Wiki
 
-* Comprehensive broadcast operations in Indonesian: **[PANDUAN.md](PANDUAN.md)**.
-* Complete Technical Wiki: **[docs/wiki/Home.md](docs/wiki/Home.md)**:
+* Complete operations guide: **[PANDUAN.md](PANDUAN.md)**.
+* Technical Wiki: **[docs/wiki/Home.md](docs/wiki/Home.md)**:
   * **[Playout & Distribution (SLS TV Pool vs Dedicated)](docs/wiki/Playout-and-Distribution.md)**
   * **[Ingest Contribution Guide (OBS, vMix, Hardware Encoders)](docs/wiki/Ingest-Contribution-Guide.md)**
   * **[Port Reference & Firewall Guide](docs/wiki/Port-Reference-and-Firewall.md)**

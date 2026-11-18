@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -281,7 +281,7 @@
   <!-- Top Bar -->
   <div class="top-bar">
     <div class="brand-title">
-      <button class="btn-action" onclick="goBack()" title="Kembali ke Dashboard">
+      <button class="btn-action" onclick="goBack()" title="Back to Dashboard">
         ← Back
       </button>
       <span class="stream-label">{{ stream_name }}</span>
@@ -447,7 +447,7 @@
 
       if (!window.RTCPeerConnection) {
         console.warn("RTCPeerConnection not supported");
-        showNotice("Browser tidak mendukung WebRTC. Beralih ke LL-HLS...");
+        showNotice("Browser does not support WebRTC. Switching to LL-HLS...");
         switchEngine('hls');
         return;
       }
@@ -485,7 +485,7 @@
             statsDisplay.textContent = "● LIVE (WebRTC · sub-300ms)";
           } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
             setStatus("STANDBY", "standby");
-            statsDisplay.textContent = "WebRTC standby: Menunggu sinyal siaran...";
+            statsDisplay.textContent = "WebRTC standby: Waiting for the live signal...";
             retryTimer = setTimeout(initWebRtc, 3000);
           }
         };
@@ -537,14 +537,14 @@
         console.warn("WebRTC startup error:", err.message);
         // Codec mismatch (e.g. stream is H.265 or AAC): MediaMTX returns 'codecs not supported by client'
         if (err.message && err.message.includes('codecs not supported')) {
-          showNotice("Stream menggunakan H.265 (HEVC). WebRTC butuh H.264. Mengalihkan ke LL-HLS...", 5000);
+          showNotice("Stream uses H.265 (HEVC). WebRTC requires H.264. Switching to LL-HLS...", 5000);
           switchEngine('hls');
           return;
         }
 
         if (err.message && err.message.includes('no stream is available')) {
           setStatus("STANDBY", "standby");
-          statsDisplay.textContent = "Standby: Menunggu feed sinyal siaran aktif...";
+          statsDisplay.textContent = "Standby: Waiting for the live feed signal...";
           tapOverlay.style.display = 'flex';
           retryTimer = setTimeout(initWebRtc, 3000);
           return;
@@ -577,7 +577,7 @@
 
         video.onerror = () => {
           setStatus("STANDBY", "standby");
-          statsDisplay.textContent = "Standby: Menunggu feed sinyal siaran aktif...";
+          statsDisplay.textContent = "Standby: Waiting for the live feed signal...";
           tapOverlay.style.display = 'flex';
         };
 
@@ -628,7 +628,7 @@
             const is404 = data.response && (data.response.code === 404 || data.response.code === 0);
             if (is404) {
               setStatus("STANDBY", "standby");
-              statsDisplay.textContent = "Standby: Menunggu feed sinyal siaran aktif...";
+              statsDisplay.textContent = "Standby: Waiting for the live feed signal...";
             } else {
               setStatus("RECONNECTING", "standby");
               statsDisplay.textContent = "Stream interrupted, reconnecting...";
@@ -638,7 +638,7 @@
           }
         });
       } else {
-        statsDisplay.textContent = "Browser tidak mendukung WebRTC maupun HLS playback.";
+        statsDisplay.textContent = "Browser does not support WebRTC or HLS playback.";
       }
     }
 
