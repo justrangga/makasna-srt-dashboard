@@ -1209,11 +1209,6 @@ html, body {
 
   <!-- User Actions -->
   <div class="user-actions">
-    <a href="/download/apk" target="_blank" title="Download Installer Android Remote Controller (APK)">
-      <button type="button" class="btn-icon" style="color:#10B981; border-color:rgba(16,185,129,0.4); font-weight:600; background:rgba(16,185,129,0.08);">
-        <span class="d-none-mobile">Android </span>APK
-      </button>
-    </a>
     <a href="/download/sop" target="_blank" title="Download Standard Operating Procedure (SOP)">
       <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;">
         <span class="d-none-mobile">Engineering </span>SOP
@@ -1801,11 +1796,11 @@ html, body {
   </div>
 </div>
 
-<!-- MODAL: SRT Port -->
+<!-- MODAL: Global Settings (SRT Port, Account) -->
 <div id="modal-srt-port" class="modal hidden">
-  <div class="modal-card" style="width:min(420px, 100%);">
+  <div class="modal-card" style="width:min(460px, 100%);">
     <div class="modal-header">
-      <h2>Global Settings &amp; SRT Port</h2>
+      <h2>Settings</h2>
       <button class="btn-icon" onclick="closeSrtPortModal()" title="Close">&times;</button>
     </div>
     <div class="modal-body">
@@ -1816,24 +1811,38 @@ html, body {
         <label>MediaMTX SRT Port</label>
         <input type="number" id="input-srt-port" class="form-control" min="1024" max="65535" value="8890">
       </div>
-      <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--muted); margin-bottom:8px;">
-        <b style="color:#fff;">Android Remote Controller:</b><br>
-        Install the Android remote controller to monitor live feeds and manage routes:
-        <div style="margin-top:8px;">
-          <a href="/download/apk" target="_blank">
-            <button type="button" class="btn-primary" style="width:100%; justify-content:center; background:#10B981; border-color:#059669;">
-              Download Makasna Remote (APK)
-            </button>
-          </a>
+
+      <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:14px; margin-top:14px;">
+        <b style="color:#fff; font-size:13px;">Operator Account</b>
+        <p style="font-size:12px; color:var(--muted); margin:6px 0 10px;">
+          Change the dashboard username and/or password. Enter your current password to confirm.
+        </p>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="acc-username" class="form-control" autocomplete="username">
         </div>
+        <div class="form-group">
+          <label>Current Password</label>
+          <input type="password" id="acc-current-password" class="form-control" autocomplete="current-password" placeholder="Required">
+        </div>
+        <div class="form-group">
+          <label>New Password</label>
+          <input type="password" id="acc-new-password" class="form-control" autocomplete="new-password" placeholder="Min. 8 characters (leave blank to keep current)">
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password</label>
+          <input type="password" id="acc-confirm-password" class="form-control" autocomplete="new-password" placeholder="Repeat new password">
+        </div>
+        <button type="button" class="btn-primary" style="width:100%; justify-content:center;" onclick="saveAccount()">Save Account</button>
       </div>
-      <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--muted);">
+
+      <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--muted); margin-top:14px;">
         <b style="color:#fff;">Documentation:</b><br>
-        Download Standar Operasional Prosedur (SOP) 1 Lembar:
+        Download the one-page Standard Operating Procedure (PDF):
         <div style="margin-top:8px;">
           <a href="/download/sop" target="_blank">
             <button type="button" class="btn-primary" style="width:100%; justify-content:center;">
-              Download SOP Pengoperasian Sistem (PDF)
+              Download System SOP (PDF)
             </button>
           </a>
         </div>
@@ -2111,6 +2120,7 @@ pollSystemStats();
 // Inbound SRT Ingest & Listeners Poller
 let latestSrtPort = 8890;
 const SERVER_PUBLIC_IP = '{{ server_public_ip or "103.89.5.211" }}';
+const CURRENT_USER = '{{ user or "admin" }}';
 let serverHostName = SERVER_PUBLIC_IP;
 let latestInboundPublishers = [];
 let latestInboundReaders = [];
@@ -4321,7 +4331,39 @@ async function openSrtPortModal() {
   try {
     const d = await api('/api/srt/port');
     document.getElementById('input-srt-port').value = d.port || 8890;
+    // prefill operator account section
+    const accUser = document.getElementById('acc-username');
+    if (accUser) accUser.value = CURRENT_USER || '';
+    document.getElementById('acc-current-password').value = '';
+    document.getElementById('acc-new-password').value = '';
+    document.getElementById('acc-confirm-password').value = '';
     document.getElementById('modal-srt-port').classList.remove('hidden');
+  } catch(e) { alert(e.message); }
+}
+
+async function saveAccount() {
+  const username = document.getElementById('acc-username').value.trim();
+  const currentPassword = document.getElementById('acc-current-password').value;
+  const newPassword = document.getElementById('acc-new-password').value;
+  const confirmPassword = document.getElementById('acc-confirm-password').value;
+  if (!username) { alert('Username is required.'); return; }
+  if (!currentPassword) { alert('Current password is required.'); return; }
+  if (newPassword || confirmPassword) {
+    if (newPassword !== confirmPassword) { alert('New passwords do not match.'); return; }
+    if (newPassword.length < 8) { alert('New password must be at least 8 characters.'); return; }
+  }
+  try {
+    const res = await api('/api/auth/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, current_password: currentPassword, new_password: newPassword })
+    });
+    if (res && res.ok) {
+      alert('Account updated. Use the new credentials next time you sign in.');
+      closeSrtPortModal();
+    } else {
+      alert(res && res.error ? res.error : 'Failed to update account.');
+    }
   } catch(e) { alert(e.message); }
 }
 

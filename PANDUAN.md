@@ -13,8 +13,7 @@ This guide covers day-to-day broadcast operations: field contribution, studio pl
 3. [Studio Playout (Downstream / Receivers)](#3-studio-playout-downstream--receivers)
 4. [Route Management & Failover](#4-route-management--failover)
 5. [Audio Monitoring & Clipping](#5-audio-monitoring--clipping)
-6. [Remote Android App](#6-remote-android-app)
-7. [Ports & Troubleshooting](#7-ports--troubleshooting)
+6. [Ports & Troubleshooting](#6-ports--troubleshooting)
 
 ---
 
@@ -132,19 +131,7 @@ For an isolated point-to-point receiver:
 
 ---
 
-## 6. Remote Android App
-
-The standalone **Makasna Remote** app lets field crews control the server from a phone:
-
-* **Repository:** [justrangga/makasna-remote-controller](https://github.com/justrangga/makasna-remote-controller)
-* **Direct download:** `http://SERVER_IP:8080/download/apk` or the app repository's GitHub Releases.
-* **Dynamic connection:** enter the server IP, HTTP port (8080), and SRT port (8890). Enable *Remember Login Session* for automatic reconnect.
-* **Signal tab:** monitor throughput, connected encoders, and create routes from active feeds.
-* **Routes tab:** start, stop, create, and edit fan-out routes.
-
----
-
-## 7. Ports & Troubleshooting
+## 6. Ports & Troubleshooting
 
 | Port | Protocol | Service | Description |
 |:---:|:---:|:---|:---|

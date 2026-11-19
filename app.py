@@ -1167,17 +1167,17 @@ def index():
     return render_template("dashboard.html", user=session.get("username", "admin"), server_public_ip=pub_ip)
 
 
-@app.route("/download/apk")
-def download_apk():
-    apk_path = os.path.join(BASE_DIR, "static", "makasna-remote.apk")
-    if os.path.exists(apk_path):
+@app.route("/download/sop")
+def download_sop():
+    sop_path = os.path.join(BASE_DIR, "static", "Makasna_SOP.pdf")
+    if os.path.exists(sop_path):
         return send_from_directory(
             os.path.join(BASE_DIR, "static"),
-            "makasna-remote.apk",
+            "Makasna_SOP.pdf",
             as_attachment=True,
-            mimetype="application/vnd.android.package-archive"
+            mimetype="application/pdf"
         )
-    return ("APK not found", 404)
+    return ("SOP document not found", 404)
 
 
 @app.route("/favicon.ico")
@@ -1945,6 +1945,55 @@ def api_srt_port():
         return jsonify({"ok": True, "port": port})
     except Exception:
         return jsonify({"ok": True, "port": 8890})
+
+
+@app.route("/api/auth/credentials", methods=["POST"])
+@login_required
+def api_update_credentials():
+    """Change operator username/password. Requires the current password."""
+    data = request.json or {}
+    username = str(data.get("username", "")).strip()
+    current_password = str(data.get("current_password", ""))
+    new_password = str(data.get("new_password", ""))
+
+    if not username:
+        return jsonify({"ok": False, "error": "Username is required"}), 400
+
+    cfg = load_auth_config()
+    if not cfg:
+        return jsonify({"ok": False, "error": "Setup not completed yet"}), 400
+
+    if not check_password_hash(cfg.get("password_hash", ""), current_password):
+        return jsonify({"ok": False, "error": "Current password is incorrect"}), 403
+
+    if new_password and len(new_password) < 8:
+        return jsonify({"ok": False, "error": "New password must be at least 8 characters"}), 400
+
+    if new_password:
+        save_auth_config(username, new_password)
+    else:
+        # keep the existing password hash, only update the username
+        data = {
+            "username": username,
+            "password_hash": cfg.get("password_hash"),
+            "setup_complete": True,
+            "updated_at": now_iso()
+        }
+        import json as _json
+        with _auth_state_lock:
+            tmp = AUTH_CONFIG_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                _json.dump(data, f, indent=2)
+            os.replace(tmp, AUTH_CONFIG_FILE)
+            try:
+                os.chmod(AUTH_CONFIG_FILE, 0o600)
+            except Exception:
+                pass
+    # If the operator changed their own username, refresh the session identity
+    if session.get("logged_in"):
+        session["username"] = username
+    log_event("system", "Auth", "credentials_updated", f"Operator account updated: username='{username}'", "info")
+    return jsonify({"ok": True, "message": "Account updated successfully"})
 
 
 # =========================================================================

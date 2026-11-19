@@ -10,7 +10,6 @@
   <img src="https://img.shields.io/badge/SRT-Reliable%20Transport-00E5FF?style=flat-square" alt="SRT" />
   <img src="https://img.shields.io/badge/MediaMTX-v1.11+-3B82F6?style=flat-square" alt="MediaMTX" />
   <img src="https://img.shields.io/badge/FFmpeg-Transcode%20%26%20ISO%20Rec-F59E0B?style=flat-square" alt="FFmpeg" />
-  <img src="https://img.shields.io/badge/Flutter-Mobile%20Remote-02569B?style=flat-square" alt="Flutter" />
 </p>
 
 ---
@@ -86,16 +85,6 @@
 * **Single Dedicated Listeners (Ports 12106, 12107, etc.):**
   * Point-to-point 1:1 dedicated SRT listener sockets for specialized downlinks and independent studio receivers.
 
-### 3. Remote Android Controller Application
-* **Standalone Mobile App Repository:** [justrangga/makasna-remote-controller](https://github.com/justrangga/makasna-remote-controller)
-* **Direct APK Download:** Available at `/download/apk` or from the dedicated mobile app repository release.
-* **Key Capabilities:**
-  * Dynamic IP & Port onboarding with persistent session caching (Auto-Connect).
-  * Real-time Ingest Signal Monitor with 1-click URL copying and route generation.
-  * Complete Route Management CRUD (Create, Edit, Delete, Start/Stop).
-  * Multi-channel Audio VU Meter with dBVU (-20 to +3 VU) and dBFS (-60 to 0 dBFS) scales.
-  * Built-in Broadcast Technical Guide for OBS Studio, vMix, and field encoders.
-
 ---
 
 ## Network Port Allocation
@@ -159,7 +148,8 @@ The repository also includes:
 | `/api/routes/<id>/stop` | `POST` | Stop active route execution cleanly |
 | `/api/srt/inbound` | `GET` | List active inbound SRT publishers and connected readers (including SLS) |
 | `/api/sls/stat` | `POST` | Webhook endpoint for SLS daemon live player statistics |
-| `/download/apk` | `GET` | Download latest Makasna Remote Android APK |
+| `/api/auth/credentials` | `POST` | Change operator username/password (requires current password) |
+| `/download/sop` | `GET` | Download the one-page SOP quick reference (PDF) |
 
 ---
 
