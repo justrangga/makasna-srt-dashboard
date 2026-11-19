@@ -84,6 +84,7 @@ Install MediaMTX and keep its API bound to localhost. A baseline configuration i
 
 - SRT address `:8890` (ingest and listener pull).
 - API address `127.0.0.1:9997` (required by the dashboard monitor; do not expose publicly).
+- HLS (`:8888`) and WebRTC (`:8889`) enabled — the preview players in the telemetry modal depend on them.
 
 After editing the configuration:
 

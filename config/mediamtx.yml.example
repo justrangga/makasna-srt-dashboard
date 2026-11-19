@@ -16,8 +16,8 @@ rtspAddress: :8554
 rtspTransports: [tcp]
 rtmp: yes
 rtmpAddress: :1935
-hls: no
-webrtc: no
+hls: yes
+webrtc: yes
 srt: yes
 srtAddress: :8890
 
