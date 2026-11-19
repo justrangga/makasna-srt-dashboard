@@ -2215,7 +2215,6 @@ async function pollInboundSrt() {
     const readers = d.readers || [];
     latestInboundPublishers = publishers;
     latestInboundReaders = readers;
-    syncHyperdeckRouteOptions();
 
     // Auto-switch tab if user hasn't explicitly chosen one yet
     if (!userSelectedSrtTab) {
