@@ -1119,6 +1119,23 @@ if try_acquire_supervisor_lock():
 # =========================================================================
 # Web Application Routes & Auth
 # =========================================================================
+@app.after_request
+def set_no_cache_headers(response):
+    """HTML pages must always revalidate; stale dashboards show frozen stats."""
+    ctype = response.headers.get("Content-Type", "")
+    if "text/html" in ctype:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
+@app.context_processor
+def inject_build_stamp():
+    from datetime import datetime, timezone
+    return {"build_stamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":

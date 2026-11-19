@@ -1315,7 +1315,7 @@ html, body {
               <span>No inbound SRT source encoders are currently connected to port 8890.</span>
               <a href="javascript:void(0)" onclick="openConnectionUrlsModal()" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Click here to view publisher ingest URL formats (OBS / vMix)</a>
             </div>
-            <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
+            <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s · <span id="srt-last-updated-readers">--:--:--</span></span>
           </div>
 
           <div id="inbound-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(0,229,255,0.25); overflow-x:auto;">
@@ -1352,7 +1352,7 @@ html, body {
               <span>No downstream client listeners are currently pulling stream feeds from this gateway.</span>
               <a href="javascript:void(0)" onclick="openConnectionUrlsModal(null, 'receiver')" style="color:var(--cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Listener Pull URL: srt://{{ server_public_ip or '103.89.5.211' }}:8890?streamid=read:STREAM_NAME</a>
             </div>
-            <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s</span>
+            <span style="font-size:11px; color:var(--text-dim);">Auto-refreshes every 2s · <span id="srt-last-updated">--:--:--</span></span>
           </div>
 
           <div id="readers-table-container" class="table-container" style="display:none; margin-top:4px; border-color:rgba(59,130,246,0.3); overflow-x:auto;">
@@ -2248,6 +2248,13 @@ async function pollInboundSrt() {
     if (readTabDot) readTabDot.className = readers.length ? 'dot dot-blue' : 'dot dot-gray';
 
     // 1. Render Publishers Table (Clean Broadcast Engineering Table)
+    const now = new Date();
+    const stamp = now.toLocaleTimeString('en-GB', { hour12: false });
+    const stampEl = document.getElementById('srt-last-updated');
+    const stampElR = document.getElementById('srt-last-updated-readers');
+    if (stampEl) stampEl.textContent = stamp;
+    if (stampElR) stampElR.textContent = stamp;
+
     const pubEmptyNotice = document.getElementById('inbound-empty-notice');
     const pubTableContainer = document.getElementById('inbound-table-container');
     const pubTbody = document.getElementById('inbound-tbody');
