@@ -123,6 +123,9 @@ sudo ufw allow 22/tcp    # administration
 sudo ufw allow 8080/tcp  # dashboard
 sudo ufw allow 8890/udp  # SRT ingest/egress
 sudo ufw allow 12105:12150/udp  # only if SLS or dedicated listeners are used
+sudo ufw allow 8888/tcp  # HLS preview
+sudo ufw allow 8889/udp  # WebRTC preview media (TCP 8889 only if direct WHEP is used)
+sudo ufw allow 1935/tcp  # only if RTMP ingest is used
 sudo ufw enable
 sudo ufw status verbose
 ```
