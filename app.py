@@ -43,9 +43,54 @@ DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS")
 if not os.environ.get("SECRET_KEY"):
     logging.getLogger(__name__).warning("SECRET_KEY is not set; sessions will be invalidated on restart.")
 if not DASHBOARD_PASS:
-    logging.getLogger(__name__).warning("DASHBOARD_PASS is not set; dashboard login is disabled.")
+    logging.getLogger(__name__).warning("DASHBOARD_PASS is not set; first-run setup will be required.")
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+from werkzeug.security import generate_password_hash, check_password_hash
+import hashlib
+
+# First-run setup: credentials are stored hashed in auth_config.json after the
+# operator completes the setup wizard. Until then, env defaults (if any) apply.
+AUTH_CONFIG_FILE = os.path.join(BASE_DIR, "auth_config.json")
+_auth_state_lock = threading.Lock()
+
+def load_auth_config():
+    if os.path.exists(AUTH_CONFIG_FILE):
+        try:
+            with open(AUTH_CONFIG_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data.get("password_hash") and data.get("setup_complete"):
+                    return data
+        except Exception:
+            pass
+    return None
+
+def save_auth_config(username, password):
+    data = {
+        "username": username.strip() or "admin",
+        "password_hash": generate_password_hash(password),
+        "setup_complete": True,
+        "updated_at": now_iso()
+    }
+    with _auth_state_lock:
+        tmp = AUTH_CONFIG_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, AUTH_CONFIG_FILE)
+        try:
+            os.chmod(AUTH_CONFIG_FILE, 0o600)
+        except Exception:
+            pass
+    return data
+
+def get_active_credentials():
+    cfg = load_auth_config()
+    if cfg:
+        return cfg.get("username", "admin"), cfg.get("password_hash"), True
+    return DASHBOARD_USER, DASHBOARD_PASS, False
+
 ROUTES_FILE = os.path.join(BASE_DIR, "routes.json")
 LEGACY_FORWARDS_FILE = os.path.join(BASE_DIR, "forwards.json")
 EVENTS_FILE = os.path.join(BASE_DIR, "events.json")
@@ -225,6 +270,10 @@ def get_route(route_id):
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
+        if not load_auth_config():
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "error": "Setup required", "setup_required": True}), 403
+            return redirect(url_for("first_run_setup"))
         if session.get("logged_in"):
             return view(*args, **kwargs)
         if request.path.startswith("/api/"):
@@ -1038,7 +1087,14 @@ def login():
         password = request.form.get("password", "").strip()
         remember = request.form.get("remember")
         client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-        if username == DASHBOARD_USER and password == DASHBOARD_PASS:
+        stored_user, stored_secret, is_hashed = get_active_credentials()
+        ok = False
+        if stored_user and username == stored_user:
+            if is_hashed and stored_secret:
+                ok = check_password_hash(stored_secret, password)
+            elif stored_secret is not None:
+                ok = (password == stored_secret)
+        if ok:
             session.permanent = bool(remember is not None)
             session["logged_in"] = True
             session["username"] = username
@@ -1049,6 +1105,29 @@ def login():
     if session.get("logged_in"):
         return redirect(url_for("index"))
     return render_template("login.html")
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def first_run_setup():
+    cfg = load_auth_config()
+    if cfg:
+        return redirect(url_for("login"))
+
+    env_user, env_pass, _ = DASHBOARD_USER, DASHBOARD_PASS, None
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip() or "admin"
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+        if len(password) < 8:
+            return render_template("setup.html", error="Password must be at least 8 characters.", username=username)
+        if password != confirm:
+            return render_template("setup.html", error="Passwords do not match.", username=username)
+        save_auth_config(username, password)
+        log_event("system", "Auth", "setup_complete", f"First-run setup completed; dashboard user '{username}' created", "info")
+        return redirect(url_for("login"))
+
+    return render_template("setup.html", username=(env_user if env_pass else "admin"))
 
 
 @app.route("/logout")
@@ -1830,7 +1909,6 @@ def api_clear_events():
     return jsonify({"ok": True, "message": "All events cleared successfully"})
 
 
-
 # Legacy forwarder API mapping for backward compatibility
 @app.route("/api/forwards", methods=["GET"])
 @login_required
@@ -2263,7 +2341,6 @@ def api_srt_inbound():
         "srt_port": port_info["port"],
         "server_host": host
     })
-
 
 
 # =========================================================================

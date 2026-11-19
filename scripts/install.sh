@@ -35,8 +35,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   install -m 600 -o root -g root "${APP_DIR}/.env.example" "${ENV_FILE}"
   SECRET=$(openssl rand -hex 32)
   sed -i "s/^SECRET_KEY=.*/SECRET_KEY=${SECRET}/" "${ENV_FILE}"
-  sed -i "s/^DASHBOARD_PASS=.*/DASHBOARD_PASS=change-this-password/" "${ENV_FILE}"
-  echo "Created ${ENV_FILE}. Change DASHBOARD_PASS before exposing the dashboard."
+  echo "Created ${ENV_FILE}. The dashboard setup wizard will ask for operator credentials on first visit."
 fi
 
 install -m 644 "${APP_DIR}/systemd/makasna-dashboard.service" /etc/systemd/system/makasna-dashboard.service

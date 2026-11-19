@@ -37,3 +37,4 @@ static/*.apk
 mobile-app/build/
 mobile-app/.dart_tool/
 recordings_meta.json
+auth_config.json

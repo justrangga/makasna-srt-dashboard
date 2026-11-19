@@ -136,7 +136,7 @@ sudoedit /etc/makasna-dashboard.env
 sudo systemctl restart makasna-dashboard
 ```
 
-Do not expose the dashboard before replacing `DASHBOARD_PASS` and setting a unique `SECRET_KEY`. Do not expose the MediaMTX API on the public interface.
+Do not expose the dashboard before completing the first-run setup wizard; it creates the operator account with a hashed password. Do not expose the MediaMTX API on the public interface.
 
 The repository also includes:
 

@@ -68,11 +68,13 @@ Minimum contents:
 PORT=8080
 SECRET_KEY=generate-a-long-random-value
 DASHBOARD_USER=admin
-DASHBOARD_PASS=replace-with-a-unique-password
+DASHBOARD_PASS=
 MEDIAMTX_API=http://127.0.0.1:9997
 MEDIAMTX_CONF=/etc/mediamtx/mediamtx.yml
 SERVER_PUBLIC_IP=203.0.113.10
 ```
+
+Leave `DASHBOARD_PASS` empty: the first dashboard visit opens a one-time setup wizard that asks for the operator username and password. The account is stored hashed in `auth_config.json` (mode `600`) and is used for every login afterwards; the wizard never appears again.
 
 Generate a strong secret with `openssl rand -hex 32`. Never commit the real `.env` or reuse example values in production.
 
