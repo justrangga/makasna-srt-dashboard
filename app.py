@@ -1217,6 +1217,29 @@ def index():
     return render_template("dashboard.html", user=session.get("username", "admin"), server_public_ip=pub_ip)
 
 
+@app.route("/diag")
+def diag_live():
+    """Public read-only diagnostic: shows what THIS server currently sees."""
+    try:
+        r = requests.get(f"{MEDIAMTX_API}/v3/paths/list", timeout=2)
+        items = r.json().get("items", []) if r.status_code == 200 else []
+        paths = [{"name": i.get("name"), "ready": i.get("ready")} for i in items]
+    except Exception:
+        paths = []
+    try:
+        r = requests.get(f"{MEDIAMTX_API}/v3/srtconns/list", timeout=2)
+        conns = r.json().get("items", []) if r.status_code == 200 else []
+        conns = [{"state": i.get("state"), "remote": i.get("remoteAddr"), "path": i.get("path")} for i in conns]
+    except Exception:
+        conns = []
+    return jsonify({
+        "ok": True,
+        "server_time": now_iso(),
+        "mediamtx_paths": paths,
+        "srt_connections": conns
+    })
+
+
 @app.route("/download/sop")
 def download_sop():
     sop_path = os.path.join(BASE_DIR, "static", "Makasna_SOP.pdf")
