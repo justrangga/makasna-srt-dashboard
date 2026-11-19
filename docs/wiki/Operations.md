@@ -15,7 +15,7 @@ Start a route only after its input is visible in the ingest monitor. Confirm the
 
 ## Backup
 
-Back up `routes.json`, `events.json`, `overlay_config.json`, and `/etc/makasna-dashboard.env`. Never put those files in a public issue, commit, wiki page, or chat message.
+Back up `routes.json`, `events.json`, and `/etc/makasna-dashboard.env`. Never put those files in a public issue, commit, wiki page, or chat message.
 
 ## Updates
 

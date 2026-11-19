@@ -41,18 +41,12 @@ Welcome to the **Makasna Broadcast Infrastructure Wiki**. This knowledge base pr
    - Solution B: **1:1 Dedicated Sockets (Ports 12106, 12107, etc.)**
    - Solution C: **MediaMTX Pull with Stream ID (Port 8890)**
 
-9. **[Master Deck ISO Recorder & Cloud Sync](Master-Deck-ISO-Recorder.md)**
-   - Frame-accurate segmenting (15m, 30m, 1h)
-   - MOV QuickTime (`+faststart`) vs MP4 Universal
-   - Clean SIGINT atom finalization
-   - Automated Google Drive chunked background upload
-
-10. **[Audio Monitoring & True Peak Metering](Audio-Monitoring-and-Metering.md)**
+9. **[Audio Monitoring & True Peak Metering](Audio-Monitoring-and-Metering.md)**
    - Dual-scale ballistics: dBFS (-60 to 0) & dBVU (-20 to +3)
    - Real-time Digital Clipping alert threshold
    - Auto MP2/AC3 to AAC transcoding for RTMP fan-out
 
-11. **[Port Reference & Network Security](Port-Reference-and-Firewall.md)**
+10. **[Port Reference & Network Security](Port-Reference-and-Firewall.md)**
    - UDP & TCP Port Table
    - Cloud Firewall / Security Group configuration
    - Latency buffer calculations based on RTT

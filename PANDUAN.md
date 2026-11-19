@@ -1,6 +1,6 @@
 # Makasna Live Video Transport Gateway — Operations Guide
 
-This guide covers day-to-day broadcast operations: field contribution, studio playout, failover, master recording, cloud archiving, and remote control.
+This guide covers day-to-day broadcast operations: field contribution, studio playout, failover, and remote control.
 
 > **New server?** Follow [INSTALL.md](INSTALL.md) first. This guide assumes the gateway is already installed and reachable.
 
@@ -12,10 +12,9 @@ This guide covers day-to-day broadcast operations: field contribution, studio pl
 2. [Field Contribution (Ingest Encoders)](#2-field-contribution-ingest-encoders)
 3. [Studio Playout (Downstream / Receivers)](#3-studio-playout-downstream--receivers)
 4. [Route Management & Failover](#4-route-management--failover)
-5. [Master Deck ISO Recorder & Cloud Archive](#5-master-deck-iso-recorder--cloud-archive)
-6. [Audio Monitoring & Clipping](#6-audio-monitoring--clipping)
-7. [Remote Android App](#7-remote-android-app)
-8. [Ports & Troubleshooting](#8-ports--troubleshooting)
+5. [Audio Monitoring & Clipping](#5-audio-monitoring--clipping)
+6. [Remote Android App](#6-remote-android-app)
+7. [Ports & Troubleshooting](#7-ports--troubleshooting)
 
 ---
 
@@ -25,8 +24,7 @@ The gateway is the transport layer for mission-critical live video.
 
 1. **Ingest:** field encoders push SRT caller streams to server port `8890` using `publish:STREAM_NAME` as the Stream ID.
 2. **Core:** MediaMTX receives the feed and exposes real-time telemetry (bitrate, loss, RTT) to the dashboard, which supervises route processes.
-3. **Egress:** the feed fans out to studio switchers (SRT caller/listener), SLS TV Pool decoders, RTMP platforms, and recorders simultaneously.
-4. **Master recording:** the ISO recorder runs independently, writing MP4/MOV segments with clean SIGINT finalization.
+3. **Egress:** the feed fans out to studio switchers (SRT caller/listener), SLS TV Pool decoders, and RTMP platforms simultaneously.
 
 ---
 
@@ -124,20 +122,7 @@ For an isolated point-to-point receiver:
 
 ---
 
-## 5. Master Deck ISO Recorder & Cloud Archive
-
-1. **Feed selection:** choose the camera via the *Feed Source* dropdown.
-2. **Container format:**
-   * **Universal MP4** for web and archival.
-   * **QuickTime MOV** with `+faststart` for direct NLE editing (DaVinci Resolve, Final Cut Pro, Premiere Pro).
-3. **Bitrate & resolution:** passthrough, 2.5/4.5/6/8/12 Mbps, or custom kbps; original, 1080p, or 720p.
-4. **Segment duration:** 15 minutes, 30 minutes, or 1 hour per file.
-5. **Clean stop:** the **STOP** button sends SIGINT to FFmpeg so MP4/MOV atoms close cleanly without corrupting the file.
-6. **Google Drive sync:** finished segments queue for background upload using 16 MB resumable chunks; Linux file locks prevent premature uploads of files still being written.
-
----
-
-## 6. Audio Monitoring & Clipping
+## 5. Audio Monitoring & Clipping
 
 1. **Real-time VU meters** appear on the web dashboard and remote app with peak-hold ballistics.
 2. **Scales:**
@@ -147,7 +132,7 @@ For an isolated point-to-point receiver:
 
 ---
 
-## 7. Remote Android App
+## 6. Remote Android App
 
 The standalone **Makasna Remote** app lets field crews control the server from a phone:
 
@@ -155,12 +140,11 @@ The standalone **Makasna Remote** app lets field crews control the server from a
 * **Direct download:** `http://SERVER_IP:8080/download/apk` or the app repository's GitHub Releases.
 * **Dynamic connection:** enter the server IP, HTTP port (8080), and SRT port (8890). Enable *Remember Login Session* for automatic reconnect.
 * **Signal tab:** monitor throughput, connected encoders, and create routes from active feeds.
-* **Recorder tab:** control master ISO recording with live timecode and format selection.
 * **Routes tab:** start, stop, create, and edit fan-out routes.
 
 ---
 
-## 8. Ports & Troubleshooting
+## 7. Ports & Troubleshooting
 
 | Port | Protocol | Service | Description |
 |:---:|:---:|:---|:---|

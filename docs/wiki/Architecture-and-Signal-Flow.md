@@ -4,7 +4,7 @@
 
 - **MediaMTX** accepts SRT, RTMP, and RTSP contributions and exposes local status through its API.
 - **Makasna Dashboard** authenticates operators, displays telemetry, stores route definitions, and supervises FFmpeg route processes.
-- **FFmpeg** relays, fan-outs, remuxes, transcodes when required, and records ISO output.
+- **FFmpeg** relays, fan-outs, remuxes, and transcodes when required.
 - **SLS** is optional. It serves a multi-client SRT TV Pool for receivers that cannot provide an SRT Stream ID.
 
 ## Normal signal path
@@ -12,7 +12,7 @@
 ```text
 Field encoder -> SRT publish:STREAM -> MediaMTX :8890
 MediaMTX -> Dashboard telemetry via localhost :9997
-Dashboard route -> FFmpeg -> receiver/CDN/recorder/SLS
+Dashboard route -> FFmpeg -> receiver/CDN/SLS
 SLS :12105 -> many caller-mode hardware receivers
 ```
 

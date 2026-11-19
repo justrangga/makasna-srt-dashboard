@@ -5,7 +5,7 @@ This guide installs the Makasna dashboard from a clean Ubuntu server. Prerequisi
 ## 1. Server Requirements
 
 - Ubuntu 22.04 or 24.04 (amd64 or arm64).
-- Minimum 2 vCPU, 4 GB RAM; add storage for recordings.
+- Minimum 2 vCPU, 4 GB RAM.
 - A public IP or firewall forwarding for SRT.
 - Root access via sudo.
 - MediaMTX v1.11+ installed and running with its API on `127.0.0.1:9997`.
@@ -148,8 +148,7 @@ Back up runtime state before changes:
 ```bash
 sudo tar -C /srv -czf /root/makasna-dashboard-backup-$(date +%F).tgz \
   makasna-dashboard/routes.json \
-  makasna-dashboard/events.json \
-  makasna-dashboard/overlay_config.json
+  makasna-dashboard/events.json
 sudo cp -a /etc/makasna-dashboard.env /root/makasna-dashboard.env.backup
 ```
 

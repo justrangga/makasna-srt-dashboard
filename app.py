@@ -50,87 +50,6 @@ ROUTES_FILE = os.path.join(BASE_DIR, "routes.json")
 LEGACY_FORWARDS_FILE = os.path.join(BASE_DIR, "forwards.json")
 EVENTS_FILE = os.path.join(BASE_DIR, "events.json")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
-RECORDINGS_DIR = os.path.join(BASE_DIR, "recordings")
-RECORDINGS_META_FILE = os.path.join(RECORDINGS_DIR, "recordings_meta.json")
-OVERLAY_CONFIG_FILE = os.path.join(BASE_DIR, "overlay_config.json")
-OVERLAYS_DIR = os.path.join(BASE_DIR, "static", "overlays")
-os.makedirs(LOGS_DIR, exist_ok=True)
-os.makedirs(RECORDINGS_DIR, exist_ok=True)
-os.makedirs(OVERLAYS_DIR, exist_ok=True)
-
-def load_recordings_meta():
-    if os.path.exists(RECORDINGS_META_FILE):
-        try:
-            with open(RECORDINGS_META_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def save_recordings_meta(meta):
-    try:
-        with open(RECORDINGS_META_FILE, "w") as f:
-            json.dump(meta, f, indent=2)
-    except Exception:
-        pass
-
-def scan_local_recordings():
-    meta = load_recordings_meta()
-    updated = False
-    routes_map = {}
-    routes_file = os.path.join(BASE_DIR, "routes.json")
-    if os.path.exists(routes_file):
-        try:
-            with open(routes_file, "r") as f:
-                rlist = json.load(f)
-                routes_map = {r.get("id"): r.get("name") for r in rlist}
-        except Exception:
-            pass
-
-    for root, dirs, files in os.walk(RECORDINGS_DIR):
-        for fname in files:
-            lower_fname = fname.lower()
-            if not (lower_fname.endswith(".mp4") or lower_fname.endswith(".mov")):
-                continue
-            fpath = os.path.join(root, fname)
-            try:
-                stat = os.stat(fpath)
-            except Exception:
-                continue
-
-            rel_dir = os.path.relpath(root, RECORDINGS_DIR)
-            route_id = rel_dir if rel_dir != "." else "general"
-            friendly_name = routes_map.get(route_id) or route_id.replace("route_", "").upper()
-            key = f"{route_id}/{fname}"
-
-            if key not in meta:
-                created_dt = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
-                meta[key] = {
-                    "id": key,
-                    "filename": fname,
-                    "filepath": fpath,
-                    "route_id": route_id,
-                    "route_name": friendly_name,
-                    "size_bytes": stat.st_size,
-                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "created_at": created_dt,
-                    "completed": True,
-                    "last_size": stat.st_size,
-                    "last_checked": time.time(),
-                    "gdrive_status": "local_only"
-                }
-                updated = True
-            else:
-                rec = meta[key]
-                if rec.get("size_bytes") != stat.st_size:
-                    rec["size_bytes"] = stat.st_size
-                    rec["size_mb"] = round(stat.st_size / (1024 * 1024), 2)
-                    updated = True
-
-    if updated:
-        save_recordings_meta(meta)
-    return meta
-
 # Rotating Audit & System Loggers
 AUDIT_LOG_FILE = os.path.join(LOGS_DIR, "system_audit.log")
 audit_handler = RotatingFileHandler(AUDIT_LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding="utf-8")
@@ -139,72 +58,6 @@ logger = logging.getLogger("makasna_gateway")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     logger.addHandler(audit_handler)
-
-DEFAULT_OVERLAY_CONFIG = {
-    "enabled": False,
-    "apply_to_egress": True,
-    "target_output": "none",
-    "layers": [
-        {
-            "id": 1,
-            "name": "Overlay 1",
-            "file": "",
-            "x_percent": 80.0,
-            "y_percent": 5.0,
-            "scale_percent": 15.0,
-            "opacity": 1.0,
-            "enabled": False
-        }
-    ]
-}
-
-def load_overlay_config():
-    cfg = DEFAULT_OVERLAY_CONFIG.copy()
-    if os.path.exists(OVERLAY_CONFIG_FILE):
-        try:
-            with open(OVERLAY_CONFIG_FILE, "r") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    cfg.update(data)
-        except Exception as e:
-            print(f"[OVERLAY] Error loading config: {e}", file=sys.stderr)
-
-    # Ensure layers list exists and has at least 1 layer without forcing default assets
-    if "layers" not in cfg or not isinstance(cfg.get("layers"), list) or len(cfg["layers"]) == 0:
-        cfg["layers"] = [
-            {
-                "id": 1,
-                "name": "Overlay 1",
-                "file": "",
-                "x_percent": 80.0,
-                "y_percent": 5.0,
-                "scale_percent": 15.0,
-                "opacity": 1.0,
-                "enabled": False
-            }
-        ]
-    return cfg
-
-def save_overlay_config(cfg):
-    try:
-        with open(OVERLAY_CONFIG_FILE, "w") as f:
-            json.dump(cfg, f, indent=2)
-        return True
-    except Exception as e:
-        print(f"[OVERLAY] Error saving config: {e}", file=sys.stderr)
-        return False
-
-def get_available_overlays():
-    files = []
-    if os.path.exists(OVERLAYS_DIR):
-        for f in sorted(os.listdir(OVERLAYS_DIR)):
-            if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-                files.append({
-                    "name": f,
-                    "url": f"/static/overlays/{f}",
-                    "path": os.path.join(OVERLAYS_DIR, f)
-                })
-    return files
 
 MEDIAMTX_API = os.environ.get("MEDIAMTX_API", "http://127.0.0.1:9997")
 MEDIAMTX_CONF = os.environ.get("MEDIAMTX_CONF", "/etc/mediamtx/mediamtx.yml")
@@ -220,8 +73,6 @@ MEDIAMTX_CONF = os.environ.get("MEDIAMTX_CONF", "/etc/mediamtx/mediamtx.yml")
 # }
 active_routes = {}
 active_routes_lock = threading.Lock()
-active_recorders = {}
-active_recorders_lock = threading.Lock()
 events_lock = threading.Lock()
 
 # Failover policies
@@ -550,28 +401,7 @@ def build_source_url(source_config):
     return f"rtsp://127.0.0.1:8554/{stream_id or 'live'}"
 
 
-def build_video_filters(dest, overlay_cfg=None, route_id=None, dest_idx=0):
-    if overlay_cfg is None:
-        overlay_cfg = load_overlay_config()
-
-    use_overlay = overlay_cfg.get("enabled", False)
-
-    # Output target selection check (default 'none' ensures all outputs have no overlay initially)
-    target_output = str(overlay_cfg.get("target_output", "none")).strip()
-    if not target_output or target_output == "none":
-        use_overlay = False
-    else:
-        # Match strictly against selected final destination: "route_<id>:<dest_idx>"
-        parts = target_output.split(":")
-        if len(parts) == 2:
-            target_r = parts[0].replace("route_", "").strip()
-            target_didx = parts[1].strip()
-            clean_rid = str(route_id or "").replace("route_", "").strip()
-            if clean_rid != target_r or str(dest_idx) != str(target_didx):
-                use_overlay = False
-        else:
-            use_overlay = False
-
+def build_video_filters(dest, route_id=None, dest_idx=0):
     scale = dest.get("scale", "original")
     scale_filter = None
     if scale == "1080p":
@@ -595,56 +425,7 @@ def build_video_filters(dest, overlay_cfg=None, route_id=None, dest_idx=0):
     if fps_filter:
         pre_filters.append(fps_filter)
 
-    if not use_overlay:
-        return ",".join(pre_filters) if pre_filters else None
-
-    def resolve_path(p):
-        if not p:
-            return ""
-        if p.startswith("/static/"):
-            return os.path.join(BASE_DIR, p.lstrip("/"))
-        return p
-
-    # Collect active layers (supports dynamic list up to 4 layers)
-    layers = overlay_cfg.get("layers", [])
-    if not layers:
-        for k in ("overlay_1", "overlay_2", "overlay_3", "overlay_4"):
-            if k in overlay_cfg:
-                layers.append(overlay_cfg[k])
-
-    active_layers = []
-    for l in layers:
-        fpath = resolve_path(l.get("file", ""))
-        if l.get("enabled", False) and fpath and os.path.exists(fpath):
-            active_layers.append((l, fpath))
-
-    if not active_layers:
-        return ",".join(pre_filters) if pre_filters else None
-
-    filter_parts = []
-    last_label = "in"
-
-    if pre_filters:
-        filter_parts.append(f"[in]{','.join(pre_filters)}[v_pre]")
-        last_label = "v_pre"
-
-    base_w = 1280 if scale == "720p" else 1920
-    for idx, (ov, fpath) in enumerate(active_layers):
-        scale_pct = float(ov.get("scale_percent", 15.0)) / 100.0
-        w_px = max(20, int(base_w * scale_pct))
-        opacity = max(0.1, min(1.0, float(ov.get("opacity", 1.0))))
-        x_pct = float(ov.get("x_percent", 80.0)) / 100.0
-        y_pct = float(ov.get("y_percent", 5.0)) / 100.0
-
-        ov_tag = f"ov{idx+1}"
-        filter_parts.append(f"movie='{fpath}',scale={w_px}:-1,format=rgba,colorchannelmixer=aa={opacity}[{ov_tag}]")
-
-        is_last = (idx == len(active_layers) - 1)
-        next_label = "out" if is_last else f"tmp_ov{idx+1}"
-        filter_parts.append(f"[{last_label}][{ov_tag}]overlay=W*{x_pct:.4f}:H*{y_pct:.4f}[{next_label}]")
-        last_label = next_label
-
-    return ";".join(filter_parts) if filter_parts else None
+    return ",".join(pre_filters) if pre_filters else None
 
 
 def build_ffmpeg_cmd(route, source_config):
@@ -678,8 +459,6 @@ def build_ffmpeg_cmd(route, source_config):
             "-f", "flv",
             f"rtmp://127.0.0.1:1935/{stream_path}"
         ])
-
-    overlay_cfg = load_overlay_config()
 
     # 2. Fan-out to all configured Destinations
     for dest_idx, dest in enumerate(route.get("destinations", [])):
@@ -794,7 +573,7 @@ def build_ffmpeg_cmd(route, source_config):
         else:
             cmd.extend(["-map", "0:a:0?"])
 
-        vf = build_video_filters(dest, overlay_cfg=overlay_cfg, route_id=route_id, dest_idx=dest_idx)
+        vf = build_video_filters(dest, route_id=route_id, dest_idx=dest_idx)
 
         if vf or v_mode == "transcode":
             v_codec = dest.get("video_codec", "libx264")
@@ -876,232 +655,7 @@ def build_ffmpeg_cmd(route, source_config):
     return cmd
 
 
-def start_route_recording(route_id, options=None):
-    opts = options or {}
-    target_id = str(route_id).strip()
-    is_inbound = target_id.startswith("inbound:") or target_id.startswith("inbound_")
-
-    if is_inbound:
-        if target_id.startswith("inbound:"):
-            stream_name = target_id.split("inbound:", 1)[1].strip()
-        else:
-            stream_name = target_id.split("inbound_", 1)[1].strip()
-
-        paths = get_mediamtx_paths()
-        path_names = [p.get("name") for p in paths if isinstance(p, dict)]
-        if stream_name not in path_names:
-            return False, f"Inbound stream '{stream_name}' is not active in MediaMTX."
-
-        route_name = f"Inbound: {stream_name}"
-        route_safe_id = f"inbound_{stream_name}"
-        input_url = f"rtsp://127.0.0.1:8554/{stream_name}"
-        route = None
-    else:
-        rid = target_id.replace("route:", "").strip()
-        with active_routes_lock:
-            if rid not in active_routes:
-                return False, "Route is not running. Please start the route before recording."
-
-        routes = load_routes()
-        route = next((r for r in routes if r["id"] == rid), None)
-        if not route:
-            return False, "Route not found."
-
-        route_name = route["name"]
-        route_safe_id = rid
-        input_url = f"rtmp://127.0.0.1:1935/route_{rid}"
-
-    with active_recorders_lock:
-        if route_safe_id in active_recorders:
-            info = active_recorders[route_safe_id]
-            if info.get("proc") and info["proc"].poll() is None:
-                return True, "Recording is already active."
-
-    rec_dir = os.path.join(RECORDINGS_DIR, route_safe_id)
-    os.makedirs(rec_dir, exist_ok=True)
-
-    seg_time = int(opts.get("record_duration") or (route.get("record_duration") if route else 900) or 900)
-    rec_mode = opts.get("record_mode") or (route.get("record_mode") if route else "compress") or "compress"
-    rec_format = str(opts.get("record_format") or "mp4").lower().strip()
-    if rec_format not in ("mp4", "mov"):
-        rec_format = "mp4"
-
-    rec_vbitrate = int(opts.get("record_vbitrate") or (route.get("record_vbitrate") if route else 2000) or 2000)
-    rec_scale = str(opts.get("record_scale") or (route.get("record_scale") if route else "original") or "original").lower().strip()
-    custom_w = opts.get("custom_w")
-    custom_h = opts.get("custom_h")
-    rec_fps = str(opts.get("record_fps") or (route.get("record_fps") if route else "original") or "original").strip()
-    rec_preset = opts.get("record_preset") or (route.get("record_preset") if route else "veryfast") or "veryfast"
-    rec_abitrate = int(opts.get("record_abitrate") or (route.get("record_abitrate") if route else 128) or 128)
-
-    cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y"
-    ]
-    if input_url.startswith("rtsp:"):
-        cmd.extend(["-rtsp_transport", "tcp"])
-    else:
-        cmd.extend(["-rw_timeout", "5000000"])
-
-    cmd.extend([
-        "-i", input_url,
-        "-map", "0:v:0?",
-        "-map", "0:a:0?"
-    ])
-
-    if rec_mode == "copy" and rec_scale in ("original", ""):
-        cmd.extend(["-c:v", "copy"])
-    else:
-        rec_filters = []
-        if rec_scale == "custom" and custom_w and custom_h:
-            try:
-                w = (int(custom_w) // 2) * 2
-                h = (int(custom_h) // 2) * 2
-                if w > 0 and h > 0:
-                    rec_filters.append(f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2")
-            except Exception:
-                pass
-        elif rec_scale == "4k":
-            rec_filters.append("scale=3840:2160:force_original_aspect_ratio=decrease,pad=3840:2160:(ow-iw)/2:(oh-ih)/2")
-        elif rec_scale == "1080p":
-            rec_filters.append("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2")
-        elif rec_scale == "720p":
-            rec_filters.append("scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2")
-        elif rec_scale == "480p":
-            rec_filters.append("scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2")
-
-        if rec_fps in ("25", "30", "50", "60"):
-            rec_filters.append(f"fps={rec_fps}")
-
-        if rec_filters:
-            cmd.extend(["-vf", ",".join(rec_filters)])
-
-        max_b = int(rec_vbitrate * 1.2)
-        buf_b = int(rec_vbitrate * 2)
-        cmd.extend([
-            "-c:v", "libx264",
-            "-preset", rec_preset,
-            "-b:v", f"{rec_vbitrate}k",
-            "-maxrate", f"{max_b}k",
-            "-bufsize", f"{buf_b}k",
-            "-pix_fmt", "yuv420p"
-        ])
-
-    ext = rec_format
-    cmd.extend([
-        "-c:a", "aac",
-        "-b:a", f"{rec_abitrate}k",
-        "-ar", "48000",
-        "-f", "segment",
-        "-segment_time", str(seg_time),
-        "-segment_format", ext,
-        "-reset_timestamps", "1",
-        "-strftime", "1",
-        "-movflags", "+faststart",
-        os.path.join(rec_dir, f"rec_{route_safe_id}_%Y%m%d_%H%M%S.{ext}")
-    ])
-
-    log_file_path = os.path.join(LOGS_DIR, f"record_{route_safe_id}.log")
-    log_fp = open(log_file_path, "a")
-    log_fp.write(f"\n--- Starting Master ISO Recording for '{route_name}' ({ext.upper()}) at {now_iso()} ---\n")
-    log_fp.write("CMD: " + " ".join(cmd) + "\n\n")
-    log_fp.flush()
-
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log_fp,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True
-        )
-    except Exception as e:
-        log_fp.close()
-        log_event(route_safe_id, route_name, "record_error", f"Failed to spawn master recording: {e}", "error")
-        return False, str(e)
-
-    with active_recorders_lock:
-        active_recorders[route_safe_id] = {
-            "proc": proc,
-            "started_at": time.time(),
-            "route_id": route_safe_id,
-            "target_id": target_id,
-            "route_name": route_name,
-            "log_file": log_file_path,
-            "log_fp": log_fp,
-            "seg_time": seg_time,
-            "format": ext,
-            "mode": rec_mode,
-            "bitrate": rec_vbitrate,
-            "scale": rec_scale,
-            "fps": rec_fps
-        }
-
-    if route:
-        route["record_enabled"] = True
-        save_routes(routes)
-
-    log_event(route_safe_id, route_name, "record_start", f"Master ISO recording started for '{route_name}' [{ext.upper()}] (PID {proc.pid})", "info")
-    return True, None
-
-
-def stop_route_recording(route_id):
-    target_id = str(route_id).strip()
-    route_safe_id = target_id.replace("route:", "").replace("inbound:", "inbound_").strip()
-    with active_recorders_lock:
-        info = active_recorders.get(route_safe_id) or active_recorders.get(target_id)
-        if not info:
-            routes = load_routes()
-            route = next((r for r in routes if r["id"] == route_safe_id), None)
-            if route and route.get("record_enabled"):
-                route["record_enabled"] = False
-                save_routes(routes)
-            return True, "Recording was not active."
-
-        # Key used in dict
-        rec_key = route_safe_id if route_safe_id in active_recorders else target_id
-        proc = info.get("proc")
-        if proc and proc.poll() is None:
-            try:
-                proc.send_signal(signal.SIGINT)
-                proc.wait(timeout=4)
-            except Exception:
-                try:
-                    proc.terminate()
-                    proc.wait(timeout=2)
-                except Exception:
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
-
-        log_fp = info.get("log_fp")
-        if log_fp:
-            try:
-                log_fp.close()
-            except Exception:
-                pass
-
-        rname = info.get("route_name", route_safe_id)
-        del active_recorders[rec_key]
-
-    routes = load_routes()
-    route = next((r for r in routes if r["id"] == route_safe_id), None)
-    if route:
-        route["record_enabled"] = False
-        save_routes(routes)
-
-    try:
-        scan_local_recordings()
-    except Exception:
-        pass
-
-    log_event(route_safe_id, rname, "record_stop", f"Master ISO recording stopped for '{rname}'", "info")
-    return True, None
-
-
-
 def stop_route_process(route_id):
-    stop_route_recording(route_id)
     with active_routes_lock:
         info = active_routes.get(route_id)
         if not info:
@@ -1214,14 +768,6 @@ def start_route_process(route, source_type="primary"):
         }
 
     log_event(route_id, route["name"], "started", f"Route started with {source_type} source (PID {proc.pid})")
-
-    if route.get("record_enabled"):
-        def auto_start_rec(rid):
-            time.sleep(1.5)
-            with active_routes_lock:
-                if rid in active_routes:
-                    start_route_recording(rid)
-        threading.Thread(target=auto_start_rec, args=(route_id,), daemon=True).start()
 
     return True, None
 
@@ -1542,20 +1088,6 @@ def index():
     return render_template("dashboard.html", user=session.get("username", "admin"), server_public_ip=pub_ip)
 
 
-@app.route("/download/booklet")
-@app.route("/download/sop")
-def download_booklet():
-    pdf_path = os.path.join(BASE_DIR, "static", "MAKASNA_SOP_PENGOPERASIAN_SISTEM.pdf")
-    if os.path.exists(pdf_path):
-        return send_from_directory(
-            os.path.join(BASE_DIR, "static"),
-            "MAKASNA_SOP_PENGOPERASIAN_SISTEM.pdf",
-            as_attachment=True,
-            mimetype="application/pdf"
-        )
-    return ("SOP document not found", 404)
-
-
 @app.route("/download/apk")
 def download_apk():
     apk_path = os.path.join(BASE_DIR, "static", "makasna-remote.apk")
@@ -1608,17 +1140,6 @@ def api_list_routes():
                 r["status"] = "STOPPED"
                 r["current_active_source"] = r.get("active_source", "primary")
                 r["stats"] = None
-
-            with active_recorders_lock:
-                rec_info = active_recorders.get(rid)
-                if rec_info and rec_info.get("proc") and rec_info["proc"].poll() is None:
-                    r["is_recording"] = True
-                    r["recording_elapsed_sec"] = int(time.time() - rec_info.get("started_at", time.time()))
-                    r["recording_started_at"] = rec_info.get("started_at", 0)
-                else:
-                    r["is_recording"] = False
-                    r["recording_elapsed_sec"] = 0
-                    r["recording_started_at"] = 0
     return jsonify({"ok": True, "routes": routes})
 
 
@@ -1696,14 +1217,6 @@ def api_create_route():
         "primary_source": primary_source,
         "secondary_source": secondary_source,
         "destinations": destinations,
-        "record_enabled": bool(data.get("record_enabled", False)),
-        "record_duration": int(data.get("record_duration", 900)),
-        "record_mode": data.get("record_mode", "compress"),
-        "record_vbitrate": int(data.get("record_vbitrate", 2000)),
-        "record_scale": data.get("record_scale", "720p"),
-        "record_fps": data.get("record_fps", "original"),
-        "record_abitrate": int(data.get("record_abitrate", 128)),
-        "record_preset": data.get("record_preset", "veryfast"),
         "created_at": now_iso(),
         "updated_at": now_iso()
     }
@@ -1762,22 +1275,6 @@ def api_update_route(route_id):
         r["failover_policy"] = data["failover_policy"]
     if "destinations" in data:
         r["destinations"] = data["destinations"]
-    if "record_enabled" in data:
-        r["record_enabled"] = bool(data["record_enabled"])
-    if "record_duration" in data:
-        r["record_duration"] = int(data["record_duration"])
-    if "record_mode" in data:
-        r["record_mode"] = data["record_mode"]
-    if "record_vbitrate" in data:
-        r["record_vbitrate"] = int(data["record_vbitrate"])
-    if "record_scale" in data:
-        r["record_scale"] = data["record_scale"]
-    if "record_fps" in data:
-        r["record_fps"] = data["record_fps"]
-    if "record_abitrate" in data:
-        r["record_abitrate"] = int(data["record_abitrate"])
-    if "record_preset" in data:
-        r["record_preset"] = data["record_preset"]
     r["updated_at"] = now_iso()
     r["running"] = True
     r["status"] = "RUNNING"
@@ -1904,205 +1401,6 @@ def get_safe_json():
     if request.form:
         return dict(request.form)
     return {}
-
-
-@app.route("/api/routes/<path:route_id>/record/start", methods=["POST"])
-@login_required
-def api_route_record_start(route_id):
-    opts = get_safe_json()
-    ok, err = start_route_recording(route_id, options=opts)
-    if not ok:
-        return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "Master ISO recording started"})
-
-
-@app.route("/api/routes/<path:route_id>/record/stop", methods=["POST"])
-@login_required
-def api_route_record_stop(route_id):
-    ok, err = stop_route_recording(route_id)
-    if not ok:
-        return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "Master ISO recording stopped"})
-
-
-@app.route("/api/routes/<path:route_id>/record/status", methods=["GET"])
-@login_required
-def api_route_record_status(route_id):
-    route_safe_id = str(route_id).replace("route:", "").replace("inbound:", "inbound_").strip()
-    with active_recorders_lock:
-        info = active_recorders.get(route_safe_id) or active_recorders.get(route_id)
-        if info and info.get("proc") and info["proc"].poll() is None:
-            elapsed = int(time.time() - info.get("started_at", time.time()))
-            return jsonify({
-                "ok": True,
-                "is_recording": True,
-                "started_at": info.get("started_at"),
-                "elapsed_sec": elapsed,
-                "format": info.get("format", "mp4"),
-                "mode": info.get("mode"),
-                "bitrate": info.get("bitrate"),
-                "scale": info.get("scale"),
-                "fps": info.get("fps"),
-                "seg_time": info.get("seg_time")
-            })
-    return jsonify({
-        "ok": True,
-        "is_recording": False,
-        "elapsed_sec": 0
-    })
-
-
-@app.route("/api/record/start", methods=["POST"])
-@login_required
-def api_direct_record_start():
-    opts = get_safe_json()
-    target_id = opts.get("target_id") or opts.get("route_id") or ""
-    if not target_id:
-        with active_routes_lock:
-            # If there is an active running route or inbound
-            pass
-    if not target_id:
-        return jsonify({"ok": False, "error": "target_id or route_id is required"}), 400
-    ok, err = start_route_recording(target_id, options=opts)
-    if not ok:
-        return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "Master ISO recording started"})
-
-
-@app.route("/api/record/stop", methods=["POST"])
-@login_required
-def api_direct_record_stop():
-    opts = get_safe_json()
-    target_id = opts.get("target_id") or opts.get("route_id") or ""
-    if not target_id:
-        with active_recorders_lock:
-            if len(active_recorders) == 1:
-                target_id = list(active_recorders.keys())[0]
-            elif len(active_recorders) > 1:
-                stopped = []
-                for k in list(active_recorders.keys()):
-                    stop_route_recording(k)
-                    stopped.append(k)
-                return jsonify({"ok": True, "message": f"Stopped {len(stopped)} active recordings"})
-    if not target_id:
-        return jsonify({"ok": False, "error": "target_id or route_id is required"}), 400
-    ok, err = stop_route_recording(target_id)
-    if not ok:
-        return jsonify({"ok": False, "error": err}), 400
-    return jsonify({"ok": True, "message": "Master ISO recording stopped"})
-
-
-# =========================================================================
-# OVERLAY & STATION ID REST API
-# =========================================================================
-@app.route("/api/overlay/config", methods=["GET"])
-@login_required
-def api_get_overlay_config():
-    cfg = load_overlay_config()
-    assets = get_available_overlays()
-    return jsonify({
-        "ok": True,
-        "config": cfg,
-        "assets": assets
-    })
-
-
-@app.route("/api/overlay/save", methods=["POST"])
-@login_required
-def api_save_overlay():
-    data = get_safe_json()
-    cfg = load_overlay_config()
-    for k, v in data.items():
-        if k == "layers" and isinstance(v, list):
-            cfg["layers"] = v
-        elif isinstance(v, dict) and k in cfg and isinstance(cfg[k], dict):
-            cfg[k].update(v)
-        else:
-            cfg[k] = v
-    if save_overlay_config(cfg):
-        # Hot-restart active running routes so overlay changes take effect immediately on live streams
-        routes_to_restart = []
-        with active_routes_lock:
-            for rid, info in active_routes.items():
-                if info.get("proc") and info["proc"].poll() is None:
-                    src = info.get("active_source", "primary")
-                    routes_to_restart.append((rid, src))
-
-        for rid, src in routes_to_restart:
-            r = get_route(rid)
-            if r:
-                stop_route_process(rid)
-                time.sleep(0.4)
-                start_route_process(r, source_type=src)
-        return jsonify({"ok": True, "message": "Overlay configuration saved successfully", "config": cfg})
-    return jsonify({"ok": False, "error": "Failed to save overlay configuration"}), 500
-
-
-@app.route("/api/overlay/safety-off", methods=["POST"])
-@login_required
-def api_safety_off_overlay():
-    cfg = load_overlay_config()
-    cfg["enabled"] = False
-    cfg["target_output"] = "none"
-    for l in cfg.get("layers", []):
-        l["enabled"] = False
-    if save_overlay_config(cfg):
-        # Restart active running routes immediately to remove overlay from live streams
-        routes_to_restart = []
-        with active_routes_lock:
-            for rid, info in active_routes.items():
-                if info.get("proc") and info["proc"].poll() is None:
-                    src = info.get("active_source", "primary")
-                    routes_to_restart.append((rid, src))
-
-        for rid, src in routes_to_restart:
-            r = get_route(rid)
-            if r:
-                stop_route_process(rid)
-                time.sleep(0.4)
-                start_route_process(r, source_type=src)
-        return jsonify({"ok": True, "message": "All overlays disabled for safety", "config": cfg})
-    return jsonify({"ok": False, "error": "Failed to disable overlays"}), 500
-
-
-@app.route("/api/overlay/upload", methods=["POST"])
-@login_required
-def api_upload_overlay():
-    if "file" not in request.files:
-        return jsonify({"ok": False, "error": "No file uploaded"}), 400
-    file = request.files["file"]
-    layer = str(request.form.get("layer", "1")).strip()
-    if not file or file.filename == "":
-        return jsonify({"ok": False, "error": "Empty filename"}), 400
-
-    filename = secure_filename(file.filename)
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in (".png", ".webp", ".jpg", ".jpeg"):
-        return jsonify({"ok": False, "error": "Only image files (.png, .webp, .jpg) are supported"}), 400
-
-    save_name = f"overlay_{layer}_{int(time.time())}{ext}"
-    save_path = os.path.join(OVERLAYS_DIR, save_name)
-    file.save(save_path)
-
-    web_path = f"/static/overlays/{save_name}"
-    cfg = load_overlay_config()
-
-    # Update layer in layers list
-    layers = cfg.get("layers", [])
-    found = False
-    for l in layers:
-        if str(l.get("id")) == layer or f"overlay_{l.get('id')}" == layer:
-            l["file"] = web_path
-            l["enabled"] = True
-            found = True
-            break
-    if not found and layers:
-        layers[0]["file"] = web_path
-        layers[0]["enabled"] = True
-
-    save_overlay_config(cfg)
-
-    return jsonify({"ok": True, "file": web_path, "layer": layer, "config": cfg, "assets": get_available_overlays()})
 
 
 @app.route("/api/routes/<route_id>/switch-source", methods=["POST"])
@@ -2969,96 +2267,6 @@ def api_srt_inbound():
 
 
 # =========================================================================
-# Local Recording Management APIs
-# =========================================================================
-@app.route("/api/recordings", methods=["GET"])
-@login_required
-def api_list_recordings():
-    meta = scan_local_recordings()
-    disk = psutil.disk_usage(RECORDINGS_DIR)
-    recordings_list = sorted(list(meta.values()), key=lambda x: x.get("created_at", ""), reverse=True)
-
-    active_rec_dict = {}
-    with active_recorders_lock:
-        for rid, info in active_recorders.items():
-            if info.get("proc") and info["proc"].poll() is None:
-                active_rec_dict[rid] = {
-                    "route_id": rid,
-                    "target_id": info.get("target_id", rid),
-                    "route_name": info.get("route_name"),
-                    "started_at": info.get("started_at"),
-                    "elapsed_sec": int(time.time() - info.get("started_at", time.time())),
-                    "format": info.get("format", "mp4"),
-                    "mode": info.get("mode"),
-                    "bitrate": info.get("bitrate"),
-                    "scale": info.get("scale"),
-                    "fps": info.get("fps"),
-                    "seg_time": info.get("seg_time")
-                }
-
-    return jsonify({
-        "ok": True,
-        "recordings": recordings_list,
-        "active_recorders": active_rec_dict,
-        "disk": {
-            "total_gb": round(disk.total / (1024**3), 1),
-            "used_gb": round(disk.used / (1024**3), 1),
-            "free_gb": round(disk.free / (1024**3), 1),
-            "percent": disk.percent
-        }
-    })
-
-
-@app.route("/api/recordings/download/<path:rel_path>", methods=["GET"])
-@login_required
-def api_download_recording(rel_path):
-    directory = os.path.dirname(os.path.join(RECORDINGS_DIR, rel_path))
-    filename = os.path.basename(rel_path)
-    if not os.path.exists(os.path.join(directory, filename)):
-        return "File not found", 404
-    return send_from_directory(directory, filename, as_attachment=True)
-
-
-@app.route("/api/recordings/upload-now/<path:rel_path>", methods=["POST"])
-@login_required
-def api_upload_recording_now(rel_path):
-    fpath = os.path.join(RECORDINGS_DIR, rel_path)
-    if not os.path.exists(fpath):
-        return jsonify({"ok": False, "error": "Local file not found"}), 404
-
-    meta = load_recordings_meta()
-    key = rel_path
-    if key not in meta:
-        meta = scan_local_recordings()
-
-    if key in meta:
-        rec = meta[key]
-        rec["completed"] = True
-        rec["gdrive_status"] = "local_only"
-        save_recordings_meta(meta)
-        return jsonify({"ok": True, "message": "Recording marked as local archive."})
-    else:
-        return jsonify({"ok": False, "error": "Recording metadata not found"}), 404
-
-
-@app.route("/api/recordings/<path:rel_path>", methods=["DELETE"])
-@login_required
-def api_delete_recording(rel_path):
-    fpath = os.path.join(RECORDINGS_DIR, rel_path)
-    if os.path.exists(fpath):
-        try:
-            os.remove(fpath)
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
-
-    meta = load_recordings_meta()
-    if rel_path in meta:
-        del meta[rel_path]
-        save_recordings_meta(meta)
-
-    return jsonify({"ok": True, "message": "Recording deleted"})
-
-
 @atexit.register
 def cleanup_all():
     with active_routes_lock:

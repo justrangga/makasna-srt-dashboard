@@ -3,15 +3,13 @@
 </p>
 
 <p align="center">
-  <b>Enterprise SRT Live Video Transport Gateway, Failover Switching, Master Deck ISO Recorder &amp; Multi-Destination Playout Engine</b>
+  <b>Enterprise SRT Live Video Transport Gateway, Failover Switching & Multi-Destination Playout Engine</b>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/SRT-Reliable%20Transport-00E5FF?style=flat-square" alt="SRT" />
   <img src="https://img.shields.io/badge/MediaMTX-v1.11+-3B82F6?style=flat-square" alt="MediaMTX" />
   <img src="https://img.shields.io/badge/FFmpeg-Transcode%20%26%20ISO%20Rec-F59E0B?style=flat-square" alt="FFmpeg" />
-  <img src="https://img.shields.io/badge/Master%20Deck-Broadcast%20Console-EF4444?style=flat-square" alt="Master Deck" />
-  <img src="https://img.shields.io/badge/Google%20Drive-Chunked%20Upload-10B981?style=flat-square" alt="Google Drive" />
   <img src="https://img.shields.io/badge/Flutter-Mobile%20Remote-02569B?style=flat-square" alt="Flutter" />
 </p>
 
@@ -19,7 +17,7 @@
 
 ## Technical Overview & Architecture
 
-**Makasna Live Video Transport Gateway** is an enterprise broadcast gateway built on Python/Flask, MediaMTX, and FFmpeg. The platform is designed for mission-critical video contribution, hot-standby failover switching, real-time audio/video transcoding, sub-second latency monitoring, multi-destination fan-out distribution, and automated ISO recording with Google Drive cloud archiving.
+**Makasna Live Video Transport Gateway** is an enterprise broadcast gateway built on Python/Flask, MediaMTX, and FFmpeg. The platform is designed for mission-critical video contribution, hot-standby failover switching, real-time audio/video transcoding, sub-second latency monitoring, and multi-destination fan-out distribution.
 
 ```
                   ┌────────────────────────────────────────────────────────┐
@@ -48,11 +46,11 @@
                        │                                       │                                       │
                        ▼                                       ▼                                       ▼
         ┌──────────────────────────────┐        ┌──────────────────────────────┐        ┌──────────────────────────────┐
-        │   MULTI-DESTINATION FAN-OUT  │        │   SEGMENTED ISO RECORDING    │        │   OPERATOR PREVIEW & AUDIT   │
-        │   • SRT Caller / Listener    │        │   • 15m / 30m / 1h Segments  │        │   • fMP4 HLS Buffer (12s)    │
-        │   • RTMP / RTMPS / CDN       │        │   • Clean SIGINT Atom Closure│        │   • WebRTC Sub-Second (<0.3s)│
-        │   • UDP MPEG-TS / RTSP       │        │   • Google Service Account   │        │   • Same-Origin Proxy        │
-        │   • Auto MP2->AAC Transcode  │        │   • Chunked 16MB Background  │        │   • Audio Digital Clip Alert │
+        │   MULTI-DESTINATION FAN-OUT  │        │  SLS TV POOL HUB (12105)     │        │   OPERATOR PREVIEW & AUDIT   │
+        │   • SRT Caller / Listener    │        │   • Dozens of Simultaneous   │        │   • fMP4 HLS Buffer (12s)    │
+        │   • RTMP / RTMPS / CDN       │        │   • Decoder Pulls (No Stream │        │   • WebRTC Sub-Second (<0.3s)│
+        │   • UDP MPEG-TS / RTSP       │        │   • ID Required) + Live      │        │   • Same-Origin Proxy        │
+        │   • Auto MP2->AAC Transcode  │        │   • Client Telemetry         │        │   • Audio Digital Clip Alert │
         └──────────────────────────────┘        └──────────────────────────────┘        └──────────────────────────────┘
 ```
 
@@ -88,28 +86,13 @@
 * **Single Dedicated Listeners (Ports 12106, 12107, etc.):**
   * Point-to-point 1:1 dedicated SRT listener sockets for specialized downlinks and independent studio receivers.
 
-### 3. Master Deck ISO Recorder Console
-* **Broadcast Rack-Mount Style Console:**
-  * **16:9 Confidence Monitor:** Real-time low-latency fMP4 HLS preview with automatic SMPTE color bars during standby.
-  * **Broadcast OSD & Timecode:** Mode indicator (`● REC` / `● STBY`), stream metrics, input label, and monospace running timecode (`00:00:00:00`).
-  * **True Peak Audio VU Meters:** Real-time dual/quad audio meters with dBFS and dBVU scales, peak-hold needles, and red Digital Clipping indicators.
-  * **Dual Media Bays:** 
-    * **Slot 1 (Local Storage):** Free space calculation, real-time disk usage bar, and estimated recording hours remaining.
-    * **Slot 2 (Cloud Archive):** Google Drive connection status and automated chunked background upload worker.
-  * **Tactile Controls [ ● RECORD ] & [ ■ STOP ]:** Clean SIGINT process finalization ensuring MP4/MOV moov atom integrity without file corruption.
-* **Flexible Compression & Container Options:**
-  * Container formats: **Universal MP4** (`-segment_format mp4`) and **QuickTime MOV** (`-segment_format mov`).
-  * Bitrate controls: **Passthrough (Bitstream Copy)**, **2.5 Mbps**, **4.5 Mbps**, **6.0 Mbps**, **8.0 Mbps**, **12.0 Mbps**, or **Custom Bitrate**.
-  * Resolution control: Original source passthrough, 1080p Full HD, or 720p HD.
-
-### 4. Remote Android Controller Application
+### 3. Remote Android Controller Application
 * **Standalone Mobile App Repository:** [justrangga/makasna-remote-controller](https://github.com/justrangga/makasna-remote-controller)
 * **Direct APK Download:** Available at `/download/apk` or from the dedicated mobile app repository release.
 * **Key Capabilities:**
   * Dynamic IP & Port onboarding with persistent session caching (Auto-Connect).
   * Real-time Ingest Signal Monitor with 1-click URL copying and route generation.
   * Complete Route Management CRUD (Create, Edit, Delete, Start/Stop).
-  * Remote Master ISO Recording controls with live timecode sync and format selection.
   * Multi-channel Audio VU Meter with dBVU (-20 to +3 VU) and dBFS (-60 to 0 dBFS) scales.
   * Built-in Broadcast Technical Guide for OBS Studio, vMix, and field encoders.
 
@@ -176,7 +159,6 @@ The repository also includes:
 | `/api/routes/<id>/stop` | `POST` | Stop active route execution cleanly |
 | `/api/srt/inbound` | `GET` | List active inbound SRT publishers and connected readers (including SLS) |
 | `/api/sls/stat` | `POST` | Webhook endpoint for SLS daemon live player statistics |
-| `/api/recordings` | `GET` | List recorded ISO files and storage usage |
 | `/download/apk` | `GET` | Download latest Makasna Remote Android APK |
 
 ---
