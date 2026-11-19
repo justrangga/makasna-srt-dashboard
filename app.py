@@ -56,24 +56,7 @@ import hashlib
 AUTH_CONFIG_FILE = os.path.join(BASE_DIR, "auth_config.json")
 _auth_state_lock = threading.Lock()
 
-def load_auth_config():
-    if os.path.exists(AUTH_CONFIG_FILE):
-        try:
-            with open(AUTH_CONFIG_FILE, "r") as f:
-                data = json.load(f)
-                if isinstance(data, dict) and data.get("password_hash") and data.get("setup_complete"):
-                    return data
-        except Exception:
-            pass
-    return None
-
-def save_auth_config(username, password):
-    data = {
-        "username": username.strip() or "admin",
-        "password_hash": generate_password_hash(password),
-        "setup_complete": True,
-        "updated_at": now_iso()
-    }
+def _write_auth_config(data):
     with _auth_state_lock:
         tmp = AUTH_CONFIG_FILE + ".tmp"
         with open(tmp, "w") as f:
@@ -85,10 +68,65 @@ def save_auth_config(username, password):
             pass
     return data
 
+def load_auth_config():
+    """Multi-user auth store. Migrates the legacy single-account shape on read."""
+    if os.path.exists(AUTH_CONFIG_FILE):
+        try:
+            with open(AUTH_CONFIG_FILE, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get("setup_complete"):
+                if not isinstance(data.get("users"), list):
+                    # legacy single-account file -> migrate
+                    if data.get("password_hash"):
+                        data["users"] = [{
+                            "username": data.get("username", "admin"),
+                            "password_hash": data.get("password_hash"),
+                            "created_at": data.get("updated_at", now_iso())
+                        }]
+                        data.pop("username", None)
+                        data.pop("password_hash", None)
+                        return _write_auth_config(data)
+                    return None
+                if data.get("users"):
+                    return data
+        except Exception:
+            pass
+    return None
+
+def save_auth_config(username, password):
+    """Create the initial (first) operator account."""
+    data = {
+        "users": [{
+            "username": username.strip() or "admin",
+            "password_hash": generate_password_hash(password),
+            "created_at": now_iso()
+        }],
+        "setup_complete": True,
+        "updated_at": now_iso()
+    }
+    return _write_auth_config(data)
+
+def find_user(username):
+    cfg = load_auth_config()
+    if not cfg:
+        return None, None
+    for u in cfg.get("users", []):
+        if u.get("username", "").lower() == str(username).strip().lower():
+            return cfg, u
+    return cfg, None
+
+def verify_login(username, password):
+    cfg, user = find_user(username)
+    if not user:
+        return False
+    return check_password_hash(user.get("password_hash", ""), password)
+
 def get_active_credentials():
     cfg = load_auth_config()
     if cfg:
-        return cfg.get("username", "admin"), cfg.get("password_hash"), True
+        users = cfg.get("users", [])
+        if users:
+            return users[0].get("username", "admin"), users[0].get("password_hash"), True
     return DASHBOARD_USER, DASHBOARD_PASS, False
 
 ROUTES_FILE = os.path.join(BASE_DIR, "routes.json")
@@ -1087,13 +1125,7 @@ def login():
         password = request.form.get("password", "").strip()
         remember = request.form.get("remember")
         client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-        stored_user, stored_secret, is_hashed = get_active_credentials()
-        ok = False
-        if stored_user and username == stored_user:
-            if is_hashed and stored_secret:
-                ok = check_password_hash(stored_secret, password)
-            elif stored_secret is not None:
-                ok = (password == stored_secret)
+        ok = verify_login(username, password)
         if ok:
             session.permanent = bool(remember is not None)
             session["logged_in"] = True
@@ -1950,7 +1982,7 @@ def api_srt_port():
 @app.route("/api/auth/credentials", methods=["POST"])
 @login_required
 def api_update_credentials():
-    """Change operator username/password. Requires the current password."""
+    """Change the current operator's username and/or password."""
     data = request.json or {}
     username = str(data.get("username", "")).strip()
     current_password = str(data.get("current_password", ""))
@@ -1963,37 +1995,94 @@ def api_update_credentials():
     if not cfg:
         return jsonify({"ok": False, "error": "Setup not completed yet"}), 400
 
-    if not check_password_hash(cfg.get("password_hash", ""), current_password):
+    session_user = session.get("username", "")
+    cfg, user = find_user(session_user)
+    if not user or not check_password_hash(user.get("password_hash", ""), current_password):
         return jsonify({"ok": False, "error": "Current password is incorrect"}), 403
 
     if new_password and len(new_password) < 8:
         return jsonify({"ok": False, "error": "New password must be at least 8 characters"}), 400
 
+    # username uniqueness check (case-insensitive, excluding self)
+    for u in cfg.get("users", []):
+        if u is user:
+            continue
+        if u.get("username", "").lower() == username.lower():
+            return jsonify({"ok": False, "error": "That username is already taken"}), 400
+
+    user["username"] = username
     if new_password:
-        save_auth_config(username, new_password)
-    else:
-        # keep the existing password hash, only update the username
-        data = {
-            "username": username,
-            "password_hash": cfg.get("password_hash"),
-            "setup_complete": True,
-            "updated_at": now_iso()
-        }
-        import json as _json
-        with _auth_state_lock:
-            tmp = AUTH_CONFIG_FILE + ".tmp"
-            with open(tmp, "w") as f:
-                _json.dump(data, f, indent=2)
-            os.replace(tmp, AUTH_CONFIG_FILE)
-            try:
-                os.chmod(AUTH_CONFIG_FILE, 0o600)
-            except Exception:
-                pass
-    # If the operator changed their own username, refresh the session identity
-    if session.get("logged_in"):
-        session["username"] = username
+        user["password_hash"] = generate_password_hash(new_password)
+    cfg["updated_at"] = now_iso()
+    _write_auth_config(cfg)
+    session["username"] = username
     log_event("system", "Auth", "credentials_updated", f"Operator account updated: username='{username}'", "info")
     return jsonify({"ok": True, "message": "Account updated successfully"})
+
+
+@app.route("/api/auth/users", methods=["GET"])
+@login_required
+def api_list_users():
+    cfg = load_auth_config()
+    users = [{"username": u.get("username"), "created_at": u.get("created_at")} for u in (cfg or {}).get("users", [])]
+    return jsonify({"ok": True, "users": users, "current": session.get("username", "")})
+
+
+@app.route("/api/auth/users", methods=["POST"])
+@login_required
+def api_add_user():
+    """Add another operator account. Requires the current operator's password."""
+    data = request.json or {}
+    new_username = str(data.get("username", "")).strip()
+    new_password = str(data.get("new_password", ""))
+    admin_password = str(data.get("admin_password", ""))
+
+    if not new_username:
+        return jsonify({"ok": False, "error": "Username is required"}), 400
+    if len(new_password) < 8:
+        return jsonify({"ok": False, "error": "Password must be at least 8 characters"}), 400
+
+    cfg, me = find_user(session.get("username", ""))
+    if not me or not check_password_hash(me.get("password_hash", ""), admin_password):
+        return jsonify({"ok": False, "error": "Your current password is incorrect"}), 403
+
+    if find_user(new_username)[1]:
+        return jsonify({"ok": False, "error": "That username already exists"}), 400
+
+    cfg.setdefault("users", []).append({
+        "username": new_username,
+        "password_hash": generate_password_hash(new_password),
+        "created_at": now_iso()
+    })
+    cfg["updated_at"] = now_iso()
+    _write_auth_config(cfg)
+    log_event("system", "Auth", "user_added", f"New operator account created: username='{new_username}' by '{session.get('username')}'", "info")
+    return jsonify({"ok": True, "message": f"User '{new_username}' created"})
+
+
+@app.route("/api/auth/users/<username>", methods=["DELETE"])
+@login_required
+def api_delete_user(username):
+    """Remove an operator account. Cannot remove yourself or the last account."""
+    cfg, me = find_user(session.get("username", ""))
+    if not cfg:
+        return jsonify({"ok": False, "error": "Setup not completed yet"}), 400
+    if username.lower() == session.get("username", "").lower():
+        return jsonify({"ok": False, "error": "You cannot delete the account you are signed in with"}), 400
+    target = None
+    for u in cfg.get("users", []):
+        if u.get("username", "").lower() == username.lower():
+            target = u
+            break
+    if not target:
+        return jsonify({"ok": False, "error": "User not found"}), 404
+    if len(cfg.get("users", [])) <= 1:
+        return jsonify({"ok": False, "error": "At least one account must remain"}), 400
+    cfg["users"].remove(target)
+    cfg["updated_at"] = now_iso()
+    _write_auth_config(cfg)
+    log_event("system", "Auth", "user_deleted", f"Operator account removed: username='{username}' by '{session.get('username')}'", "info")
+    return jsonify({"ok": True, "message": f"User '{username}' removed"})
 
 
 # =========================================================================

@@ -140,6 +140,20 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 8px;
 }
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  color: #e6f9ff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.user-chip svg { color: var(--cyan); flex-shrink: 0; }
 .btn-logout {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
@@ -1220,6 +1234,10 @@ html, body {
 
   <!-- User Actions -->
   <div class="user-actions">
+    <div class="user-chip" id="topbar-user-chip" title="Signed-in operator">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <span id="topbar-username">{{ user or 'admin' }}</span>
+    </div>
     <a href="/download/sop" target="_blank" title="Download Standard Operating Procedure (SOP)">
       <button type="button" class="btn-icon" style="color:var(--cyan); border-color:rgba(0,229,255,0.3); font-weight:600;">
         <span class="d-none-mobile">Engineering </span>SOP
@@ -1845,6 +1863,29 @@ html, body {
           <input type="password" id="acc-confirm-password" class="form-control" autocomplete="new-password" placeholder="Repeat new password">
         </div>
         <button type="button" class="btn-primary" style="width:100%; justify-content:center;" onclick="saveAccount()">Save Account</button>
+      </div>
+
+      <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:14px; margin-top:14px;">
+        <b style="color:#fff; font-size:13px;">Operator Accounts</b>
+        <p style="font-size:12px; color:var(--muted); margin:6px 0 10px;">
+          Multiple operator accounts can sign in to this dashboard. Every sign-in is recorded in the Event Log.
+        </p>
+        <div id="user-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;"></div>
+        <div style="border-top:1px solid var(--border); padding-top:12px;">
+          <div class="form-group">
+            <label>New Username</label>
+            <input type="text" id="new-user-username" class="form-control" autocomplete="off" placeholder="e.g. operator2">
+          </div>
+          <div class="form-group">
+            <label>New Password</label>
+            <input type="password" id="new-user-password" class="form-control" autocomplete="new-password" placeholder="Min. 8 characters">
+          </div>
+          <div class="form-group">
+            <label>Your Current Password</label>
+            <input type="password" id="new-user-admin-password" class="form-control" autocomplete="current-password" placeholder="Required to authorize">
+          </div>
+          <button type="button" class="btn-primary" style="width:100%; justify-content:center;" onclick="addUser()">Add User</button>
+        </div>
       </div>
 
       <div style="background:var(--panel-elevated); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--muted); margin-top:14px;">
@@ -4342,13 +4383,71 @@ async function openSrtPortModal() {
   try {
     const d = await api('/api/srt/port');
     document.getElementById('input-srt-port').value = d.port || 8890;
-    // prefill operator account section
+    // prefill operator account section + user list
     const accUser = document.getElementById('acc-username');
     if (accUser) accUser.value = CURRENT_USER || '';
+    loadUsers();
     document.getElementById('acc-current-password').value = '';
     document.getElementById('acc-new-password').value = '';
     document.getElementById('acc-confirm-password').value = '';
     document.getElementById('modal-srt-port').classList.remove('hidden');
+  } catch(e) { alert(e.message); }
+}
+
+async function loadUsers() {
+  const listEl = document.getElementById('user-list');
+  if (!listEl) return;
+  try {
+    const d = await api('/api/auth/users');
+    const users = d.users || [];
+    listEl.innerHTML = users.map(u => {
+      const isMe = u.username === d.current;
+      const isOnly = users.length === 1;
+      const delBtn = (!isMe && !isOnly)
+        ? `<button type="button" class="btn-mini" onclick="removeUser('${u.username}')" style="padding:2px 10px; font-size:10.5px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); color:#fca5a5; border-radius:4px; cursor:pointer;">Remove</button>`
+        : '';
+      const meTag = isMe ? '<span style="font-size:9.5px; color:var(--cyan); border:1px solid rgba(0,229,255,0.3); border-radius:3px; padding:1px 6px; margin-left:6px;">YOU</span>' : '';
+      return `<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:6px; padding:7px 10px;">
+        <span style="font-size:12.5px; font-weight:600; color:#fff;">${u.username}${meTag}</span>
+        ${delBtn}
+      </div>`;
+    }).join('');
+  } catch(e) { listEl.innerHTML = '<div style="font-size:12px; color:var(--muted);">Failed to load users.</div>'; }
+}
+
+async function addUser() {
+  const username = document.getElementById('new-user-username').value.trim();
+  const password = document.getElementById('new-user-password').value;
+  const adminPassword = document.getElementById('new-user-admin-password').value;
+  if (!username) { alert('New username is required.'); return; }
+  if (password.length < 8) { alert('Password must be at least 8 characters.'); return; }
+  if (!adminPassword) { alert('Your current password is required to authorize this change.'); return; }
+  try {
+    const res = await api('/api/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, new_password: password, admin_password: adminPassword })
+    });
+    if (res && res.ok) {
+      document.getElementById('new-user-username').value = '';
+      document.getElementById('new-user-password').value = '';
+      document.getElementById('new-user-admin-password').value = '';
+      loadUsers();
+    } else {
+      alert(res && res.error ? res.error : 'Failed to add user.');
+    }
+  } catch(e) { alert(e.message); }
+}
+
+async function removeUser(username) {
+  if (!confirm(`Remove operator account '${username}'?`)) return;
+  try {
+    const res = await api(`/api/auth/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    if (res && res.ok) {
+      loadUsers();
+    } else {
+      alert(res && res.error ? res.error : 'Failed to remove user.');
+    }
   } catch(e) { alert(e.message); }
 }
 
