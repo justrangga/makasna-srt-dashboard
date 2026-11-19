@@ -1619,27 +1619,20 @@ def proxy_hls(subpath):
         target_url = f"{target_url}?{request.query_string.decode('utf-8', errors='ignore')}"
 
     req_headers = {}
-    for h in ["Range", "Cookie", "User-Agent", "Accept"]:
+    for h in ["User-Agent", "Accept"]:
         if h in request.headers:
             req_headers[h] = request.headers[h]
 
     try:
-        r = requests.get(target_url, headers=req_headers, timeout=6)
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        headers = []
-        for name, value in r.headers.items():
-            if name.lower() in excluded_headers:
-                continue
-            if name.lower() == "set-cookie":
-                # Strip Secure and SameSite=None so browsers accept it over plain HTTP
-                cleaned = re.sub(r';\s*Secure', '', value, flags=re.I)
-                cleaned = re.sub(r';\s*SameSite=None', '; SameSite=Lax', cleaned, flags=re.I)
-                cleaned = re.sub(r';\s*Partitioned', '', cleaned, flags=re.I)
-                headers.append((name, cleaned))
-            else:
-                headers.append((name, value))
+        # HLS playlists use blocking reload (CAN-BLOCK-RELOAD); allow the wait.
+        r = requests.get(target_url, headers=req_headers, timeout=(5, 30), stream=True)
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'set-cookie']
+        headers = [(name, value) for name, value in r.headers.items() if name.lower() not in excluded_headers]
         headers.append(('Access-Control-Allow-Origin', '*'))
         headers.append(('Access-Control-Allow-Headers', '*'))
+        if ".mp4" in subpath:
+            # segments/init parts: stream through without buffering whole body
+            return Response(r.iter_content(chunk_size=64 * 1024), r.status_code, headers)
         return Response(r.content, r.status_code, headers)
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 502

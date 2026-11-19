@@ -3222,14 +3222,14 @@ function initHlsPlayer(video, streamUrl) {
   if (Hls.isSupported()) {
     hlsInstance = new Hls({
       enableWorker: true,
-      lowLatencyMode: false,          // Stable buffer mode for continuous smooth playback
-      backBufferLength: 10,           // Retain 10s of back buffer
-      maxBufferLength: 12,            // 12s buffer prevents buffer underrun
-      maxMaxBufferLength: 20,
-      liveSyncDurationCount: 3,       // Stay 3 segments behind live edge (safe buffer margin)
-      liveMaxLatencyDurationCount: 6, // Catch up smoothly if latency exceeds 6 segments
-      maxBufferHole: 0.5,             // Gracefully jump across tiny gaps
-      highBufferWatchdogPeriod: 2,
+      lowLatencyMode: true,           // LL-HLS: MediaMTX emits 200ms parts
+      backBufferLength: 8,
+      maxBufferLength: 6,             // tight buffer keeps latency low
+      maxMaxBufferLength: 12,
+      liveSyncDurationCount: 2,       // ~4s behind live edge (2s segments)
+      liveMaxLatencyDurationCount: 4, // catch up if drift exceeds ~8s
+      maxBufferHole: 0.6,
+      highBufferWatchdogPeriod: 1,
       nudgeOffset: 0.2,
       nudgeMaxRetry: 10,
       fragLoadingTimeOut: 20000,
