@@ -836,6 +836,7 @@ def start_route_process(route, source_type="primary"):
             "proc": proc,
             "started_at": time.time(),
             "active_source": actual_source,
+            "route": route,
             "log_file": log_file_path,
             "log_fp": log_fp,
             "status": "RUNNING",
