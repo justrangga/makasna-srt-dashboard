@@ -230,9 +230,10 @@ a { color: inherit; text-decoration: none; }
 /* Workspace */
 .workspace {
   flex: 1;
-  padding: 24px 28px;
+  padding: 24px clamp(16px, 2.5vw, 40px);
   overflow-y: auto;
-  max-width: 1600px;
+  min-width: 0;
+  width: 100%;
 }
 
 /* Page Header */
@@ -897,6 +898,15 @@ html, body {
   touch-action: manipulation;
 }
 
+/* Wide Desktop Enhancement (>= 1600px): more horizontal breathing room, richer columns */
+@media (min-width: 1600px) {
+  .workspace {
+    padding-left: clamp(24px, 3vw, 56px);
+    padding-right: clamp(24px, 3vw, 56px);
+  }
+  .page-header h1 { font-size: 24px; }
+}
+
 /* Tablet & Laptop Scaling for Top Bar Metrics */
 @media (max-width: 1250px) and (min-width: 1025px) {
   .stat-pill {
@@ -921,8 +931,9 @@ html, body {
     display: flex !important;
   }
   .workspace {
-    padding: 14px 12px calc(95px + env(safe-area-inset-bottom, 20px)) 12px !important; /* Ample clearance so bottom nav never cuts off buttons */
-    max-width: 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 14px 14px calc(95px + env(safe-area-inset-bottom, 20px)) 14px !important; /* Ample clearance so bottom nav never cuts off buttons */
   }
 
   /* Top Navigation Bar: Auto height, wrap gracefully without clipping */
