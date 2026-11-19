@@ -76,6 +76,29 @@ else
   echo "already patched: slscore/SLSListener.cpp (empty streamid fallback)"
 fi
 
+# 2b. attach the manager stat callback to the main-loop stat POST client.
+# Without it get_request_data() yields an empty body and the dashboard's
+# /api/sls/stat endpoint never receives player stats.
+if ! grep -q 'set_stage_callback(CSLSManager::stat_client_callback' srt-live-server.cpp; then
+python3 - <<'PYEOF'
+import pathlib
+p = pathlib.Path('srt-live-server.cpp'); t = p.read_text()
+old = '''    conf_srt = (sls_conf_srt_t *)sls_conf_get_root_conf();
+    if (strlen(conf_srt->stat_post_url) > 0)
+        http_stat_client->open(conf_srt->stat_post_url, stat_method, conf_srt->stat_post_interval);'''
+new = '''    conf_srt = (sls_conf_srt_t *)sls_conf_get_root_conf();
+    if (strlen(conf_srt->stat_post_url) > 0) {
+        http_stat_client->set_stage_callback(CSLSManager::stat_client_callback, sls_manager);
+        http_stat_client->open(conf_srt->stat_post_url, stat_method, conf_srt->stat_post_interval);
+    }'''
+assert old in t, "stat_post_url open block not found"
+p.write_text(t.replace(old, new, 1))
+print("patched: srt-live-server.cpp (stat callback attached)")
+PYEOF
+else
+  echo "already patched: srt-live-server.cpp (stat callback attached)"
+fi
+
 # 3. newer GCC compatibility
 if ! grep -q '#include <time.h>' slscore/common.cpp; then
   sed -i 's|#include <cstdarg>|#include <cstdarg>\n#include <time.h>|' slscore/common.cpp

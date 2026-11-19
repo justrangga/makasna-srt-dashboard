@@ -91,7 +91,23 @@ sudo ss -lunp | grep 12105
 
 The hub has no source until a dashboard route is running. In the dashboard, create a route whose destination is the **SLS Hub (`12105`)** type; the dashboard internally pushes the MediaMTX stream into SLS as caller `srt://127.0.0.1:12105?streamid=uplive/live/stream`. Start the route, then decoders can pull.
 
-## Decoder side
+## Standby Slate (fallback graphics)
+
+The route engine falls back to a local `STANDBY_SLATE` stream when the primary source is offline, so hub decoders keep receiving idle graphics instead of a dead port. Provide that stream with the bundled unit:
+
+```bash
+sudo install -m 644 systemd/sls-slate.service /etc/systemd/system/sls-slate.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now sls-slate
+```
+
+It publishes color bars (`testsrc2`) with silent AAC audio to `publish:STANDBY_SLATE` on MediaMTX. Verify with:
+
+```bash
+curl -fsS http://127.0.0.1:9997/v3/paths/list | jq '.items[].name'
+```
+
+`STANDBY_SLATE` should list as ready whenever MediaMTX is running.
 
 | Parameter | Value |
 |:---|:---|
@@ -122,4 +138,4 @@ CSLSListener::handler, new player[...]..., key_stream_name=uplive/live/stream, p
 
 ## Telemetry caveat
 
-`stat_post_url` support in SLS pushes aggregate stats, and the dashboard merges hub players into `/api/srt/inbound` only while a hub route is active. Treat per-client telemetry as best-effort; the primary source of truth is the SLS log.
+With the `scripts/patch-sls.sh` build, SLS POSTs full per-player stats (role, IP, port, bitrate) to the dashboard every `stat_post_interval` seconds, and the dashboard merges hub players into `/api/srt/inbound` while a hub route is active. Player entries drop out roughly 15 s after a decoder disconnects, and the whole buffer clears when the hub route stops. The SLS log remains the source of truth for connection history.
